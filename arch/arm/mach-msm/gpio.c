@@ -25,6 +25,9 @@
 
 #define FIRST_GPIO_IRQ MSM_GPIO_TO_INT(0)
 
+#include "proc_comm.h"
+#include "smd_private.h"
+
 #define MSM_GPIO_BANK(bank, first, last)				\
 	{								\
 		.regs = {						\
@@ -49,6 +52,14 @@
 			.free = msm_gpio_free,				\
 		}							\
 	}
+
+enum {
+	GPIO_DEBUG_SLEEP = 1U << 0,
+};
+
+static int msm_gpio_debug_mask;
+module_param_named(debug_mask, msm_gpio_debug_mask, int,
+		   S_IRUGO | S_IWUSR | S_IWGRP);
 
 #define MSM_GPIO_BROKEN_INT_CLEAR 1
 
@@ -344,6 +355,118 @@ static struct irq_chip msm_gpio_irq_chip = {
 	.irq_set_wake  = msm_gpio_irq_set_wake,
 	.irq_set_type  = msm_gpio_irq_set_type,
 };
+
+#define NUM_GPIO_SMEM_BANKS 6
+#define GPIO_SMEM_NUM_GROUPS 2
+#define GPIO_SMEM_MAX_PC_INTERRUPTS 8
+struct tramp_gpio_smem {
+	uint16_t num_fired[GPIO_SMEM_NUM_GROUPS];
+	uint16_t fired[GPIO_SMEM_NUM_GROUPS][GPIO_SMEM_MAX_PC_INTERRUPTS];
+	uint32_t enabled[NUM_GPIO_SMEM_BANKS];
+	uint32_t detection[NUM_GPIO_SMEM_BANKS];
+	uint32_t polarity[NUM_GPIO_SMEM_BANKS];
+};
+
+static void msm_gpio_sleep_int(unsigned long arg)
+{
+	int i, j;
+	struct tramp_gpio_smem *smem_gpio;
+
+	BUILD_BUG_ON(NR_GPIO_IRQS > NUM_GPIO_SMEM_BANKS * 32);
+
+	smem_gpio = smem_alloc(SMEM_GPIO_INT, sizeof(*smem_gpio));
+	if (smem_gpio == NULL)
+		return;
+
+	local_irq_disable();
+	for (i = 0; i < GPIO_SMEM_NUM_GROUPS; i++) {
+		int count = smem_gpio->num_fired[i];
+		for (j = 0; j < count; j++) {
+			/* TODO: Check mask */
+			generic_handle_irq(
+				MSM_GPIO_TO_INT(smem_gpio->fired[i][j]));
+		}
+	}
+	local_irq_enable();
+}
+
+static DECLARE_TASKLET(msm_gpio_sleep_int_tasklet, msm_gpio_sleep_int, 0);
+
+void msm_gpio_enter_sleep(int from_idle)
+{
+	int i;
+	struct tramp_gpio_smem *smem_gpio;
+
+	smem_gpio = smem_alloc(SMEM_GPIO_INT, sizeof(*smem_gpio));
+
+	if (smem_gpio) {
+		for (i = 0; i < ARRAY_SIZE(smem_gpio->enabled); i++) {
+			smem_gpio->enabled[i] = 0;
+			smem_gpio->detection[i] = 0;
+			smem_gpio->polarity[i] = 0;
+		}
+	}
+
+	for (i = 0; i < ARRAY_SIZE(msm_gpio_chips); i++) {
+		writel(msm_gpio_chips[i].int_enable[!from_idle],
+		       msm_gpio_chips[i].regs.int_en);
+		if (smem_gpio) {
+			uint32_t tmp;
+			int start, index, shiftl, shiftr;
+			start = msm_gpio_chips[i].chip.base;
+			index = start / 32;
+			shiftl = start % 32;
+			shiftr = 32 - shiftl;
+			tmp = msm_gpio_chips[i].int_enable[!from_idle];
+			smem_gpio->enabled[index] |= tmp << shiftl;
+			smem_gpio->enabled[index+1] |= tmp >> shiftr;
+			smem_gpio->detection[index] |=
+				readl(msm_gpio_chips[i].regs.int_edge) <<
+				shiftl;
+			smem_gpio->detection[index+1] |=
+				readl(msm_gpio_chips[i].regs.int_edge) >>
+				shiftr;
+			smem_gpio->polarity[index] |=
+				readl(msm_gpio_chips[i].regs.int_pos) << shiftl;
+			smem_gpio->polarity[index+1] |=
+				readl(msm_gpio_chips[i].regs.int_pos) >> shiftr;
+		}
+	}
+
+	if (smem_gpio) {
+		if (msm_gpio_debug_mask & GPIO_DEBUG_SLEEP)
+			for (i = 0; i < ARRAY_SIZE(smem_gpio->enabled); i++) {
+				printk("msm_gpio_enter_sleep gpio %d-%d: enable"
+				       " %08x, edge %08x, polarity %08x\n",
+				       i * 32, i * 32 + 31,
+				       smem_gpio->enabled[i],
+				       smem_gpio->detection[i],
+				       smem_gpio->polarity[i]);
+			}
+		for (i = 0; i < GPIO_SMEM_NUM_GROUPS; i++)
+			smem_gpio->num_fired[i] = 0;
+	}
+}
+
+void msm_gpio_exit_sleep(void)
+{
+	int i;
+	struct tramp_gpio_smem *smem_gpio;
+
+	smem_gpio = smem_alloc(SMEM_GPIO_INT, sizeof(*smem_gpio));
+
+	for (i = 0; i < ARRAY_SIZE(msm_gpio_chips); i++) {
+		writel(msm_gpio_chips[i].int_enable[0],
+		       msm_gpio_chips[i].regs.int_en);
+	}
+
+	if (smem_gpio && (smem_gpio->num_fired[0] || smem_gpio->num_fired[1])) {
+		if (msm_gpio_debug_mask & GPIO_DEBUG_SLEEP)
+			printk(KERN_INFO "gpio: fired %x %x\n",
+			      smem_gpio->num_fired[0], smem_gpio->num_fired[1]);
+		tasklet_schedule(&msm_gpio_sleep_int_tasklet);
+	}
+}
 
 static int __init msm_init_gpio(void)
 {
