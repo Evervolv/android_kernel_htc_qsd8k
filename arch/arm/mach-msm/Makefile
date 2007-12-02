@@ -24,6 +24,10 @@ obj-$(CONFIG_MSM_SCM) += scm.o scm-boot.o
 obj-$(CONFIG_HOTPLUG_CPU) += hotplug.o
 obj-$(CONFIG_SMP) += headsmp.o platsmp.o
 
+obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter.o
+obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter_device.o
+obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter_servers.o
+
 obj-$(CONFIG_MACH_TROUT) += board-trout.o board-trout-gpio.o board-trout-mmc.o devices-msm7x00.o
 obj-$(CONFIG_MACH_TROUT) += board-trout.o board-trout-gpio.o board-trout-mmc.o board-trout-panel.o devices-msm7x00.o
 obj-$(CONFIG_MACH_HALIBUT) += board-halibut.o devices-msm7x00.o
