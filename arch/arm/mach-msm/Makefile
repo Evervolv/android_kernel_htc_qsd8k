@@ -4,6 +4,8 @@ obj-y += acpuclock-arm11.o
 obj-y += dma.o
 endif
 
+obj-y += nand_partitions.o
+
 ifdef CONFIG_MSM_VIC
 obj-y += irq-vic.o
 else
