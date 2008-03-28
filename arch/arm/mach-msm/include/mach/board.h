@@ -52,4 +52,10 @@ int __init msm_add_sdcc(unsigned int controller,
 			struct msm_mmc_platform_data *plat,
 			unsigned int stat_irq, unsigned long stat_irq_flags);
 
+#if defined(CONFIG_USB_FUNCTION_MSM_HSUSB)
+void msm_hsusb_set_vbus_state(int online);
+#else
+static inline void msm_hsusb_set_vbus_state(int online) {}
+#endif
+
 #endif
