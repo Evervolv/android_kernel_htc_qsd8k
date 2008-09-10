@@ -1,4 +1,5 @@
 obj-y += io.o idle.o timer.o
+obj-y += memory.o
 ifndef CONFIG_ARCH_MSM8X60
 obj-y += acpuclock-arm11.o
 obj-y += dma.o

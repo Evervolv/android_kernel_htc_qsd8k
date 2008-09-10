@@ -29,5 +29,7 @@
 #define PHYS_OFFSET		UL(0x10000000)
 #endif
 
+#define HAS_ARCH_IO_REMAP_PFN_RANGE
+
 #endif
 
