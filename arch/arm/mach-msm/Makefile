@@ -39,6 +39,7 @@ obj-$(CONFIG_MSM_CPU_FREQ_SCREEN) += cpufreq.o
 
 obj-$(CONFIG_MACH_TROUT) += board-trout.o board-trout-gpio.o board-trout-mmc.o devices-msm7x00.o
 obj-$(CONFIG_MACH_TROUT) += board-trout.o board-trout-gpio.o board-trout-mmc.o board-trout-panel.o devices-msm7x00.o
+obj-$(CONFIG_MACH_TROUT) += board-trout-keypad.o
 obj-$(CONFIG_MACH_HALIBUT) += board-halibut.o devices-msm7x00.o
 obj-$(CONFIG_MACH_HALIBUT) += board-halibut-keypad.o
 obj-$(CONFIG_ARCH_MSM7X30) += board-msm7x30.o devices-msm7x30.o
