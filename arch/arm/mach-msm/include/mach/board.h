@@ -31,6 +31,12 @@ struct msm_acpu_clock_platform_data
 	unsigned long wait_for_irq_khz;
 };
 
+struct msm_camera_device_platform_data{
+	int sensor_reset;
+	int sensor_pwd;
+	int vcm_pwd;
+};
+
 struct clk;
 
 extern struct sys_timer msm_timer;
