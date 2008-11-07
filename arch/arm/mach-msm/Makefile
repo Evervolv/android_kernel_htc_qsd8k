@@ -36,7 +36,7 @@ obj-$(CONFIG_MSM_RPCSERVERS) += rpc_server_time_remote.o
 obj-$(CONFIG_MSM_ADSP) += qdsp5/
 obj-$(CONFIG_MSM_HW3D) += hw3d.o
 obj-$(CONFIG_PM) += pm.o
-obj-$(CONFIG_MSM_CPU_FREQ_SCREEN) += cpufreq.o
+obj-$(CONFIG_MSM_CPU_FREQ) += cpufreq.o
 
 obj-$(CONFIG_MACH_TROUT) += board-trout.o board-trout-gpio.o board-trout-mmc.o devices-msm7x00.o
 obj-$(CONFIG_MACH_TROUT) += board-trout.o board-trout-gpio.o board-trout-mmc.o board-trout-panel.o devices-msm7x00.o

@@ -616,6 +616,7 @@ config ARCH_PXA
 
 config ARCH_MSM
 	bool "Qualcomm MSM"
+	select ARCH_HAS_CPUFREQ
 	select ARCH_REQUIRE_GPIOLIB
 	select HAVE_CLK
 	select GENERIC_GPIO
