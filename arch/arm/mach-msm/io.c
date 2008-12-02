@@ -20,6 +20,7 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/io.h>
+#include <linux/module.h>
 
 #include <mach/hardware.h>
 #include <asm/page.h>
