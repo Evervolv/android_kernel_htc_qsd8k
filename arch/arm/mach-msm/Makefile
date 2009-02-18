@@ -6,6 +6,7 @@ obj-y += dma.o
 endif
 
 obj-y += nand_partitions.o
+obj-y += devices_htc.o
 
 ifdef CONFIG_MSM_VIC
 obj-y += irq-vic.o
@@ -45,6 +46,11 @@ obj-$(CONFIG_MACH_TROUT) += htc_akm_cal.o htc_wifi_nvs.o htc_acoustic.o
 obj-$(CONFIG_MACH_TROUT) += board-trout-rfkill.o
 obj-$(CONFIG_MACH_TROUT) += board-trout-wifi.o
 obj-$(CONFIG_TROUT_BATTCHG) += htc_battery.o
+obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire.o board-sapphire-gpio.o
+obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-keypad.o board-sapphire-panel.o
+obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-mmc.o board-sapphire-wifi.o
+obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-rfkill.o msm_vibrator.o
+obj-$(CONFIG_MACH_SAPPHIRE) += devices-msm7x00.o
 obj-$(CONFIG_MACH_HALIBUT) += board-halibut.o devices-msm7x00.o
 obj-$(CONFIG_MACH_HALIBUT) += board-halibut-keypad.o
 obj-$(CONFIG_ARCH_MSM7X30) += board-msm7x30.o devices-msm7x30.o
