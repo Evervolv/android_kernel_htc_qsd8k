@@ -1,4 +1,4 @@
-obj-y += io.o idle.o timer.o
+obj-y += io.o timer.o
 obj-y += memory.o
 ifndef CONFIG_ARCH_MSM8X60
 obj-y += dma.o
@@ -6,8 +6,8 @@ endif
 
 obj-y += nand_partitions.o
 
-obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock-arm11.o
-obj-$(CONFIG_ARCH_MSM_SCORPION) += acpuclock-scorpion.o
+obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock-arm11.o idle.o
+obj-$(CONFIG_ARCH_MSM_SCORPION) += acpuclock-scorpion.o idle-v7.o
 
 ifdef CONFIG_MSM_VIC
 obj-y += irq-vic.o
