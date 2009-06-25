@@ -31,6 +31,7 @@
 #include <mach/msm_iomap.h>
 #include <mach/fiq.h>
 
+#include "sirc.h"
 #include "smd_private.h"
 
 enum {
@@ -469,12 +470,7 @@ void __init msm_init_irq(void)
 		set_irq_flags(n, IRQF_VALID);
 	}
 
-#if defined(CONFIG_ARCH_QSD8X50)
-	{
-		void msm_init_sirc(void);
-		msm_init_sirc();
-	}
-#endif
+	msm_init_sirc();
 }
 
 #if defined(CONFIG_MSM_FIQ_SUPPORT)
@@ -487,21 +483,23 @@ void msm_trigger_irq(int irq)
 
 void msm_fiq_enable(int irq)
 {
+	struct irq_data *d = irq_get_irq_data(irq);
 	unsigned long flags;
 	local_irq_save(flags);
-	msm_irq_unmask(irq);
+	d->chip->irq_unmask(d);
 	local_irq_restore(flags);
 }
 
 void msm_fiq_disable(int irq)
 {
+	struct irq_data *d = irq_get_irq_data(irq);
 	unsigned long flags;
 	local_irq_save(flags);
-	msm_irq_mask(irq);
+	d->chip->irq_mask(d);
 	local_irq_restore(flags);
 }
 
-void msm_fiq_select(int irq)
+static void _msm_fiq_select(int irq)
 {
 	void __iomem *reg = VIC_INT_SELECT0 + ((irq & 32) ? 4 : 0);
 	unsigned index = (irq >> 5) & 1;
@@ -514,7 +512,7 @@ void msm_fiq_select(int irq)
 	local_irq_restore(flags);
 }
 
-void msm_fiq_unselect(int irq)
+static void _msm_fiq_unselect(int irq)
 {
 	void __iomem *reg = VIC_INT_SELECT0 + ((irq & 32) ? 4 : 0);
 	unsigned index = (irq >> 5) & 1;
@@ -526,6 +524,27 @@ void msm_fiq_unselect(int irq)
 	writel(msm_irq_shadow_reg[index].int_select, reg);
 	local_irq_restore(flags);
 }
+
+void msm_fiq_select(int irq)
+{
+	if (irq < FIRST_SIRC_IRQ)
+		_msm_fiq_select(irq);
+	else if (irq < FIRST_GPIO_IRQ)
+		sirc_fiq_select(irq, true);
+	else
+		pr_err("unsupported fiq %d", irq);
+}
+
+void msm_fiq_unselect(int irq)
+{
+	if (irq < FIRST_SIRC_IRQ)
+		_msm_fiq_unselect(irq);
+	else if (irq < FIRST_GPIO_IRQ)
+		sirc_fiq_select(irq, false);
+	else
+		pr_err("unsupported fiq %d", irq);
+}
+
 /* set_fiq_handler originally from arch/arm/kernel/fiq.c */
 static void set_fiq_handler(void *start, unsigned int length)
 {
