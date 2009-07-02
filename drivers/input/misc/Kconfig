@@ -470,4 +470,10 @@ config INPUT_CMA3000_I2C
 	  To compile this driver as a module, choose M here: the
 	  module will be called cma3000_d0x_i2c.
 
+config INPUT_CAPELLA_CM3602
+	tristate "Capella CM3602 proximity and light sensor"
+	help
+	  Say Y here to enable the Capella CM3602 Short Distance Proximity
+	  Sensor with Ambient Light Sensor.
+
 endif
