@@ -5,6 +5,7 @@ obj-y += dma.o
 endif
 
 obj-y += nand_partitions.o
+obj-y += pmic.o
 
 obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock-arm11.o idle.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += acpuclock-scorpion.o idle-v7.o
