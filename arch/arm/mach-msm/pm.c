@@ -18,6 +18,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/clk.h>
+#include <linux/console.h>
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/pm.h>
@@ -558,8 +559,35 @@ static void msm_pm_power_off(void)
 	for (;;) ;
 }
 
+static bool console_flushed;
+
+void msm_pm_flush_console(void)
+{
+	if (console_flushed)
+		return;
+	console_flushed = true;
+
+	printk("\n");
+	printk(KERN_EMERG "Restarting %s\n", linux_banner);
+	if (console_trylock()) {
+		console_unlock();
+		return;
+	}
+
+	mdelay(50);
+
+	local_irq_disable();
+	if (!console_trylock())
+		printk(KERN_EMERG "msm_restart: Console was locked! Busting\n");
+	else
+		printk(KERN_EMERG "msm_restart: Console was locked!\n");
+	console_unlock();
+}
+
 static void msm_pm_restart(char str)
 {
+	msm_pm_flush_console();
+
 	/* If there's a hard reset hook and the restart_reason
 	 * is the default, prefer that to the (slower) proc_comm
 	 * reset command.
