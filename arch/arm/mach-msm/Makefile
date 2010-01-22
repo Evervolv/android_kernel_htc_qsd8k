@@ -8,8 +8,10 @@ obj-y += nand_partitions.o
 obj-y += pmic.o
 
 obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock-arm11.o idle.o
-obj-$(CONFIG_ARCH_MSM_SCORPION) += acpuclock-scorpion.o idle-v7.o
+obj-$(CONFIG_ARCH_MSM_SCORPION) += idle-v7.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += arch-init-scorpion.o
+
+obj-$(CONFIG_ARCH_QSD8X50) += acpuclock-qsd8x50.o
 
 ifndef CONFIG_ARCH_MSM8X60
 obj-y += irq.o
