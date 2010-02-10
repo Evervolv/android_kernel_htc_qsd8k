@@ -169,6 +169,8 @@ obj-$(CONFIG_VIDEO_IR_I2C)  += ir-kbd-i2c.o
 
 obj-y	+= davinci/
 
+obj-$(CONFIG_MSM_CAMERA) += msm/
+
 obj-$(CONFIG_ARCH_OMAP)	+= omap/
 
 EXTRA_CFLAGS += -Idrivers/media/dvb/dvb-core
