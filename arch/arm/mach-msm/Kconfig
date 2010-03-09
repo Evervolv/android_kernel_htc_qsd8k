@@ -24,6 +24,7 @@ config ARCH_MSM7X30
 	select MSM_PROC_COMM
 	select HAS_MSM_DEBUG_UART_PHYS
 	select VERIFY_PERMISSION_FAULT
+	select MSM_DAL
 
 config ARCH_QSD8X50
 	bool "QSD8X50"
@@ -35,6 +36,7 @@ config ARCH_QSD8X50
 	select MSM_PROC_COMM
 	select HAS_MSM_DEBUG_UART_PHYS
 	select VERIFY_PERMISSION_FAULT
+	select MSM_DAL
 
 config ARCH_MSM8X60
 	bool "MSM8X60"
@@ -463,6 +465,14 @@ config IOMMU_API
 
 config MSM_SCM
 	bool
+
+config MSM_DAL
+	default n 
+	bool "MSM Driver Access Layer (DAL RPC)"
+	help
+	  Support for the DAL RPC interface used to communicate with
+	  the baseband processor or DSP in newer Qualcomm MSM/QSD
+	  chips.
 
 config MSM_ONCRPCROUTER
 	depends on MSM_SMD
