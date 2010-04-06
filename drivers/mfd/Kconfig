@@ -624,6 +624,14 @@ config MFD_WL1273_CORE
 	  driver connects the radio-wl1273 V4L2 module and the wl1273
 	  audio codec.
 
+config PM8058
+	bool "Qualcomm PM8058 Power Management IC"
+	depends on MSM_SSBI && ARCH_MSM7X30
+	default y if MSM_SSBI && ARCH_MSM7X30
+	help
+	  Say yes here if your board is equipped with the Qualcomm
+	  PM8058 PMIC.
+
 endif # MFD_SUPPORT
 
 menu "Multimedia Capabilities Port drivers"
