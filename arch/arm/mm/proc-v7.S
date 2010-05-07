@@ -282,6 +282,21 @@ __v7_setup:
 	ALT_SMP(orr	r4, r4, #TTB_FLAGS_SMP)
 	ALT_UP(orr	r4, r4, #TTB_FLAGS_UP)
 	mcr	p15, 0, r4, c2, c0, 1		@ load TTB1
+#ifdef CONFIG_ARCH_MSM_SCORPION
+#ifdef CONFIG_ARCH_QSD8X50
+	mov     r0, #0x77
+#else
+	mov     r0, #0x33
+#endif
+	mcr     p15, 3, r0, c15, c0, 3          @ set L2CR1
+	mrc     p15, 0, r0, c1, c0, 1           @ read ACTLR
+#ifdef CONFIG_CPU_CACHE_ERR_REPORT
+	orr     r0, r0, #0x37                   @ turn on L1/L2 error reporting
+#else
+	bic     r0, r0, #0x37
+#endif
+	mcr     p15, 0, r0, c1, c0, 1           @ write ACTLR
+#endif
 	/*
 	 * Memory region attributes with SCTLR.TRE=1
 	 *
