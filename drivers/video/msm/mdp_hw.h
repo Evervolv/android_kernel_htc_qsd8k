@@ -139,9 +139,28 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 #endif
 
 #if defined(CONFIG_MSM_MDP40)
-#define MDP_LAYERMIXER_IN_CFG            (0x10100)
-#define MDP_OVERLAYPROC0_CFG             (0x10004)
-#define MDP_OVERLAYPROC1_CFG             (0x18004)
+#define MDP_LAYERMIXER_IN_CFG              (0x10100)
+#define MDP_OVERLAYPROC_START(x)           (0x00004 + ((x) * 0x4))
+#define MDP_OVERLAYPROC_CFG(x)             (0x10004 + ((x) * 0x8000))
+#define MDP_OVERLAYPROC_OUT_SIZE(x)        (0x10008 + ((x) * 0x8000))
+#define MDP_OVERLAYPROC_FB_ADDR(x)         (0x1000c + ((x) * 0x8000))
+#define MDP_OVERLAYPROC_FB_ADDR2(x)        (0x1001c + ((x) * 0x8000))
+#define MDP_OVERLAYPROC_FB_Y_STRIDE(x)     (0x10010 + ((x) * 0x8000))
+#define MDP_OVERLAYPROC_OPMODE(x)          (0x10014 + ((x) * 0x8000))
+
+#define MDP_PIPE_RGB_SRC_SIZE(x)           (0x40000 + ((x) * 0x10000))
+#define MDP_PIPE_RGB_SRC_XY(x)             (0x40004 + ((x) * 0x10000))
+#define MDP_PIPE_RGB_OUT_SIZE(x)           (0x40008 + ((x) * 0x10000))
+#define MDP_PIPE_RGB_OUT_XY(x)             (0x4000c + ((x) * 0x10000))
+#define MDP_PIPE_RGB_SRC_ADDR(x)           (0x40010 + ((x) * 0x10000))
+#define MDP_PIPE_RGB_SRC_Y_STRIDE(x)       (0x40040 + ((x) * 0x10000))
+#define MDP_PIPE_RGB_SRC_FORMAT(x)         (0x40050 + ((x) * 0x10000))
+#define MDP_PIPE_RGB_SRC_UNPACK_PATTERN(x) (0x40054 + ((x) * 0x10000))
+#define MDP_PIPE_RGB_OP_MODE(x)            (0x40058 + ((x) * 0x10000))
+#define MDP_PIPE_RGB_SCALE_PHASEX_STEP(x)  (0x4005c + ((x) * 0x10000))
+#define MDP_PIPE_RGB_SCALE_PHASEY_STEP(x)  (0x40060 + ((x) * 0x10000))
+
+#define MDP_PIPE_RGB_FETCH_CFG(x)          (0x41004 + ((x) * 0x10000))
 #endif
 
 #define MDP_CGC_EN                       (0x00100)

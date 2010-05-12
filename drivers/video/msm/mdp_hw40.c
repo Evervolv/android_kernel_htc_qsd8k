@@ -27,7 +27,39 @@ static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 	struct mdp_info *mdp = priv;
 	uint32_t dma2_cfg;
 	uint16_t ld_param = 0; /* 0=PRIM, 1=SECD, 2=EXT */
+	uint32_t fmt, pattern;
 
+	/* configure source, base layer */
+	mdp_writel(mdp, ((height << 16) | (width)), MDP_PIPE_RGB_SRC_SIZE(0));
+	mdp_writel(mdp, 0, MDP_PIPE_RGB_SRC_XY(0));
+	mdp_writel(mdp, addr, MDP_PIPE_RGB_SRC_ADDR(0));
+	mdp_writel(mdp, stride, MDP_PIPE_RGB_SRC_Y_STRIDE(0));
+
+	switch (mdp->dma_format) {
+	case DMA_IBUF_FORMAT_XRGB8888:
+		fmt = PPP_CFG_MDP_XRGB_8888(SRC);
+		pattern = PPP_PACK_PATTERN_MDP_BGRA_8888;
+		break;
+	case DMA_IBUF_FORMAT_RGB565:
+		fmt = PPP_CFG_MDP_RGB_565(SRC);
+		pattern = PPP_PACK_PATTERN_MDP_RGB_565;
+		break;
+	default:
+		BUG();
+		break;
+	}
+
+	mdp_writel(mdp, fmt, MDP_PIPE_RGB_SRC_FORMAT(0));
+	mdp_writel(mdp, pattern, MDP_PIPE_RGB_SRC_UNPACK_PATTERN(0));
+
+	/* configure destination */
+	/* setup size, address, and stride in the overlay engine */
+	mdp_writel(mdp, 1, MDP_OVERLAYPROC_CFG(0));
+	mdp_writel(mdp, (height << 16) | (width), MDP_OVERLAYPROC_OUT_SIZE(0));
+	mdp_writel(mdp, addr, MDP_OVERLAYPROC_FB_ADDR(0));
+	mdp_writel(mdp, stride, MDP_OVERLAYPROC_FB_Y_STRIDE(0));
+
+	/* output i/f config is in dma_p */
 	dma2_cfg = DMA_PACK_TIGHT |
 		DMA_PACK_ALIGN_LSB;
 
@@ -38,11 +70,6 @@ static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 	/* 666 18BPP */
 	dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_6BITS | DMA_DSTC2R_6BITS;
 
-	/* setup size, address, and stride */
-	mdp_writel(mdp, (height << 16) | (width), MDP_DMA_P_SIZE);
-	mdp_writel(mdp, addr, MDP_DMA_P_IBUF_ADDR);
-	mdp_writel(mdp, stride, MDP_DMA_P_IBUF_Y_STRIDE);
-
 	/* set y & x offset and MDDI transaction parameters */
 	mdp_writel(mdp, (y << 16) | (x), MDP_DMA_P_OUT_XY);
 	mdp_writel(mdp, ld_param, MDP_MDDI_PARAM_WR_SEL);
@@ -51,7 +78,9 @@ static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 
 	mdp_writel(mdp, 0x1, MDP_MDDI_DATA_XFR);
 	mdp_writel(mdp, dma2_cfg, MDP_DMA_P_CONFIG);
-	mdp_writel(mdp, 0, MDP_DMA_P_START);
+
+	/* start the overlay fetch */
+	mdp_writel(mdp, 0, MDP_OVERLAYPROC_START(0));
 }
 
 int mdp_hw_init(struct mdp_info *mdp)
@@ -71,24 +100,29 @@ int mdp_hw_init(struct mdp_info *mdp)
 	clk_set_rate(mdp->clk, 122880000); /* 122.88 Mhz */
 	pr_info("%s: mdp_clk=%lu\n", __func__, clk_get_rate(mdp->clk));
 
-	/* TODO: Configure the VG/RGB pipes fetch data */
-
 	/* this should work for any mdp_clk freq. 
 	 * TODO: use different value for mdp_clk freqs >= 90Mhz */
-	mdp_writel(mdp, 0x27, MDP_DMA_P_FETCH_CFG); /* 8 bytes-burst x 8 req */
+	/* 8 bytes-burst x 8 req */
+	mdp_writel(mdp, 0x27, MDP_DMA_P_FETCH_CFG);
+	/* 16 bytes-burst x 4 req */
+	/* TODO: do same for vg pipes */
+	mdp_writel(mdp, 0xc3, MDP_PIPE_RGB_FETCH_CFG(0));
+	mdp_writel(mdp, 0xc3, MDP_PIPE_RGB_FETCH_CFG(1));
 
 	mdp_writel(mdp, 0x3, MDP_EBI2_PORTMAP_MODE);
 
 	/* 3 pending requests */
 	mdp_writel(mdp, 0x02222, MDP_MAX_RD_PENDING_CMD_CONFIG);
 
-	/* no overlay processing, sw controls everything */
-	mdp_writel(mdp, 0, MDP_LAYERMIXER_IN_CFG);
-	mdp_writel(mdp, 1 << 3, MDP_OVERLAYPROC0_CFG);
-	mdp_writel(mdp, 1 << 3, MDP_OVERLAYPROC1_CFG);
-
 	/* XXX: HACK! hardcode to do mddi on primary */
 	mdp_writel(mdp, 0x2, MDP_DISP_INTF_SEL);
+
+	/* RGB1 -> Layer 0 base */
+	mdp_writel(mdp, 1 << 8, MDP_LAYERMIXER_IN_CFG);
+
+	mdp_writel(mdp, 1, MDP_OVERLAYPROC_CFG(0));
+	mdp_writel(mdp, 0, MDP_OVERLAYPROC_CFG(1));
+
 	return 0;
 }
 
