@@ -24,6 +24,7 @@ struct mddi_info;
 /* output interface format */
 #define MSM_MDP_OUT_IF_FMT_RGB565 0
 #define MSM_MDP_OUT_IF_FMT_RGB666 1
+#define MSM_MDP_OUT_IF_FMT_RGB888 2
 
 struct msm_fb_data {
 	int xres;	/* x resolution in pixels */
