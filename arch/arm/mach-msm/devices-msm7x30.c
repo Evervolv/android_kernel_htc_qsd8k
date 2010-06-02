@@ -613,6 +613,26 @@ struct platform_device msm_device_spi = {
 	.resource	= resources_spi,
 };
 
+static struct resource msm_vidc_720p_resources[] = {
+	{
+		.start	= 0xA3B00000,
+		.end	= 0xA3B00000 + SZ_4K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= INT_MFC720,
+		.end	= INT_MFC720,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+struct platform_device msm_device_vidc_720p = {
+	.name = "msm_vidc_720p",
+	.id = 0,
+	.num_resources = ARRAY_SIZE(msm_vidc_720p_resources),
+	.resource = msm_vidc_720p_resources,
+};
+
 static struct resource resources_otg[] = {
 	{
 		.start	= MSM_HSUSB_PHYS,
