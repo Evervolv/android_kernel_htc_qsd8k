@@ -19,7 +19,6 @@ config ARCH_MSM7X30
 	select MACH_MSM7X30_SURF # if !
 	select ARCH_MSM_SCORPION
 	select MSM_SMD
-	select MSM_VIC
 	select CPU_V7
 	select MSM_GPIOMUX
 	select MSM_PROC_COMM
@@ -31,7 +30,6 @@ config ARCH_QSD8X50
 	select MACH_QSD8X50_SURF if !MACH_QSD8X50A_ST1_5
 	select ARCH_MSM_SCORPION
 	select MSM_SMD
-	select MSM_VIC
 	select CPU_V7
 	select MSM_GPIOMUX
 	select MSM_PROC_COMM
@@ -63,9 +61,6 @@ config  ARCH_MSM_SCORPION
 	bool
 
 config HAS_MSM_DEBUG_UART_PHYS
-	bool
-
-config  MSM_VIC
 	bool
 
 config MSM_MDP22

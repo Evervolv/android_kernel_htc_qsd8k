@@ -11,12 +11,8 @@ obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock-arm11.o idle.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += acpuclock-scorpion.o idle-v7.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += arch-init-scorpion.o
 
-ifdef CONFIG_MSM_VIC
-obj-y += irq-vic.o
-else
 ifndef CONFIG_ARCH_MSM8X60
 obj-y += irq.o
-endif
 endif
 
 obj-$(CONFIG_ARCH_MSM8X60) += clock-dummy.o iommu.o iommu_dev.o devices-msm8x60-iommu.o
