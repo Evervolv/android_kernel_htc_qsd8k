@@ -94,7 +94,11 @@
 #define PMIC_RPC_TIMEOUT (5*HZ)
 
 #define PMIC_RPC_PROG	0x30000061
+#ifdef CONFIG_ARCH_MSM7X30
+#define PMIC_RPC_VER	0x00030001
+#else
 #define PMIC_RPC_VER	0x00010001
+#endif
 
 /* error bit flags defined by modem side */
 #define PM_ERR_FLAG__PAR1_OUT_OF_RANGE		(0x0001)
