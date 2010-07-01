@@ -211,4 +211,10 @@ config CHARGER_GPIO
 	  This driver can be build as a module. If so, the module will be
 	  called gpio-charger.
 
+config CHARGER_PM8058
+	bool "Qualcomm PM8058 pmic charger driver"
+	depends on PM8058
+	help
+	  Say Y to include support for the pm8058 charge controller
+
 endif # POWER_SUPPLY
