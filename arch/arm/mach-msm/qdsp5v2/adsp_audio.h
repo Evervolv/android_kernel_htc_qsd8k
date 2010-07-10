@@ -38,6 +38,7 @@ int afe_disable(unsigned device);
 
 
 int msm_codec_output(int enable);
+int msm_codec_input(int enable);
 
 void adsp_audio_init(void);
 

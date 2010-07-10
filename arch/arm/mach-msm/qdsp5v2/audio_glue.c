@@ -474,6 +474,44 @@ int msm_codec_output_disable(struct msm_codec *mc)
 }
 
 
+int msm_codec_input_enable(struct msm_codec *mc)
+{
+	unsigned rate, val;
+
+	pr_info("msm_codec_input_enable()\n");
+
+	/* yes tx clks for rx codec -- the clocks
+	 * are named from the opposite POV of the
+	 * codec for some reason...
+	 */
+
+
+	/* bitrate * bits * channels * 8 */
+	rate = 48000 * 16 * 2 * 8;
+	clk_set_rate(mc->tx_mclk, rate);
+
+	printk("RATE %d\n", clk_get_rate(mc->tx_mclk));
+
+	clk_enable(mc->tx_mclk);
+	clk_enable(mc->tx_sclk);
+
+	/* fire up mi2s transport */
+	mi2s_set_input(mc, 2, 16);
+
+	return 0;
+}
+
+int msm_codec_input_disable(struct msm_codec *mc)
+{
+	pr_info("msm_codec_input_disable()\n");
+
+	clk_disable(mc->tx_sclk);
+	clk_disable(mc->tx_mclk);
+
+	return 0;
+}
+
+
 static struct msm_codec the_msm_codec;
 
 int msm_codec_output(int enable)
@@ -483,6 +521,15 @@ int msm_codec_output(int enable)
 		return msm_codec_output_enable(mc);
 	else
 		return msm_codec_output_disable(mc);
+}
+
+int msm_codec_input(int enable)
+{
+	struct msm_codec *mc = &the_msm_codec;
+	if (enable)
+		return msm_codec_input_enable(mc);
+	else
+		return msm_codec_input_disable(mc);
 }
 
 /* 7x30 memory map */
