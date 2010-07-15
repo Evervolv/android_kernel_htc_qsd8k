@@ -20,6 +20,8 @@
 
 #include "../dal.h"
 
+#include "adsp_audio.h"
+
 #define VOICE_DAL_DEVICE	0x02000075
 #define VOICE_DAL_PORT		"SMD_DAL00"
 
@@ -112,7 +114,10 @@ static void voice_work_func(struct work_struct *work)
 
 	pr_info("voice: doing work...\n");
 
-	if (voice->next == EVENT_ACQUIRE_START) {
+	switch (voice->next) {
+	case EVENT_ACQUIRE_START:
+		audio_route_path("handset");
+
 		cmd.hdr.id = CMD_DEVICE_INFO;
 		cmd.hdr.data_len = sizeof(cmd) - sizeof(cmd.hdr);
 		cmd.rx_device = 1;
@@ -131,6 +136,11 @@ static void voice_work_func(struct work_struct *work)
 		}
 
 		rc = voice_cmd_acquire_done(voice);
+		break;
+
+	case EVENT_RELEASE_START:
+		audio_route_path("speaker");
+		break;
 	}
 }
 
@@ -165,31 +175,6 @@ static void voice_dal_callback(void *data, int len, void *cookie)
 
 static int voice_open(struct inode *inode, struct file *file)
 {
-	struct msm_voice *voice = &the_voice;
-	struct voice_init cmd;
-	int rc;
-
-	pr_info("!!! voice !!!\n");
-
-	voice->client = dal_attach(VOICE_DAL_DEVICE,
-				   VOICE_DAL_PORT,
-				   voice_dal_callback,
-				   voice);
-
-	if (!voice->client) {
-		pr_err("voice: cannot attach to service\n");
-		return -ENODEV;
-	}
-
-	cmd.hdr.id = CMD_VOICE_INIT;
-	cmd.hdr.data_len = sizeof(cmd) - sizeof(cmd.hdr);
-	cmd.cb_handle = 0x12345678;
-	rc = dal_call_f5(voice->client, VOICE_DALRPC_CMD, &cmd, sizeof(cmd));
-
-	if (rc < 0) {
-		pr_err("voice: init failed\n");
-		return -ENODEV;
-	}
 	return 0;
 }
 
@@ -211,9 +196,33 @@ struct miscdevice voice_misc = {
 	.fops	= &voice_fops,
 };
 
-static int __init audio_init(void)
+int msm_voice_init(void)
 {
+	struct msm_voice *voice = &the_voice;
+	struct voice_init cmd;
+	int rc;
+
+	pr_info("voice: init()\n");
+
+	voice->client = dal_attach(VOICE_DAL_DEVICE,
+				   VOICE_DAL_PORT,
+				   voice_dal_callback,
+				   voice);
+
+	if (!voice->client) {
+		pr_err("voice: cannot attach to service\n");
+		return -ENODEV;
+	}
+
+	cmd.hdr.id = CMD_VOICE_INIT;
+	cmd.hdr.data_len = sizeof(cmd) - sizeof(cmd.hdr);
+	cmd.cb_handle = NULL;
+	rc = dal_call_f5(voice->client, VOICE_DALRPC_CMD, &cmd, sizeof(cmd));
+
+	if (rc < 0) {
+		pr_err("voice: init failed\n");
+		return -ENODEV;
+	}
+
 	return misc_register(&voice_misc);
 }
-
-device_initcall(audio_init);

@@ -29,6 +29,7 @@
 
 #include "adsp.h"
 #include "adsp_private.h"
+#include "adsp_audio.h"
 
 struct msm_adsp_queue {
 	const char *name;
@@ -660,6 +661,16 @@ static int adsp_probe(struct platform_device *pdev) {
 		return ret;
 
 	pr_info("*** adsp_probe() done ***\n");
+
+	pr_info("audio: codec init...\n");
+	msm_codec_init();
+
+	pr_info("audio: adsp init...\n");
+	adsp_audio_init();
+
+	pr_info("audio: voice init...\n");
+	msm_voice_init();
+
 	return 0;
 }
 
@@ -683,8 +694,6 @@ static int __init adsp_init(void)
 	spin_lock_init(&adsp->callback_lock);
 	spin_lock_init(&adsp->write_lock);
 	spin_lock_init(&adsp->event_lock);
-
-	msm_codec_init();
 
 	return platform_driver_register(&adsp_driver);
 }

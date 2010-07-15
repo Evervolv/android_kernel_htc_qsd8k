@@ -17,6 +17,30 @@ struct codec_reg {
 	unsigned char addr, mask, val;
 };
 
+static struct codec_reg init_tx[] = {
+	{ 0x04, 0xc0, 0x8C },
+	{ 0x0D, 0xFF, 0x00 },
+	{ 0x0E, 0xFF, 0x00 },
+	{ 0x0F, 0xFF, 0x00 },
+	{ 0x10, 0xF8, 0x68 },
+	{ 0x11, 0xFE, 0x00 },
+	{ 0x12, 0xFE, 0x00 },
+	{ 0x13, 0xFF, 0x58 },
+	{ 0x14, 0xFF, 0x00 },
+	{ 0x15, 0xFE, 0x00 },
+	{ 0x16, 0xFF, 0x00 },
+	{ 0x1A, 0xFF, 0x00 },
+	{ 0x80, 0x01, 0x00 },
+	{ 0x82, 0x7F, 0x18 },
+	{ 0x83, 0x1C, 0x00 },
+	{ 0x86, 0xFF, 0xAC },
+	{ 0x87, 0xFF, 0xAC },
+	{ 0x89, 0xFF, 0xFF },
+	{ 0x8A, 0xF0, 0x30 },
+
+	{ 0xFF, 0x00, 0x00 },
+};
+
 static struct codec_reg init_rx[] = {
 	{ 0x23, 0xF8, 0x00 },
 	{ 0x24, 0x6F, 0x00 },
@@ -70,7 +94,7 @@ static struct codec_reg init_rx[] = {
 	{ 0xFF, 0x00, 0x00 },
 };
 
-static struct codec_reg init_handset_48k_256_mono[] = {
+static struct codec_reg init_handset_rx_48k_256_mono[] = {
 	{ 0x80, 0x02, 0x02 },
 	{ 0x80, 0x02, 0x00 },
 
@@ -94,8 +118,32 @@ static struct codec_reg init_handset_48k_256_mono[] = {
 
 	{ 0xFF, 0x00, 0x00 },
 };
-	
-static struct codec_reg init_speaker_48k_256_stereo[] = {
+
+static struct codec_reg init_handset_tx_48k_256_mono[] = {
+	{ 0x80, 0x01, 0x01 },
+	{ 0x80, 0x01, 0x00 },
+	{ 0x8A, 0x30, 0x30 },
+	{ 0x11, 0xfc, 0xfc },
+	{ 0x13, 0xfc, 0x58 },
+	{ 0x14, 0xff, 0x65 },
+	{ 0x15, 0xff, 0x64 },
+	{ 0x82, 0xff, 0x5A },
+	{ 0x10, 0xFF, 0x68 },
+
+	{ 0x0D, 0xF0, 0xd0 },
+
+	{ 0xFF, 0x00, 3 },
+
+	{ 0x83, 0x14, 0x14 },
+	{ 0x8b, 0xff, 0xE6 },
+	{ 0x8c, 0x03, 0x02 },
+	{ 0x86, 0xff, 0xFA },
+	{ 0x8A, 0x50, 0x40 },
+
+	{ 0xFF, 0x00, 0x00 },
+};
+
+static struct codec_reg init_speaker_rx_48k_256_stereo[] = {
 	{ 0x80, 0x02, 0x02 },
 	{ 0x80, 0x02, 0x00 },
 
@@ -118,6 +166,7 @@ static struct codec_reg init_speaker_48k_256_stereo[] = {
 
 	{ 0xFF, 0x00, 0x00 },
 };
+
 
 
 #include <linux/module.h>
@@ -252,22 +301,57 @@ void adie_load(struct i2c_client *client, struct codec_reg *regs)
 
 void adie_enable(void)
 {
+	static int need_init = 1;
 	struct i2c_client *client = marimba_client;
 
-	marimba_vreg_enable();
+	if (need_init) {
+		marimba_vreg_enable();
 
-	marimba_write(client, 0xff, 0x08); /* bring up codec */
-	marimba_write(client, 0xff, 0x0a); /* GDFS_EN_FEW=1 */
-	marimba_write(client, 0xff, 0x0e); /* GDFS_EN_REST=1 */
-	marimba_write(client, 0xff, 0x07); /* RESET_N=1 */
-	marimba_write(client, 0xff, 0x17); /* clock enable */
-	marimba_write(client, 0x03, 0x04); /* enable band gap */
-	marimba_write(client, 0x8F, 0x44); /* dither delay select, dmic gain bypass */
+		marimba_write(client, 0xff, 0x08); /* bring up codec */
+		marimba_write(client, 0xff, 0x0a); /* GDFS_EN_FEW=1 */
+		marimba_write(client, 0xff, 0x0e); /* GDFS_EN_REST=1 */
+		marimba_write(client, 0xff, 0x07); /* RESET_N=1 */
+		marimba_write(client, 0xff, 0x17); /* clock enable */
+		marimba_write(client, 0x03, 0x04); /* enable band gap */
+		marimba_write(client, 0x8F, 0x44); /* dither delay select, dmic gain bypass */
+		
+		msleep(100);
 
-	msleep(100);
+		adie_load(client, init_tx);
+		adie_load(client, init_rx);
 
-	adie_load(client, init_rx);
-	adie_load(client, init_speaker_48k_256_stereo);
+		need_init = 0;
+	}
+}
+
+int codec_route_path(const char *path)
+{
+	struct i2c_client *client = marimba_client;
+
+	pr_info("codec_route_path: %s\n", path ? path : "default");
+
+	if (!path)
+		return 0;
+
+	if (!client) {
+		pr_err("codec_route_path: codec does not exist?!\n");
+		return -ENODEV;
+	}
+
+	if (!strcmp(path,"speaker")) {
+		adie_enable();
+		adie_load(client, init_speaker_rx_48k_256_stereo);
+		return 0;
+	}
+
+	if (!strcmp(path, "handset")) {
+		adie_enable();
+		adie_load(client, init_handset_tx_48k_256_mono);
+		adie_load(client, init_handset_rx_48k_256_mono);
+		return 0;
+	}
+
+	return -ENODEV;
 }
 
 static int marimba_probe(struct i2c_client *client,

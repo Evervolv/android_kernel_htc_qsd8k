@@ -68,17 +68,20 @@ static void audio_send_data(void *cookie)
 }
 
 
-static int need_init = 1;
-
 static int audio_open(struct inode *inode, struct file *file)
 {
 	int ret;
 	struct audio *audio;
 
+#if 0
+	static int need_init = 1;
 	if (need_init) {
 		msm_codec_output(1);
 		afe_enable(AFE_DEVICE_MI2S_CODEC_RX, 48000, 2);
 		adie_enable();
+
+		msm_codec_input(1);
+		afe_enable(AFE_DEVICE_MI2S_CODEC_TX, 48000, 2);
 		need_init = 0;
 	}
 
@@ -90,8 +93,13 @@ static int audio_open(struct inode *inode, struct file *file)
 	msleep(5000);
 	msm_codec_output(1);
 	afe_enable(AFE_DEVICE_MI2S_CODEC_RX, 48000, 2);
-	return 0;
+	adie_enable();
 #endif
+#endif
+
+	ret = audio_route_path(NULL);
+	if (ret < 0)
+		return ret;
 
 	audio = kzalloc(sizeof(*audio), GFP_KERNEL);
 	if (!audio)
@@ -175,6 +183,10 @@ static int audio_release(struct inode *inode, struct file *file)
 	audplay_dsp_config(audio->audplay, 0);
 	audplay_put(audio->audplay);
 	kfree(audio);
+#if 0
+	afe_disable(AFE_DEVICE_MI2S_CODEC_RX);
+	msm_codec_output(0);
+#endif
 	return 0;
 }
 

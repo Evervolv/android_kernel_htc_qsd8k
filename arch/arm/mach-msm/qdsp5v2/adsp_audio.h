@@ -37,9 +37,11 @@ int afe_enable(unsigned device, unsigned rate, unsigned channels);
 int afe_disable(unsigned device);
 
 
-int msm_codec_output(int enable);
-int msm_codec_input(int enable);
-
 void adsp_audio_init(void);
+int msm_voice_init(void);
+int msm_codec_init(void);
+
+int audio_route_path(const char *path);
+int codec_route_path(const char *path);
 
 #endif
