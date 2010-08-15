@@ -18,13 +18,12 @@
 #include <linux/irq.h>
 #include <linux/pm.h>
 #include <linux/sysdev.h>
+#include <linux/gpio.h>
 
 #include <asm/io.h>
-#include <asm/gpio.h>
 #include <asm/mach-types.h>
 
 #include "board-trout.h"
-#include "gpio_chip.h"
 
 static uint8_t trout_cpld_shadow[4] = {
         [0] = 0x40, // for serial debug, low current
@@ -41,8 +40,9 @@ static uint8_t trout_sleep_int_mask[] = {
 };
 static int trout_suspended;
 
-static int trout_gpio_read(struct gpio_chip *chip, unsigned n)
+static int trout_gpio_get(struct gpio_chip *chip, unsigned offset)
 {
+	unsigned n = chip->base + offset;
 	uint8_t b;
 	int reg;
 	if (n >= TROUT_GPIO_VIRTUAL_BASE)
@@ -52,8 +52,9 @@ static int trout_gpio_read(struct gpio_chip *chip, unsigned n)
 	return !!(readb(TROUT_CPLD_BASE + reg) & b);
 }
 
-int trout_gpio_write(struct gpio_chip *chip, unsigned n, unsigned on)
+static void trout_gpio_set(struct gpio_chip *chip, unsigned offset, int on)
 {
+	unsigned n = chip->base + offset;
 	uint8_t b = 1U << (n & 7);
 	int reg = (n & 0x78) >> 2; // assumes base is 128
 	unsigned long flags;
@@ -61,7 +62,7 @@ int trout_gpio_write(struct gpio_chip *chip, unsigned n, unsigned on)
 
 	if ((reg >> 1) >= ARRAY_SIZE(trout_cpld_shadow)) {
 		printk(KERN_ERR "trout_gpio_write called on input %d\n", n);
-		return -ENOTSUPP;
+		return;
 	}
 
 	local_irq_save(flags);
@@ -71,27 +72,25 @@ int trout_gpio_write(struct gpio_chip *chip, unsigned n, unsigned on)
 		reg_val = trout_cpld_shadow[reg >> 1] &= ~b;
 	writeb(reg_val, TROUT_CPLD_BASE + reg);
 	local_irq_restore(flags);
+}
+
+static int trout_gpio_direction_output(struct gpio_chip *chip,
+				       unsigned offset, int value)
+{
+	trout_gpio_set(chip, offset, value);
 	return 0;
 }
 
-static int trout_gpio_configure(struct gpio_chip *chip, unsigned int gpio, unsigned long flags)
+static int trout_gpio_to_irq(struct gpio_chip *chip, unsigned offset)
 {
-	if(flags & (GPIOF_OUTPUT_LOW | GPIOF_OUTPUT_HIGH))
-		trout_gpio_write(chip, gpio, flags & GPIOF_OUTPUT_HIGH);
-	return 0;
-}
+	unsigned gpio = chip->base + offset;
 
-static int trout_gpio_get_irq_num(struct gpio_chip *chip, unsigned int gpio, unsigned int *irqp, unsigned long *irqnumflagsp)
-{
 	if ((gpio < TROUT_GPIO_BANK0_FIRST_INT_SOURCE ||
 	     gpio > TROUT_GPIO_BANK0_LAST_INT_SOURCE) &&
 	    (gpio < TROUT_GPIO_BANK1_FIRST_INT_SOURCE ||
 	     gpio > TROUT_GPIO_BANK1_LAST_INT_SOURCE))
 		return -ENOENT;
-	*irqp = TROUT_GPIO_TO_INT(gpio);
-	if(irqnumflagsp)
-		*irqnumflagsp = 0;
-	return 0;
+	return TROUT_GPIO_TO_INT(gpio);
 }
 
 static void trout_gpio_irq_ack(unsigned int irq)
@@ -216,14 +215,12 @@ static struct irq_chip trout_gpio_irq_chip = {
 };
 
 static struct gpio_chip trout_gpio_chip = {
-	.start = TROUT_GPIO_START,
-	.end = TROUT_GPIO_END,
-	.configure = trout_gpio_configure,
-	.get_irq_num = trout_gpio_get_irq_num,
-	.read = trout_gpio_read,
-	.write = trout_gpio_write,
-//	.read_detect_status = trout_gpio_read_detect_status,
-//	.clear_detect_status = trout_gpio_clear_detect_status
+	.base = TROUT_GPIO_START,
+	.ngpio = TROUT_GPIO_END - TROUT_GPIO_START + 1,
+	.direction_output = trout_gpio_direction_output,
+	.get = trout_gpio_get,
+	.set = trout_gpio_set,
+	.to_irq = trout_gpio_to_irq,
 };
 
 struct sysdev_class trout_sysdev_class = {
@@ -252,7 +249,7 @@ static int __init trout_init_gpio(void)
 		set_irq_flags(i, IRQF_VALID);
 	}
 
-	register_gpio_chip(&trout_gpio_chip);
+	gpiochip_add(&trout_gpio_chip);
 
 	set_irq_type(MSM_GPIO_TO_INT(17), IRQF_TRIGGER_HIGH);
 	set_irq_chained_handler(MSM_GPIO_TO_INT(17), trout_gpio_irq_handler);
