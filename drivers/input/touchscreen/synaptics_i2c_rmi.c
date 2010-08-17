@@ -13,6 +13,12 @@
  *
  */
 
+/* Ported HTC's filtering code from Hero kernel sources to prevent
+ * the event hub being spammed with unnecessary events causing
+ * massive cpu usage.
+ * netarchy / Ninpo
+ */
+
 #include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/earlysuspend.h>
@@ -46,6 +52,7 @@ struct synaptics_ts_data {
 	uint32_t flags;
 	int reported_finger_count;
 	int8_t sensitivity_adjust;
+	uint32_t dup_threshold;
 	int (*power)(int on);
 	struct early_suspend early_suspend;
 };
@@ -53,6 +60,48 @@ struct synaptics_ts_data {
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void synaptics_ts_early_suspend(struct early_suspend *h);
 static void synaptics_ts_late_resume(struct early_suspend *h);
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_DUPLICATED_FILTER
+static int duplicated_filter(struct synaptics_ts_data *ts, int pos[2][2],
+						const int finger2_pressed, const int z)
+{
+	int drift_x[2];
+	int drift_y[2];
+	static int ref_x[2], ref_y[2];
+	uint8_t discard[2] = {0, 0};
+
+	drift_x[0] = abs(ref_x[0] - pos[0][0]);
+	drift_y[0] = abs(ref_y[0] - pos[0][1]);
+	if (finger2_pressed) {
+		drift_x[1] = abs(ref_x[1] - pos[1][0]);
+		drift_y[1] = abs(ref_y[1] - pos[1][1]);
+	}
+
+	if (drift_x[0] < ts->dup_threshold && drift_y[0] < ts->dup_threshold && z != 0) {
+
+		discard[0] = 1;
+	}
+	if (!finger2_pressed || (drift_x[1] < ts->dup_threshold && drift_y[1] < ts->dup_threshold)) {
+		discard[1] = 1;
+	}
+	if (discard[0] && discard[1]) {
+//		if finger 0 and finger 1's movement < threshold , discard it.
+		return 1;
+	}
+	ref_x[0] = pos[0][0];
+	ref_y[0] = pos[0][1];
+	if (finger2_pressed) {
+		ref_x[1] = pos[1][0];
+		ref_y[1] = pos[1][1];
+	}
+	if (z == 0) {
+		ref_x[0] = ref_y[0] = 0;
+		ref_x[1] = ref_y[1] = 0;
+	}
+
+	return 0;
+}
 #endif
 
 static int synaptics_init_panel(struct synaptics_ts_data *ts)
@@ -209,6 +258,14 @@ static void synaptics_ts_work_func(struct work_struct *work)
 
 				if (!finger)
 					z = 0;
+#ifdef CONFIG_TOUCHSCREEN_DUPLICATED_FILTER
+				// discard duplicate events
+				ret = duplicated_filter(ts, pos, finger2_pressed, z);
+				if (ret == 1) {
+					/* printk("%s: duplicated_filter\n", __func__); */
+					break;
+				}
+#endif
 				input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, z);
 				input_report_abs(ts->input_dev, ABS_MT_WIDTH_MAJOR, w);
 				input_report_abs(ts->input_dev, ABS_MT_POSITION_X, pos[0][0]);
@@ -363,6 +420,7 @@ static int synaptics_ts_probe(
 		fuzz_y = pdata->fuzz_y;
 		fuzz_p = pdata->fuzz_p;
 		fuzz_w = pdata->fuzz_w;
+		ts->dup_threshold = pdata->dup_threshold; // adapting filtering
 	} else {
 		irqflags = 0;
 		inactive_area_left = 0;
