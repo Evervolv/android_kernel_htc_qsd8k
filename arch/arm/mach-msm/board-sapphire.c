@@ -52,8 +52,6 @@
 #include <asm/mach/mmc.h>
 #include <linux/mmc/sdio_ids.h>
 
-
-#include "gpio_chip.h"
 #include "board-sapphire.h"
 
 #include <mach/board.h>

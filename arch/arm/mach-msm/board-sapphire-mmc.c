@@ -31,7 +31,6 @@
 #include <asm/mach/mmc.h>
 
 #include "devices.h"
-#include "gpio_chip.h"
 #include "board-sapphire.h"
 #include "proc_comm.h"
 

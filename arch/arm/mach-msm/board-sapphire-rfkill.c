@@ -21,7 +21,6 @@
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <asm/mach-types.h>
-#include "gpio_chip.h"
 #include "board-sapphire.h"
 
 static struct rfkill *bt_rfk;

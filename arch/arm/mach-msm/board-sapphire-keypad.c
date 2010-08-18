@@ -17,7 +17,6 @@
 #include <linux/interrupt.h>
 #include <linux/gpio_event.h>
 #include <asm/mach-types.h>
-#include "gpio_chip.h"
 #include "board-sapphire.h"
 static char *keycaps = "--qwerty";
 #undef MODULE_PARAM_PREFIX
