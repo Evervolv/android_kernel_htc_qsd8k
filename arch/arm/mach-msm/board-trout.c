@@ -55,8 +55,6 @@
 
 #include "board-trout.h"
 
-#include "gpio_chip.h"
-
 #include <mach/board.h>
 #include <mach/board_htc.h>
 #include <mach/msm_serial_debugger.h>
