@@ -20,7 +20,6 @@
 #include <linux/dma-mapping.h>
 #include <mach/msm_iomap.h>
 #include <mach/dma.h>
-#include "gpio_chip.h"
 #include "devices.h"
 #include <mach/board.h>
 #include <mach/board_htc.h>
