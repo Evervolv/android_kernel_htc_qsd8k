@@ -263,7 +263,7 @@ static int gpio_tp_ls_en = SAPPHIRE_TP_LS_EN;
 static int sapphire_ts_power(int on)
 {
 	if (on) {
-		sapphire_gpio_write(NULL, SAPPHIRE_GPIO_TP_EN, 1);
+		gpio_set_value(SAPPHIRE_GPIO_TP_EN, 1);
 		/* touchscreen must be powered before we enable i2c pullup */
 		msleep(2);
 		/* enable touch panel level shift */
@@ -272,7 +272,7 @@ static int sapphire_ts_power(int on)
 	} else {
 		gpio_direction_output(gpio_tp_ls_en, 0);
 		udelay(50);
-		sapphire_gpio_write(NULL, SAPPHIRE_GPIO_TP_EN, 0);
+		gpio_set_value(SAPPHIRE_GPIO_TP_EN, 0);
 	}
 
 	return 0;
@@ -1128,6 +1128,10 @@ static void __init sapphire_init(void)
 	 * Setup common MSM GPIOS
 	 */
 	config_gpios();
+	rc = gpio_request(SAPPHIRE_GPIO_TP_EN, NULL);
+	if (rc < 0)
+		pr_err("%s: gpio_request(%d) failure %d\n",
+		       __func__, SAPPHIRE_GPIO_TP_EN, rc);
 
 	msm_hw_reset_hook = sapphire_reset;
 
@@ -1150,10 +1154,8 @@ static void __init sapphire_init(void)
 	gpio_set_value(SAPPHIRE_GPIO_H2W_SEL0, 0);
 	gpio_set_value(SAPPHIRE_GPIO_H2W_SEL1, 1);
 	/* put the AF VCM in powerdown mode to avoid noise */
-	if (sapphire_is_5M_camera())
-		sapphire_gpio_write(NULL, SAPPHIRE_GPIO_VCM_PWDN, 0);
-	else
-		sapphire_gpio_write(NULL, SAPPHIRE_GPIO_VCM_PWDN, 1);
+	gpio_set_value(SAPPHIRE_GPIO_VCM_PWDN, !sapphire_is_5M_camera());
+
 	mdelay(100);
 
 	printk(KERN_DEBUG "sapphire_is_5M_camera=%d\n",

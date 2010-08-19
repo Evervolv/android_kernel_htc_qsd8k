@@ -219,6 +219,5 @@ unsigned int sapphire_get_hwid(void);
 unsigned int sapphire_get_skuid(void);
 unsigned int is_12pin_camera(void);
 int sapphire_is_5M_camera(void);
-int sapphire_gpio_write(struct gpio_chip *chip, unsigned n, unsigned on);
 
 #endif /* GUARD */
