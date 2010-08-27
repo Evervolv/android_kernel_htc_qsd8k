@@ -452,6 +452,7 @@ static int battery_adjust_charge_state(struct ds2784_device_info *di)
 	 * to 100)
 	 * Oddly, only Passion is for 99% cycles, HTC
 	 * set the Bravo to 95%.
+	 * -od of xbravoteam
          *
          * Set 99 for Passion - pershoot
 	 */
@@ -462,10 +463,14 @@ static int battery_adjust_charge_state(struct ds2784_device_info *di)
 
 	/* Modified check function, based on original HTC Source.
          * Added current_uA check (relates to 1400mAh capacity check)
+	 * -od of xbravoteam
+	 *
+	 * replace current_uA <= 80 with current_avg_uA <= 40 
+         * - pershoot,dvgrhl,rogerpodacter
 	 */
 
 	if ((di->status.status_reg & 0x80) &&
-		((di->status.current_uA/1000) <= 80) &&
+		((di->status.current_avg_uA/1000) <= 40) &&
 		(di->status.percentage == 100)) {
 		di->status.battery_full = 1;
 		charge_mode = CHARGE_BATT_DISABLE;
@@ -493,7 +498,6 @@ static int battery_adjust_charge_state(struct ds2784_device_info *di)
 			charge_mode = CHARGE_BATT_DISABLE;
 	}
 
-//	if (di->status.current_uA > 1024)
 	if (di->status.battery_full == 1)
 		di->last_charge_seen = di->last_poll;
 	else if (di->last_charge_mode != CHARGE_OFF &&
