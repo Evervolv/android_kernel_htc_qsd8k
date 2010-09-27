@@ -27,6 +27,7 @@
 #include <mach/msm_iomap.h>
 
 #include "acpuclock.h"
+#include "avs.h"
 #include "proc_comm.h"
 
 #if 0
@@ -161,6 +162,7 @@ struct clock_state {
 	unsigned long			wait_for_irq_khz;
 	struct clk*     		clk_ebi1;
 	struct regulator                *regulator;
+	int (*acpu_set_vdd) (int mvolts);
 };
 
 static struct clock_state drv_state = { 0 };
@@ -283,27 +285,41 @@ static void select_clock(unsigned src, unsigned config)
 	writel(val | ((src & 3) << 1), SPSS_CLK_SEL_ADDR);
 }
 
-static int acpuclk_set_vdd_level(int vdd)
+static int acpu_set_vdd(int vdd)
 {
 	if (!drv_state.regulator || IS_ERR(drv_state.regulator)) {
 		drv_state.regulator = regulator_get(NULL, "acpu_vcore");
 		if (IS_ERR(drv_state.regulator)) {
-			pr_info("acpuclk_set_vdd_level %d no regulator\n", vdd);
+			pr_info("acpu_set_vdd %d no regulator\n", vdd);
 			/* Assume that the PMIC supports scaling the processor
 			 * to its maximum frequency at its default voltage.
 			 */
-			return 0;
+			return -ENODEV;
 		}
-		pr_info("acpuclk_set_vdd_level got regulator\n");
+		pr_info("acpu_set_vdd got regulator\n");
 	}
 	vdd *= 1000; /* mV -> uV */
 	return regulator_set_voltage(drv_state.regulator, vdd, vdd);
+}
+
+static int acpuclk_set_vdd_level(int vdd)
+{
+	if (drv_state.acpu_set_vdd)
+		return drv_state.acpu_set_vdd(vdd);
+	else {
+		/* Assume that the PMIC supports scaling the processor
+		 * to its maximum frequency at its default voltage.
+		 */
+		return 0;
+	}
 }
 
 int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 {
 	struct clkctl_acpu_speed *cur, *next;
 	unsigned long flags;
+	int rc = 0;
+	int freq_index = 0;
 
 	cur = drv_state.current_speed;
 
@@ -322,16 +338,29 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		if (next->acpu_khz == 0)
 			return -EINVAL;
 		next++;
+		freq_index++;
 	}
 
 	if (reason == SETRATE_CPUFREQ) {
 		mutex_lock(&drv_state.lock);
+#ifdef CONFIG_MSM_CPU_AVS
+		/* Notify avs before changing frequency */
+		rc = avs_adjust_freq(freq_index, 1);
+		if (rc) {
+			printk(KERN_ERR
+				"acpuclock: Unable to increase ACPU "
+				"vdd: %d.\n", (int) rate);
+			mutex_unlock(&drv_state.lock);
+			return rc;
+		}
+#endif
 		/* Increase VDD if needed. */
 		if (next->vdd > cur->vdd) {
-			if (acpuclk_set_vdd_level(next->vdd)) {
+			rc = acpuclk_set_vdd_level(next->vdd);
+			if (rc) {
 				pr_err("acpuclock: Unable to increase ACPU VDD from %d to %d setting rate to %d.\n", cur->vdd, next->vdd, (int) rate);
 				mutex_unlock(&drv_state.lock);
-				return -EINVAL;
+				return rc;
 			}
 		}
 	}
@@ -372,9 +401,17 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	}
 #endif
 	if (reason == SETRATE_CPUFREQ) {
+#ifdef CONFIG_MSM_CPU_AVS
+		/* notify avs after changing frequency */
+		rc = avs_adjust_freq(freq_index, 0);
+		if (rc)
+			printk(KERN_ERR
+				"acpuclock: Unable to drop ACPU vdd: %d.\n", (int) rate);
+#endif
 		/* Drop VDD level if we can. */
 		if (next->vdd < cur->vdd) {
-			if (acpuclk_set_vdd_level(next->vdd))
+			rc = acpuclk_set_vdd_level(next->vdd);
+			if (rc)
 				 pr_err("acpuclock: Unable to drop ACPU VDD from%d to %d setting rate to %d.\n", cur->vdd, next->vdd, (int) rate);
 		}
 		mutex_unlock(&drv_state.lock);
@@ -509,6 +546,23 @@ unsigned long acpuclk_wait_for_irq(void)
 	return ret * 1000;
 }
 
+#ifdef CONFIG_MSM_CPU_AVS
+static int __init acpu_avs_init(int (*set_vdd) (int), int khz)
+{
+	int i;
+	int freq_count = 0;
+	int freq_index = -1;
+
+	for (i = 0; acpu_freq_tbl[i].acpu_khz; i++) {
+		freq_count++;
+		if (acpu_freq_tbl[i].acpu_khz == khz)
+			freq_index = i;
+	}
+
+	return avs_init(set_vdd, freq_count, freq_index);
+}
+#endif
+
 void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 {
 	spin_lock_init(&acpu_lock);
@@ -519,6 +573,7 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 	drv_state.vdd_switch_time_us = clkdata->vdd_switch_time_us;
 	drv_state.power_collapse_khz = clkdata->power_collapse_khz;
 	drv_state.wait_for_irq_khz = clkdata->wait_for_irq_khz;
+	drv_state.acpu_set_vdd = acpu_set_vdd;
 
 	if (clkdata->mpll_khz)
 		acpu_mpll->acpu_khz = clkdata->mpll_khz;
@@ -528,5 +583,12 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 	drv_state.clk_ebi1 = clk_get(NULL,"ebi1_clk");
 #ifndef CONFIG_AXI_SCREEN_POLICY
 	clk_set_rate(drv_state.clk_ebi1, drv_state.current_speed->axiclk_khz * 1000);
+#endif
+#ifdef CONFIG_MSM_CPU_AVS
+	if (!acpu_avs_init(drv_state.acpu_set_vdd,
+		drv_state.current_speed->acpu_khz)) {
+		/* avs init successful. avs will handle voltage changes */
+		drv_state.acpu_set_vdd = NULL;
+	}
 #endif
 }

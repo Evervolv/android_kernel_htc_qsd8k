@@ -1,0 +1,185 @@
+Introduction
+============
+
+Adaptive Voltage Scaling (AVS) for ARCH_MSM_SCORPION
+
+The AVS driver adjusts the CPU voltage based on hardware feedback.  Using
+hardware feedback AVS is able to achieve lower voltages than the equivalent
+static voltage scaling (SVS) voltage.
+
+The Scorpion architecture includes three ring oscillators for AVS.  The
+ring oscillators provide real time feedback about the voltage requirements
+for the current operating conditions.  The hardware can sense when the voltage
+can be lowered and needs to be raised.
+
+The AVS software keeps track of the current operating conditions.  Periodically
+AVS queries the hardware.  Every query AVS updates a table of required voltage
+indexed by operating conditions, CPU frequency and temperature.
+
+
+Hardware description
+====================
+
+AVS HW is specific to the Scorpion CPU implementation of ARMv7.  The AVS HW
+includes three ring oscillators.  Each is located near a different
+subsystem : CPU, VFP, and L2 cache.  For the VFP measurement to be useful,
+the VFP needs to execute.
+
+AVS HW is controlled through ARM CP15 registers
+
+AVSSCR - AVS Status and Control register
+op1 = 7, CRn = c15, CRm = c1, op2 = 7
+
+AVSDSCR - AVS Delay Synthesizer and Control and Status register
+op1 = 7, CRn = c15, CRm = c0, op2 = 6
+
+TSSCR - Temperature Sensor Control and Status register
+op1 = 7, CRn = c15, CRm = c1, op2 = 0
+
+
+Software description
+====================
+
+AVS adaptively adjusts the CPU voltage for current operating conditions.  It
+maintains a table of operating voltages indexed by CPU frequency and
+relative temperature.
+
+AVS is notified before and after the frequency change.  AVS uses this
+information to correct the voltage and correctly maintain the operating voltage
+table.
+
+AVS manages the voltage in a background work queue.  Every 50ms, AVS checks if
+the HW recommends a voltage decrease or increase.  The voltage table is updated
+and the voltage is changed.
+
+AVS is designed to never underestimate the required operating voltage.
+Several fail safes are implemented to ensure the minimum operating
+voltage is maintained.
+
+1.  The AVS HW is tuned to overestimate minimum voltage.  This
+overestimate provides extra operating margin.
+2.  Initial operating conditions are chosen to be more conservative
+than equivalent static operating conditions.  This ensures we always
+approach the optimal voltage from the same direction.
+3.  Voltage is adjusted in 25mV increments.  This adjustment is less than
+the margin built into the AVS HW.  This ensures we do not undershoot the
+voltage.
+4.  Although not expected, if the HW requests an increase in voltage for a
+single operating frequency, the voltage is increased in every frequency for
+that temperature.  This allows us to retry approaching the operating minimum.
+
+If the AVS circuitry requests a voltage increase at the maximum operating
+voltage, the request is noted in the kernel log, but the request is ignored.
+This condition is never expected to happen.
+
+Design
+======
+
+Reduce CPU operating voltage
+Never allow CPU voltage to be less than required for proper operation
+Immediate voltage changes as required for frequency changes.
+Periodic management of CPU voltage
+Minimal CPU overhead
+
+
+The HW design team designed the AVS ring oscillator configuration to ensure
+a proper operating voltage margin, while safely allowing reduction in CPU
+operating voltage.  This is implemented by the AVS delay synthesizer
+configuration magic number.
+
+AVS is logically a superset of SVS.  Therefore, AVS is implemented as an add-on
+to the Static Voltage Scaling driver.
+
+AVS manages the CPU voltage exclusively.
+
+When the frequency changes AVS is notified before and after the frequency
+change.  This allows AVS to increase the voltage before the operating voltage
+is too low.  It allows AVS to drop the voltage as soon as the frequency
+transition is complete.  Finally it allows the AVS background processing to
+be aware that the operating conditions are not stable.
+
+AVS manages the voltage in a background work queue.  The design uses a
+deferrable delayed work queue to schedule background work.  The deferrable
+queue was chosen to minimize CPU wakeups.  This queue type will not wake the
+CPU from idle, but will defer until the CPU is woken.
+
+
+Power Management
+================
+
+AVS is part of the power management architecture for Scorpion.  AVS manages
+CPU supply voltage.
+
+AVS is aware of CPU frequency changes.  These changes are initiated by
+CPUFREQ, WFI, idle power collapse and suspend.
+
+AVS CP15 registers are preserved through power collapse.
+
+
+SMP/multi-core
+==============
+
+ARCH_SM_SCORPION is not a multicore architecture.  It is difficult to
+anticipate the changes in HW and SW required to support SMP.
+
+Security
+========
+
+None
+
+Performance
+===========
+
+None
+
+Interface
+=========
+
+There is no general purpose interface to AVS.  The sole client is SVS
+(acpuclock-8x50.c).  AVS is initialized and torn down by the
+avs_init(...) and avs_exit(...) functions.  AVS is notified of CPU
+frequency changes by  avs_adjust_freq(...).
+
+Driver parameters
+=================
+
+None
+
+Config options
+==============
+
+MSM_CPU_AVS enables the driver.
+
+Dependencies
+============
+
+AVS is built on top of the Static Voltage Scaling driver (SVS)
+
+Once AVS is initialized.  AVS assumes it is the only process changing the
+supply voltage.  Other coprocessors must not change the Scorpion voltage.
+The bootloader must not change the Scorpion Voltage when warm booting from
+power collapse.
+
+User space utilities
+====================
+
+None
+
+Other
+=====
+
+None
+
+Known issues
+============
+
+None
+
+To do
+=====
+
+AVS needs to support future Scorpion chipsets.  The implementation will be
+parameterized, using board files, as new chipset support is added.
+
+
+
