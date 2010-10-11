@@ -235,12 +235,14 @@ static int avs_set_target_voltage(int freq_idx, bool update_table)
 		/*AVSDEBUG*/pr_info("AVS setting V to %d mV @%d MHz\n",
 			new_voltage, acpu_vdd_tbl[freq_idx].acpu_khz / 1000);
 		rc = avs_state.set_vdd(new_voltage);
-		while(rc && ctr) {
+		while (rc && ctr) {
 			rc = avs_state.set_vdd(new_voltage);
-	 		ctr--;
-			if(rc)
+			ctr--;
+			if (rc) {
+				printk(KERN_ERR "avs_set_target_voltage: Unable to set V to %d mV (attempt: %d)\n", new_voltage, 5 - ctr);
 				mdelay(1);
-	 	}
+			}
+		}
 		if (rc)
 			return rc;
 		avs_state.vdd = new_voltage;
