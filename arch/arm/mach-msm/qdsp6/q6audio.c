@@ -32,6 +32,7 @@
 #include "dal_acdb.h"
 #include "dal_adie.h"
 #include <mach/msm_qdsp6_audio.h>
+#include <mach/htc_acoustic_qsd.h>
 
 #include <linux/gpio.h>
 
@@ -1572,3 +1573,34 @@ int q6audio_async(struct audio_client *ac)
 	rpc.response_type = ADSP_AUDIO_RESPONSE_ASYNC;
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
+
+struct audio_client *q6fm_open(void)
+{
+	struct audio_client *ac;
+
+	if (q6audio_init())
+		return 0;
+
+/*	if (audio_rx_device_id != ADSP_AUDIO_DEVICE_ID_HEADSET_SPKR_STEREO &&
+	    audio_rx_device_id != ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_MONO)
+		return 0;
+*/
+	ac = audio_client_alloc(0);
+	if (!ac)
+		return 0;
+
+	ac->flags = AUDIO_FLAG_WRITE;
+	audio_rx_path_enable(1, 0);
+	enable_aux_loopback(1);
+
+	return ac;
+}
+
+int q6fm_close(struct audio_client *ac)
+{
+	audio_rx_path_enable(0, 0);
+	enable_aux_loopback(0);
+	audio_client_free(ac);
+	return 0;
+}
+
