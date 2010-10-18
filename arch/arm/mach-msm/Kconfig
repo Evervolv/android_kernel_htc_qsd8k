@@ -504,24 +504,26 @@ config MSM_RPCSERVERS
 	help
 	  none
 
-config MSM_CPU_FREQ_SCREEN
-	bool
-	default n
-	depends on HAS_EARLYSUSPEND
-	help
-	  Simple cpufreq scaling based on screen ON/OFF.
+if CPU_FREQ_MSM
 
-if MSM_CPU_FREQ_SCREEN
+config MSM_CPU_FREQ_SET_MIN_MAX
+        bool "Set Min/Max CPU frequencies."
+        default n
+        help
+          Allow setting min and max CPU frequencies. Sysfs can be used
+          to override these values.
 
-config MSM_CPU_FREQ_SCREEN_OFF
-	int "Screen off cpu frequency"
-	default 245760
+config MSM_CPU_FREQ_MAX
+        int "Max CPU Frequency"
+        depends on MSM_CPU_FREQ_SET_MIN_MAX
+        default 384000
 
-config MSM_CPU_FREQ_SCREEN_ON
-	int "Screen on cpu frequency"
-	default 384000
+config MSM_CPU_FREQ_MIN
+        int "Min CPU Frequency"
+        depends on MSM_CPU_FREQ_SET_MIN_MAX
+        default 245760
 
-endif # MSM_CPU_FREQ_SCREEN
+endif # CPU_FREQ_MSM
 
 config MSM_HW3D
 	tristate "MSM Hardware 3D Register Driver"
