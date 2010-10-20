@@ -34,6 +34,8 @@
 #define CLKFLAG_MIN			0x00000400
 #define CLKFLAG_MAX			0x00000800
 #define CLKFLAG_SHARED			0x00001000
+#define CLKFLAG_ARCH_QSD8X50		(0x00020000)
+#define CLKFLAG_ARCH_ALL		(0xffff0000)
 
 struct clk_ops {
 	int (*enable)(unsigned id);
@@ -78,10 +80,10 @@ struct clk_handle {
 #define CLOCK_DBG_NAME(x)
 #endif
 
-#define CLOCK(clk_name, clk_id, clk_dev, clk_flags) {	\
+#define CLOCK(clk_name, clk_id, clk_dev, clk_flags, clk_arch) {	\
 	.name = clk_name, \
 	.id = clk_id, \
-	.flags = clk_flags, \
+	.flags = (clk_flags) | ((clk_arch) & CLKFLAG_ARCH_ALL), \
 	.dev = clk_dev, \
 	 CLOCK_DBG_NAME(#clk_id) \
 	}

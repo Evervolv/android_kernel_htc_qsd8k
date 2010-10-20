@@ -545,38 +545,94 @@ struct platform_device msm_device_touchscreen = {
 	.resource = resources_tssc,
 };
 
+#if defined(CONFIG_ARCH_QSD8X50)
 static struct resource resources_spi[] = {
 	{
-		.start	= MSM_SPI_PHYS,
-		.end	= MSM_SPI_PHYS + MSM_SPI_SIZE - 1,
-		.flags	= IORESOURCE_MEM,
+		.name   = "spi_base",
+		.start  = MSM_SPI_PHYS,
+		.end    = MSM_SPI_PHYS + MSM_SPI_SIZE - 1,
+		.flags  = IORESOURCE_MEM,
 	},
 	{
-		.start	= INT_SPI_INPUT,
-		.end	= INT_SPI_INPUT,
-		.name	= "irq_in",
-		.flags	= IORESOURCE_IRQ,
+		.name   = "spi_irq_in",
+		.start  = INT_SPI_INPUT,
+		.end    = INT_SPI_INPUT,
+		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.start	= INT_SPI_OUTPUT,
-		.end	= INT_SPI_OUTPUT,
-		.name	= "irq_out",
-		.flags	= IORESOURCE_IRQ,
+		.name   = "spi_irq_out",
+		.start  = INT_SPI_OUTPUT,
+		.end    = INT_SPI_OUTPUT,
+		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.start	= INT_SPI_ERROR,
-		.end	= INT_SPI_ERROR,
-		.name	= "irq_err",
-		.flags	= IORESOURCE_IRQ,
+		.name   = "spi_irq_err",
+		.start  = INT_SPI_ERROR,
+		.end    = INT_SPI_ERROR,
+		.flags  = IORESOURCE_IRQ,
 	},
+#if defined(CONFIG_SPI_QSD)
+	{
+		.name   = "spi_clk",
+		.start  = 17,
+		.end    = 1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_mosi",
+		.start  = 18,
+		.end    = 1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_miso",
+		.start  = 19,
+		.end    = 1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_cs0",
+		.start  = 20,
+		.end    = 1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_pwr",
+		.start  = 21,
+		.end    = 0,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_irq_cs0",
+		.start  = 22,
+		.end    = 0,
+		.flags  = IORESOURCE_IRQ,
+	},
+#endif
 };
 
 struct platform_device msm_device_spi = {
+#if defined(CONFIG_SPI_QSD)
+	.name		= "spi_qsd",
+#else
 	.name		= "msm_spi",
+#endif
 	.id		= 0,
 	.num_resources	= ARRAY_SIZE(resources_spi),
 	.resource	= resources_spi,
 };
+#endif
+
+#define CLK_ALL(name, id, dev, flags) \
+		CLOCK(name, id, dev, flags, CLKFLAG_ARCH_ALL)
+#define CLK_7X00A(name, id, dev, flags) \
+		CLOCK(name, id, dev, flags, CLKFLAG_ARCH_MSM7X00A)
+#define CLK_8X50(name, id, dev, flags) \
+		CLOCK(name, id, dev, flags, CLKFLAG_ARCH_QSD8X50)
+
+#define OFF CLKFLAG_AUTO_OFF
+#define MINMAX (CLKFLAG_USE_MIN_TO_SET | CLKFLAG_USE_MAX_TO_SET)
+#define USE_MIN (CLKFLAG_USE_MIN_TO_SET | CLKFLAG_SHARED)
 
 static struct resource resources_otg[] = {
 	{
@@ -700,7 +756,9 @@ struct clk msm_clocks_8x50[] = {
 	CLK_PCOM("usb_hs3_clk",	USB_HS3_CLK,	NULL, OFF),
 	CLK_PCOM("usb_hs3_pclk",	USB_HS3_P_CLK,	NULL, OFF),
 	CLK_PCOM("usb_phy_clk",	USB_PHY_CLK,	NULL, 0),
+
 };
+
 
 unsigned msm_num_clocks_8x50 = ARRAY_SIZE(msm_clocks_8x50);
 
