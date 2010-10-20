@@ -75,6 +75,7 @@ obj-$(CONFIG_MACH_SWORDFISH) += board-swordfish.o
 obj-$(CONFIG_MACH_SWORDFISH) += board-swordfish-keypad.o fish_battery.o
 obj-$(CONFIG_MACH_SWORDFISH) += board-swordfish-panel.o
 obj-$(CONFIG_MACH_SWORDFISH) += board-swordfish-mmc.o
+
 obj-$(CONFIG_ARCH_MSM7X30) += devices-msm7x30.o
 obj-$(CONFIG_ARCH_QSD8X50) += devices-qsd8x50.o
 obj-$(CONFIG_MACH_QSD8X50_SURF) += board-qsd8x50.o
@@ -94,6 +95,19 @@ obj-y	+= gpio-v2.o
 else
 obj-y	+= gpio.o
 endif
+
+obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic.o board-supersonic-panel.o
+obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-keypad.o board-supersonic-mmc.o
+obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-rfkill.o board-supersonic-audio.o
+obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-wifi.o htc_awb_cal.o
+obj-$(CONFIG_MACH_SUPERSONIC) += msm_vibrator.o
+obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-microp.o
+obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-tpa2018d1.o
+obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-smb329.o
+obj-$(CONFIG_MACH_SUPERSONIC) += drv_callback.o
+obj-$(CONFIG_MACH_SUPERSONIC) += htc_wifi_nvs.o htc_bluetooth.o
+obj-$(CONFIG_MACH_SUPERSONIC) += htc_acoustic_qsd.o
+obj-$(CONFIG_MACH_SUPERSONIC) += devices_htc.o
 
 obj-$(CONFIG_HTC_PWRSINK) += htc_pwrsink.o
 obj-$(CONFIG_HTC_PWRSPLY) += htc_power_supply.o

@@ -103,6 +103,7 @@ config MSM_AMSS_VERSION
 	default 6220 if MSM_AMSS_VERSION_6220
 	default 6225 if MSM_AMSS_VERSION_6225
 	default 6350 if MSM_AMSS_VERSION_6350
+        default 3200 if MSM_AMSS_VERSION_3200
 
 choice
 	prompt "AMSS modem firmware version"
@@ -124,6 +125,9 @@ choice
 
 	config MSM_AMSS_VERSION_6350
 		bool "6.3.50"
+         
+         config MSM_AMSS_VERSION_3200
+ 	        bool "3.2.00"
 endchoice
 
 menu "Qualcomm MSM Board Type"
@@ -251,6 +255,13 @@ config MACH_MAHIMAHI
 	help
 	  Select this to support the Mahi-Mahi device
 
+config MACH_SUPERSONIC
+	depends on ARCH_QSD8X50
+	default y
+	bool "Supersonic (HTC EVO 4G)"
+	help
+	  Select this to support the Supersonic device
+
 config MACH_QSD8X50_FFA
 	depends on ARCH_QSD8X50
 	default y
@@ -283,6 +294,16 @@ config TROUT_BATTCHG
 	depends on (MACH_TROUT || MACH_SAPPHIRE) && POWER_SUPPLY
 	default y
 	bool "Trout battery / charger driver"
+
+config HTC_BATTCHG
+	depends on MSM_ONCRPCROUTER && POWER_SUPPLY
+	default n
+	bool "HTC battery / charger driver"
+
+config HTC_BATTCHG_SMEM
+	depends on HTC_BATTCHG
+	default n
+	bool "Read Battery Info via SMEM"
 
 config HTC_PWRSPLY
 	depends on MSM_ONCRPCROUTER && POWER_SUPPLY && !TROUT_BATTCHG
