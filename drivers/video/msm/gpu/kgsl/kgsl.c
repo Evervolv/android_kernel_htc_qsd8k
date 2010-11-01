@@ -190,11 +190,6 @@ static int kgsl_first_open_locked(void)
 
 	kgsl_clk_enable();
 
-	/* init memory apertures */
-	result = kgsl_sharedmem_init(&kgsl_driver.shmem);
-	if (result != 0)
-		goto done;
-
 	/* init devices */
 	result = kgsl_yamato_init(&kgsl_driver.yamato_device,
 					&kgsl_driver.yamato_config);
@@ -220,9 +215,6 @@ static int kgsl_last_release_locked(void)
 
 	/* close devices */
 	kgsl_yamato_close(&kgsl_driver.yamato_device);
-
-	/* shutdown memory apertures */
-	kgsl_sharedmem_close(&kgsl_driver.shmem);
 
 	kgsl_clk_disable();
 	kgsl_driver.active = false;
@@ -1066,6 +1058,9 @@ static void kgsl_driver_cleanup(void)
 		kgsl_driver.interrupt_num = 0;
 	}
 
+	/* shutdown memory apertures */
+	kgsl_sharedmem_close(&kgsl_driver.shmem);
+
 	if (kgsl_driver.grp_clk) {
 		clk_put(kgsl_driver.grp_clk);
 		kgsl_driver.grp_clk = NULL;
@@ -1169,6 +1164,9 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 
 	kgsl_driver.shmem.physbase = res->start;
 	kgsl_driver.shmem.size = resource_size(res);
+
+	/* init memory apertures */
+	result = kgsl_sharedmem_init(&kgsl_driver.shmem);
 
 done:
 	if (result)
