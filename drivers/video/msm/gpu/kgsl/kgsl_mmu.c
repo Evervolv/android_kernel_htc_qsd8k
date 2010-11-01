@@ -396,6 +396,16 @@ int kgsl_mmu_init(struct kgsl_device *device)
 			return -ENOMEM;
 		}
 		mmu->hwpagetable = mmu->defaultpagetable;
+		mmu->tlbflushfilter.size = (mmu->va_range /
+				(PAGE_SIZE * GSL_PT_SUPER_PTE * 8)) + 1;
+		mmu->tlbflushfilter.base = (unsigned int *)
+			kzalloc(mmu->tlbflushfilter.size, GFP_KERNEL);
+		if (!mmu->tlbflushfilter.base) {
+			KGSL_MEM_ERR("Failed to create tlbflushfilter\n");
+			kgsl_mmu_close(device);
+			return -ENOMEM;
+		}
+		GSL_TLBFLUSH_FILTER_RESET();
 		kgsl_yamato_regwrite(device, REG_MH_MMU_PT_BASE,
 					mmu->hwpagetable->base.gpuaddr);
 		kgsl_yamato_regwrite(device, REG_MH_MMU_VA_RANGE,
@@ -456,7 +466,7 @@ int kgsl_mmu_map(struct kgsl_pagetable *pagetable,
 				unsigned int flags)
 {
 	int numpages;
-	unsigned int pte, superpte, ptefirst, ptelast, physaddr;
+	unsigned int pte, ptefirst, ptelast, physaddr;
 	int flushtlb, alloc_size;
 	struct kgsl_mmu *mmu = NULL;
 	int phys_contiguous = flags & KGSL_MEMFLAGS_CONPHYS;
@@ -514,15 +524,11 @@ int kgsl_mmu_map(struct kgsl_pagetable *pagetable,
 	pte = ptefirst;
 	flushtlb = 0;
 
-	superpte = ptefirst & (GSL_PT_SUPER_PTE - 1);
-	for (pte = superpte; pte < ptefirst; pte++) {
-		/* tlb needs to be flushed only when a dirty superPTE
-		   gets backed */
-		if (kgsl_pt_map_isdirty(pagetable, pte)) {
-			flushtlb = 1;
-			break;
-		}
-	}
+	/* tlb needs to be flushed when the first and last pte are not at
+	 * superpte boundaries */
+	if ((ptefirst & (GSL_PT_SUPER_PTE - 1)) != 0 ||
+			((ptelast + 1) & (GSL_PT_SUPER_PTE-1)) != 0)
+		flushtlb = 1;
 
 	for (pte = ptefirst; pte < ptelast; pte++) {
 #ifdef VERBOSE_DEBUG
@@ -530,8 +536,10 @@ int kgsl_mmu_map(struct kgsl_pagetable *pagetable,
 		uint32_t val = kgsl_pt_map_getaddr(pagetable, pte);
 		BUG_ON(val != 0 && val != GSL_PT_PAGE_DIRTY);
 #endif
-		if (kgsl_pt_map_isdirty(pagetable, pte))
-			flushtlb = 1;
+		if ((pte & (GSL_PT_SUPER_PTE-1)) == 0)
+			if (GSL_TLBFLUSH_FILTER_ISDIRTY(pte / GSL_PT_SUPER_PTE))
+				flushtlb = 1;
+
 		/* mark pte as in use */
 		if (phys_contiguous)
 			physaddr = address;
@@ -552,17 +560,6 @@ int kgsl_mmu_map(struct kgsl_pagetable *pagetable,
 		address += KGSL_PAGESIZE;
 	}
 
-	/* set superpte to end of next superpte */
-	superpte = (ptelast + (GSL_PT_SUPER_PTE - 1))
-			& (GSL_PT_SUPER_PTE - 1);
-	for (pte = ptelast; pte < superpte; pte++) {
-		/* tlb needs to be flushed only when a dirty superPTE
-		   gets backed */
-		if (kgsl_pt_map_isdirty(pagetable, pte)) {
-			flushtlb = 1;
-			break;
-		}
-	}
 	KGSL_MEM_INFO("pt %p p %08x g %08x pte f %d l %d n %d f %d\n",
 		      pagetable, address, *gpuaddr, ptefirst, ptelast,
 		      numpages, flushtlb);
@@ -571,8 +568,10 @@ int kgsl_mmu_map(struct kgsl_pagetable *pagetable,
 
 	/* Invalidate tlb only if current page table used by GPU is the
 	 * pagetable that we used to allocate */
-	if (pagetable == mmu->hwpagetable)
+	if (flushtlb &&  (pagetable == mmu->hwpagetable)) {
 		kgsl_yamato_setstate(mmu->device, KGSL_MMUFLAGS_TLBFLUSH);
+		GSL_TLBFLUSH_FILTER_RESET();
+	}
 
 
 	KGSL_MEM_VDBG("return %d\n", 0);
@@ -585,7 +584,8 @@ kgsl_mmu_unmap(struct kgsl_pagetable *pagetable, unsigned int gpuaddr,
 		int range)
 {
 	unsigned int numpages;
-	unsigned int pte, ptefirst, ptelast;
+	unsigned int pte, ptefirst, ptelast, superpte;
+	struct kgsl_mmu *mmu = NULL;
 
 	KGSL_MEM_VDBG("enter (pt=%p, gpuaddr=0x%08x, range=%d)\n",
 			pagetable, gpuaddr, range);
@@ -602,21 +602,23 @@ kgsl_mmu_unmap(struct kgsl_pagetable *pagetable, unsigned int gpuaddr,
 	KGSL_MEM_INFO("pt %p gpu %08x pte first %d last %d numpages %d\n",
 		      pagetable, gpuaddr, ptefirst, ptelast, numpages);
 
+	mmu = pagetable->mmu;
+
+	superpte = ptefirst - (ptefirst & (GSL_PT_SUPER_PTE-1));
+	GSL_TLBFLUSH_FILTER_SETDIRTY(superpte / GSL_PT_SUPER_PTE);
 	for (pte = ptefirst; pte < ptelast; pte++) {
 #ifdef VERBOSE_DEBUG
 		/* check if PTE exists */
 		BUG_ON(!kgsl_pt_map_getaddr(pagetable, pte));
 #endif
 		kgsl_pt_map_set(pagetable, pte, GSL_PT_PAGE_DIRTY);
+		superpte = pte - (pte & (GSL_PT_SUPER_PTE - 1));
+		if (pte == superpte)
+			GSL_TLBFLUSH_FILTER_SETDIRTY(superpte /
+					GSL_PT_SUPER_PTE);
 	}
 
 	dmb();
-
-	/* Invalidate tlb only if current page table used by GPU is the
-	 * pagetable that we used to allocate */
-	if (pagetable == pagetable->mmu->hwpagetable)
-		kgsl_yamato_setstate(pagetable->mmu->device,
-					KGSL_MMUFLAGS_TLBFLUSH);
 
 	gen_pool_free(pagetable->pool, gpuaddr, range);
 
@@ -650,6 +652,12 @@ int kgsl_mmu_close(struct kgsl_device *device)
 
 		if (mmu->dummyspace.gpuaddr)
 			kgsl_sharedmem_free(&mmu->dummyspace);
+
+		if (mmu->tlbflushfilter.base) {
+			mmu->tlbflushfilter.size = 0;
+			kfree(mmu->tlbflushfilter.base);
+			mmu->tlbflushfilter.base = NULL;
+		}
 
 		mmu->flags &= ~KGSL_FLAGS_STARTED;
 		mmu->flags &= ~KGSL_FLAGS_INITIALIZED;

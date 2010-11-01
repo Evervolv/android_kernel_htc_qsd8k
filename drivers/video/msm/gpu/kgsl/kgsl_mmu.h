@@ -31,6 +31,21 @@
 #define KGSL_MMUFLAGS_TLBFLUSH         0x10000000
 #define KGSL_MMUFLAGS_PTUPDATE         0x20000000
 
+/* Macros to manage TLB flushing */
+#define GSL_TLBFLUSH_FILTER_ENTRY_NUMBITS     (sizeof(unsigned char) * 8)
+#define GSL_TLBFLUSH_FILTER_GET(superpte)                           \
+             (*((unsigned char *)                                  \
+             (((unsigned int)mmu->tlbflushfilter.base)        \
+             + (superpte / GSL_TLBFLUSH_FILTER_ENTRY_NUMBITS))))
+#define GSL_TLBFLUSH_FILTER_SETDIRTY(superpte)                         \
+             (GSL_TLBFLUSH_FILTER_GET((superpte)) |= 1 <<          \
+             (superpte % GSL_TLBFLUSH_FILTER_ENTRY_NUMBITS))
+#define GSL_TLBFLUSH_FILTER_ISDIRTY(superpte)                   \
+             (GSL_TLBFLUSH_FILTER_GET((superpte)) &              \
+             (1 << (superpte % GSL_TLBFLUSH_FILTER_ENTRY_NUMBITS)))
+#define GSL_TLBFLUSH_FILTER_RESET()   memset(mmu->tlbflushfilter.base,\
+                                     0, mmu->tlbflushfilter.size)
+
 extern unsigned int kgsl_cache_enable;
 
 struct kgsl_device;
@@ -68,6 +83,11 @@ struct kgsl_pagetable {
 	struct gen_pool *pool;
 };
 
+struct kgsl_tlbflushfilter {
+	unsigned int *base;
+	unsigned int size;
+};
+
 struct kgsl_mmu {
 	unsigned int     refcnt;
 	uint32_t      flags;
@@ -81,6 +101,8 @@ struct kgsl_mmu {
 	/* current page table object being used by device mmu */
 	struct kgsl_pagetable  *defaultpagetable;
 	struct kgsl_pagetable  *hwpagetable;
+	/* Maintain filter to manage tlb flushing */
+	struct kgsl_tlbflushfilter tlbflushfilter;	
 };
 
 
