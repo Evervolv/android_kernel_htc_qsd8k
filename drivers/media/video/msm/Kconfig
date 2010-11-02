@@ -7,10 +7,15 @@ menuconfig MSM_CAMERA
 	  Say Y here to enable selecting the video adapters for
 	  Qualcomm msm camera and video encoding
 
+config 720P_CAMERA
+	bool "Qualcomm MSM camera with 720P video support"
+	depends on MSM_CAMERA
+	help
+	  720P video support
+
 config MSM_CAMERA_V4L2
 	bool "Video For Linux interface to MSM camera"
 	depends on MSM_CAMERA && VIDEO_V4L2 && EXPERIMENTAL
-	default y
 	help
 	  Say Y here to enable the V4L2 interface for the MSM camera.
 	  Not everything works through this interface and it has not
@@ -41,8 +46,43 @@ config MT9P012
 	---help---
 	  MICRON 5M Bayer Sensor with Autofocus
 
+config MSM_CAMERA_AF_FOXCONN
+	bool "FOXCONN Module"
+	depends on MT9P012
+	---help---
+	  This driver supports FOXCONN AF module for 5M Bayer sensor
+
 config S5K3E2FX
 	bool "Sensor s5k3e2fx (Samsung 5M)"
 	depends on MSM_CAMERA
 	---help---
 	  Samsung 5M with Autofocus
+
+config S5K6AAFX
+	bool "Sensor s5k6aafx (Samsung 1.3M)"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	  Samsung 1.3M without Autofocus
+
+config OV8810
+	bool "Sensor ov8810"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	  OmniVision 8M Bayer Sensor
+
+config OV9665
+	bool "Sensor ov9665"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	  OmniVision 3M YUV Sensor
+
+config S5K3H1GX
+	bool "Sensor s5k3h1gx"
+	depends on MSM_CAMERA
+	default n
+	---help---
+	  Samsung 8M 3H1 MIPI AF Sensor
+

@@ -14,11 +14,17 @@
 #include <mach/camera.h>
 #include <linux/clk.h>
 #include <linux/wakelock.h>
+#include <linux/earlysuspend.h>
+
 
 static uint16_t g_usModuleVersion;	/*0: rev.4, 1: rev.5 */
 
 /* prepare for modify PCLK*/
+#ifdef CONFIG_MACH_PASSIONC
+#define REG_PLL_MULTIPLIER_LSB_VALUE      0xA0
+#else
 #define REG_PLL_MULTIPLIER_LSB_VALUE	  0x90
+#endif
 /* 0xA0 for PCLK=80MHz */
 /* 0x90 for PCLK=72MHz */
 
@@ -42,11 +48,6 @@ static uint16_t g_usModuleVersion;	/*0: rev.4, 1: rev.5 */
 #define REG_GROUPED_PARAMETER_HOLD    0x0104
 #define GROUPED_PARAMETER_HOLD        0x01
 #define GROUPED_PARAMETER_UPDATE      0x00
-
-/* Greenish in low light */
-#define REG_MASK_CORRUPTED_FRAMES     0x0105
-#define MASK                          0x01
-#define NO_MASK                       0x00
 
 /* PLL Registers */
 #define REG_PRE_PLL_CLK_DIV           0x0305
@@ -138,7 +139,7 @@ static uint16_t g_usModuleVersion;	/*0: rev.4, 1: rev.5 */
 #define REG_301B_RESERVED             0x301B
 #define REG_30BD_RESERVED             0x30BD
 #define REG_30C2_RESERVED             0x30C2
-#define REG_3151_RESERVED             0x3151
+#define REG_3151_RESERVED             0x3151 /* 100202 the right address is 0x3151 */
 #define REG_3029_RESERVED             0x3029
 #define REG_30BF_RESERVED             0x30BF
 #define REG_3022_RESERVED             0x3022
@@ -170,8 +171,6 @@ static uint16_t g_usModuleVersion;	/*0: rev.4, 1: rev.5 */
 #define REG_Y_ADDR_END_MSB            0x034A
 #define REG_Y_ADDR_END_LSB            0x034B
 
-#define NUM_INIT_REG                  94
-#define NUM_LC_REG                    434
 
 struct s5k3e2fx_i2c_reg_conf {
 	unsigned short waddr;
@@ -179,32 +178,21 @@ struct s5k3e2fx_i2c_reg_conf {
 };
 
 /* Separate the EVT4/EVT5 sensor init and LC setting start */
-struct s5k3e2fx_i2c_reg_conf Init_setting[2][NUM_INIT_REG] = {
+
+struct s5k3e2fx_i2c_reg_conf Init_setting_evt4[] = {
 /*EVT4 */
-	{
 	 {REG_PRE_PLL_CLK_DIV, 0x06},	/* PLL setting */
 	 {REG_PLL_MULTIPLIER_MSB, 0x00},
-	 {REG_PLL_MULTIPLIER_LSB, REG_PLL_MULTIPLIER_LSB_VALUE},
+	 {REG_PLL_MULTIPLIER_LSB, 0x83},
 	 {REG_VT_PIX_CLK_DIV, 0x08},
 	 {REG_VT_SYS_CLK_DIV, 0x01},
 	 {REG_OP_PIX_CLK_DIV, 0x08},
 	 {REG_OP_SYS_CLK_DIV, 0x01},
-/* Data Format */
-	 {REG_CCP_DATA_FORMAT_MSB, 0x0a},
-	 {REG_CCP_DATA_FORMAT_LSB, 0x0a},
 /* Preview Output Size */
 	 {REG_X_OUTPUT_SIZE_MSB, 0x05},
 	 {REG_X_OUTPUT_SIZE_LSB, 0x10},
 	 {REG_Y_OUTPUT_SIZE_MSB, 0x03},
 	 {REG_Y_OUTPUT_SIZE_LSB, 0xcc},
-	 {REG_X_ADDR_START_MSB, 0x00},
-	 {REG_X_ADDR_START_LSB, 0x08},
-	 {REG_Y_ADDR_START_MSB, 0x00},
-	 {REG_Y_ADDR_START_LSB, 0x08},
-	 {REG_X_ADDR_END_MSB, 0x0a},
-	 {REG_X_ADDR_END_LSB, 0x27},
-	 {REG_Y_ADDR_END_MSB, 0x07},
-	 {REG_Y_ADDR_END_LSB, 0x9f},
 /* Frame format */
 	 {REG_FRAME_LENGTH_LINES_MSB, 0x03},
 	 {REG_FRAME_LENGTH_LINES_LSB, 0xe2},
@@ -230,72 +218,44 @@ struct s5k3e2fx_i2c_reg_conf Init_setting[2][NUM_INIT_REG] = {
 	 {REG_S1S_END, 0x93},
 	 {REG_S3_START, 0x05},
 	 {REG_S3_END, 0x3a},
-	 {REG_CMP_EN_START, 0x10},
 	 {REG_CLP_SL_START, 0x02},
 	 {REG_CLP_SL_END, 0x3e},
-	 {REG_OFF_START, 0x02},
 	 {REG_RMP_EN_START, 0x0e},
 	 {REG_TX_START, 0x46},
 	 {REG_TX_END, 0x64},
 	 {REG_STX_WIDTH, 0x1e},
-	 {REG_CLAMP_ON, 0x00},
 	 {REG_301D_RESERVED, 0x3f},
 	 {REG_VPIX, 0x04},
 	 {REG_3028_RESERVED, 0x40},
 	 {REG_3070_RESERVED, 0xdf},
-	 {REG_3072_RESERVED, 0x20},
 	 {REG_301B_RESERVED, 0x73},
 	 {REG_OFFSET, 0x02},
 	 {REG_30BD_RESERVED, 0x06},
 	 {REG_30C2_RESERVED, 0x0b},
 	 {REG_SHADE_CLK_ENABLE, 0x81},
-	 {REG_3151_RESERVED, 0xe6},
+	 {0x3151, 0xe6},
 	 {REG_3029_RESERVED, 0x02},
 	 {REG_30BF_RESERVED, 0x00},
 	 {REG_3022_RESERVED, 0x87},
 	 {REG_3019_RESERVED, 0x60},
-	 {REG_3019_RESERVED, 0x60},
-	 {REG_3019_RESERVED, 0x60},
-	 {REG_3019_RESERVED, 0x60},
-	 {REG_3019_RESERVED, 0x60},
-	 {REG_3019_RESERVED, 0x60},
+	 {0x3146, 0x3c},
 	 {REG_3152_RESERVED, 0x08},
-	 {REG_3150_RESERVED, 0x50}, /* from 0x40 to 0x50 for PCLK=80MHz */
-/* Inverse PCLK = 0x50 */
-	 {REG_3157_RESERVED, 0x04}, /* from 0x00 to 0x04 for PCLK=80MHz */
-/* PCLK Delay offset; 0x0a will delay around 4ns at 80MHz */
-	 {REG_3159_RESERVED, 0x0f}, /* from 0x00 to 0x0f for PCLK=80MHz */
+	 {REG_3159_RESERVED, 0x0A},
 /* HS, VS driving strength [3:2]=>VS, [1:0]=>HS 00:2mA, 01:4mA, 10:6mA,
  * 11:8mA
  */
-	 {REG_315A_RESERVED, 0xf0}, /* from 0x10 to 0xf0 for PCLK=80MHz */
+	 {REG_315A_RESERVED, 0xAA},
 /* PCLK, DATA driving strength [7:6]=>data, [5:4]=>PCLK 00:2mA, 01:4mA
  * 10:6mA, 11:8mA
  */
 /* AEC Setting */
-	 {REG_ANALOGUE_GAIN_CODE_GLOBAL_MSB, 0x00},
 	 {REG_ANALOGUE_GAIN_CODE_GLOBAL_LSB, REG_ANALOGUE_GAIN_CODE_GLOBAL_LSB_VALUE},
 	 {REG_FINE_INTEGRATION_TIME, 0x02},
 	 {REG_COARSE_INTEGRATION_TIME, 0x03},
-/* Preview LC config Setting */
-	 {REG_SH4CH_BLK_WIDTH_R, 0x52},
-	 {REG_SH4CH_BLK_HEIGHT_R, 0x3e},
-	 {REG_SH4CH_STEP_X_R_MSB, 0x03},
-	 {REG_SH4CH_STEP_X_R_LSB, 0x1f},
-	 {REG_SH4CH_STEP_Y_R_MSB, 0x04},
-	 {REG_SH4CH_STEP_Y_R_LSB, 0x21},
-	 {REG_SH4CH_START_BLK_CNT_X_R, 0x04},
-	 {REG_SH4CH_START_BLK_INT_X_R, 0x00},
-	 {REG_SH4CH_START_FRAC_X_R_MSB, 0x0c},
-	 {REG_SH4CH_START_FRAC_X_R_LSB, 0x7c},
-	 {REG_SH4CH_START_BLK_CNT_Y_R, 0x04},
-	 {REG_SH4CH_START_BLK_INT_Y_R, 0x00},
-	 {REG_SH4CH_START_FRAC_Y_R_MSB, 0x10},
-	 {REG_SH4CH_START_FRAC_Y_R_LSB, 0x84},
-	 },
+};
 
+struct s5k3e2fx_i2c_reg_conf Init_setting_evt5[] = {
 /* EVT5 */
-	{
 	 {REG_PRE_PLL_CLK_DIV, 0x06}, /* PLL setting */
 	 {REG_PLL_MULTIPLIER_MSB, 0x00},
 	 {REG_PLL_MULTIPLIER_LSB, REG_PLL_MULTIPLIER_LSB_VALUE},
@@ -312,13 +272,13 @@ struct s5k3e2fx_i2c_reg_conf Init_setting[2][NUM_INIT_REG] = {
 	 {REG_Y_OUTPUT_SIZE_MSB, 0x03},
 	 {REG_Y_OUTPUT_SIZE_LSB, 0xcc},
 	 {REG_X_ADDR_START_MSB, 0x00},
-	 {REG_X_ADDR_START_LSB, 0x08},
+	 {REG_X_ADDR_START_LSB, 0x00},  /* 100202 Change to 00 to the same as DesireC */
 	 {REG_Y_ADDR_START_MSB, 0x00},
-	 {REG_Y_ADDR_START_LSB, 0x08},
+	 {REG_Y_ADDR_START_LSB, 0x00},  /* 100202 Change to 00 to the same as DesireC */
 	 {REG_X_ADDR_END_MSB, 0x0a},
-	 {REG_X_ADDR_END_LSB, 0x27},
+	 {REG_X_ADDR_END_LSB, 0x2F},  /* 100202 Change to 2F to the same as DesireC */
 	 {REG_Y_ADDR_END_MSB, 0x07},
-	 {REG_Y_ADDR_END_LSB, 0x9f},
+	 {REG_Y_ADDR_END_LSB, 0xA7},  /* 100202 Change to A7 to the same as DesireC */
 /* Frame format */
 	 {REG_FRAME_LENGTH_LINES_MSB, 0x03},
 	 {REG_FRAME_LENGTH_LINES_LSB, 0xe2},
@@ -363,7 +323,7 @@ struct s5k3e2fx_i2c_reg_conf Init_setting[2][NUM_INIT_REG] = {
 	 {REG_30BD_RESERVED, 0x06},
 	 {REG_30C2_RESERVED, 0x0b},
 	 {REG_SHADE_CLK_ENABLE, 0x81},
-	 {REG_3151_RESERVED, 0xe6},
+	 {REG_3151_RESERVED, 0xe6}, /* 100202 the right address is 0x3151 */
 	 {REG_3029_RESERVED, 0x02},
 	 {REG_30BF_RESERVED, 0x00},
 	 {REG_3022_RESERVED, 0x87},
@@ -387,7 +347,6 @@ struct s5k3e2fx_i2c_reg_conf Init_setting[2][NUM_INIT_REG] = {
  * 10:6mA, 11:8mA
  */
 /* AEC Setting */
-	 {REG_ANALOGUE_GAIN_CODE_GLOBAL_MSB, 0x00},
 	 {REG_ANALOGUE_GAIN_CODE_GLOBAL_LSB, REG_ANALOGUE_GAIN_CODE_GLOBAL_LSB_VALUE},
 	 {REG_FINE_INTEGRATION_TIME, 0x02},
 	 {REG_COARSE_INTEGRATION_TIME, 0x03},
@@ -406,454 +365,463 @@ struct s5k3e2fx_i2c_reg_conf Init_setting[2][NUM_INIT_REG] = {
 	 {REG_SH4CH_START_BLK_INT_Y_R, 0x00},
 	 {REG_SH4CH_START_FRAC_Y_R_MSB, 0x10},
 	 {REG_SH4CH_START_FRAC_Y_R_LSB, 0x84},
-	 }
 };
 
-struct s5k3e2fx_i2c_reg_conf lc_setting[2][NUM_LC_REG] = {
-/*EVT4 */
-	{
-	/*EVT4 */  /* 100108 Modify LC setting DNP light source t75-r73*/
+struct s5k3e2fx_i2c_reg_conf lc_setting_evt4[] = {
+	/*EVT4 */
 	{0x3200, 0x00},
-	{0x3201, 0x99},
-	{0x3202, 0xc1},
+	{0x3201, 0xbe},
+	{0x3202, 0x4e},
 	{0x3203, 0x0f},
-	{0x3204, 0xd0},
-	{0x3205, 0x1b},
+	{0x3204, 0xb9},
+	{0x3205, 0x07},
 	{0x3206, 0x00},
-	{0x3207, 0x24},
-	{0x3208, 0x8d},
+	{0x3207, 0x4b},
+	{0x3208, 0xdf},
 	{0x3209, 0x0f},
-	{0x320a, 0xee},
-	{0x320b, 0x0f},
+	{0x320a, 0xc6},
+	{0x320b, 0x39},
 	{0x320c, 0x00},
-	{0x320d, 0x04},
-	{0x320e, 0x5c},
+	{0x320d, 0x13},
+	{0x320e, 0xee},
 	{0x320f, 0x00},
-	{0x3210, 0x07},
-	{0x3211, 0x68},
+	{0x3210, 0x14},
+	{0x3211, 0x79},
 	{0x3212, 0x0f},
-	{0x3213, 0xc2},
-	{0x3214, 0x82},
+	{0x3213, 0x9d},
+	{0x3214, 0xed},
 	{0x3215, 0x00},
-	{0x3216, 0x29},
-	{0x3217, 0x3e},
+	{0x3216, 0x3d},
+	{0x3217, 0x02},
 	{0x3218, 0x0f},
-	{0x3219, 0xd3},
-	{0x321a, 0x63},
+	{0x3219, 0xa8},
+	{0x321a, 0x6a},
 	{0x321b, 0x00},
-	{0x321c, 0x22},
-	{0x321d, 0x6c},
+	{0x321c, 0x4c},
+	{0x321d, 0x9a},
 	{0x321e, 0x0f},
-	{0x321f, 0xf8},
-	{0x3220, 0xce},
+	{0x321f, 0xfb},
+	{0x3220, 0xdb},
 	{0x3221, 0x0f},
-	{0x3222, 0xed},
-	{0x3223, 0x30},
+	{0x3222, 0xc8},
+	{0x3223, 0x1a},
 	{0x3224, 0x00},
-	{0x3225, 0x37},
-	{0x3226, 0x87},
+	{0x3225, 0x5b},
+	{0x3226, 0xf3},
 	{0x3227, 0x0f},
-	{0x3228, 0xc2},
-	{0x3229, 0x87},
+	{0x3228, 0xae},
+	{0x3229, 0xe3},
 	{0x322a, 0x00},
-	{0x322b, 0x2a},
-	{0x322c, 0xc6},
+	{0x322b, 0x5b},
+	{0x322c, 0xc8},
 	{0x322d, 0x0f},
-	{0x322e, 0xf3},
-	{0x322f, 0xd9},
+	{0x322e, 0xc3},
+	{0x322f, 0xf6},
 	{0x3230, 0x0f},
-	{0x3231, 0xea},
-	{0x3232, 0x1a},
+	{0x3231, 0xe4},
+	{0x3232, 0xb3},
 	{0x3233, 0x00},
-	{0x3234, 0x2d},
-	{0x3235, 0x9f},
+	{0x3234, 0x58},
+	{0x3235, 0xdf},
 	{0x3236, 0x0f},
-	{0x3237, 0xde},
-	{0x3238, 0x7d},
+	{0x3237, 0xbf},
+	{0x3238, 0x67},
 	{0x3239, 0x00},
-	{0x323a, 0x37},
-	{0x323b, 0x1e},
+	{0x323a, 0x3c},
+	{0x323b, 0x8e},
 	{0x323c, 0x0f},
-	{0x323d, 0xed},
-	{0x323e, 0x9c},
-	{0x323f, 0x0f},
-	{0x3240, 0xf6},
+	{0x323d, 0xd0},
+	{0x323e, 0x3d},
+	{0x323f, 0x00},
+	{0x3240, 0x11},
 	{0x3241, 0xfd},
 	{0x3242, 0x00},
-	{0x3243, 0x15},
-	{0x3244, 0xeb},
+	{0x3243, 0x1a},
+	{0x3244, 0xf0},
 	{0x3245, 0x0f},
-	{0x3246, 0xd3},
-	{0x3247, 0xca},
+	{0x3246, 0xbd},
+	{0x3247, 0x5d},
 	{0x3248, 0x00},
-	{0x3249, 0x08},
-	{0x324a, 0xe6},
+	{0x3249, 0x22},
+	{0x324a, 0x32},
 	{0x324b, 0x0f},
-	{0x324c, 0xf4},
-	{0x324d, 0x7a},
+	{0x324c, 0xff},
+	{0x324d, 0x2e},
 	{0x324e, 0x0f},
-	{0x324f, 0xed},
-	{0x3250, 0x1e},
+	{0x324f, 0xeb},
+	{0x3250, 0x0c},
 	{0x3251, 0x00},
-	{0x3252, 0x0d},
-	{0x3253, 0x46},
+	{0x3252, 0x11},
+	{0x3253, 0xbd},
 	{0x3254, 0x00},
-	{0x3255, 0x0c},
-	{0x3256, 0x3e},
-	{0x3257, 0x00},
-	{0x3258, 0x09},
-	{0x3259, 0xcf},
+	{0x3255, 0x17},
+	{0x3256, 0xda},
+	{0x3257, 0x0f},
+	{0x3258, 0xeb},
+	{0x3259, 0xf9},
 	{0x325a, 0x00},
-	{0x325b, 0x09},
-	{0x325c, 0xb5},
+	{0x325b, 0x00},
+	{0x325c, 0x81},
 	{0x325d, 0x0f},
-	{0x325e, 0xec},
-	{0x325f, 0x47},
+	{0x325e, 0xdf},
+	{0x325f, 0x3e},
 	{0x3260, 0x00},
-	{0x3261, 0x1d},
-	{0x3262, 0xd8},
+	{0x3261, 0x2c},
+	{0x3262, 0x9f},
 	{0x3263, 0x0f},
-	{0x3264, 0xf7},
-	{0x3265, 0x11},
+	{0x3264, 0xe9},
+	{0x3265, 0xd7},
 	{0x3266, 0x0f},
-	{0x3267, 0xea},
-	{0x3268, 0x3d},
+	{0x3267, 0xd1},
+	{0x3268, 0x83},
 	{0x3269, 0x00},
-	{0x326a, 0x09},
-	{0x326b, 0xcc},
+	{0x326a, 0x3e},
+	{0x326b, 0x18},
 	{0x326c, 0x00},
-	{0x326d, 0x9b},
-	{0x326e, 0x73},
+	{0x326d, 0xcb},
+	{0x326e, 0x32},
 	{0x326f, 0x0f},
-	{0x3270, 0xd4},
-	{0x3271, 0x9e},
+	{0x3270, 0xaf},
+	{0x3271, 0xe3},
 	{0x3272, 0x00},
-	{0x3273, 0x1a},
-	{0x3274, 0x87},
+	{0x3273, 0x51},
+	{0x3274, 0xc8},
 	{0x3275, 0x0f},
-	{0x3276, 0xfd},
-	{0x3277, 0xeb},
-	{0x3278, 0x0f},
-	{0x3279, 0xf5},
-	{0x327a, 0xb4},
+	{0x3276, 0xc5},
+	{0x3277, 0x4c},
+	{0x3278, 0x00},
+	{0x3279, 0x13},
+	{0x327a, 0x30},
 	{0x327b, 0x00},
-	{0x327c, 0x0d},
-	{0x327d, 0x8c},
+	{0x327c, 0x15},
+	{0x327d, 0x7b},
 	{0x327e, 0x0f},
-	{0x327f, 0xc9},
-	{0x3280, 0x4d},
+	{0x327f, 0x97},
+	{0x3280, 0x3f},
 	{0x3281, 0x00},
-	{0x3282, 0x1d},
-	{0x3283, 0x2d},
+	{0x3282, 0x3e},
+	{0x3283, 0x26},
 	{0x3284, 0x0f},
-	{0x3285, 0xea},
-	{0x3286, 0x5b},
+	{0x3285, 0xb3},
+	{0x3286, 0x02},
 	{0x3287, 0x00},
-	{0x3288, 0x04},
-	{0x3289, 0x76},
+	{0x3288, 0x37},
+	{0x3289, 0x73},
 	{0x328a, 0x00},
-	{0x328b, 0x10},
-	{0x328c, 0x2d},
+	{0x328b, 0x0f},
+	{0x328c, 0xd7},
 	{0x328d, 0x0f},
-	{0x328e, 0xe6},
-	{0x328f, 0xde},
+	{0x328e, 0xbf},
+	{0x328f, 0xdc},
 	{0x3290, 0x00},
-	{0x3291, 0x26},
-	{0x3292, 0x85},
+	{0x3291, 0x5a},
+	{0x3292, 0x9b},
 	{0x3293, 0x0f},
-	{0x3294, 0xcf},
-	{0x3295, 0x12},
+	{0x3294, 0xaf},
+	{0x3295, 0x68},
 	{0x3296, 0x00},
-	{0x3297, 0x14},
-	{0x3298, 0x0f},
-	{0x3299, 0x00},
-	{0x329a, 0x0b},
-	{0x329b, 0x36},
+	{0x3297, 0x4c},
+	{0x3298, 0xdb},
+	{0x3299, 0x0f},
+	{0x329a, 0xdc},
+	{0x329b, 0xb5},
 	{0x329c, 0x0f},
-	{0x329d, 0xe4},
-	{0x329e, 0xa4},
+	{0x329d, 0xca},
+	{0x329e, 0x69},
 	{0x329f, 0x00},
-	{0x32a0, 0x21},
-	{0x32a1, 0x1f},
+	{0x32a0, 0x68},
+	{0x32a1, 0x0a},
 	{0x32a2, 0x0f},
-	{0x32a3, 0xf3},
-	{0x32a4, 0x99},
+	{0x32a3, 0xc9},
+	{0x32a4, 0x6c},
 	{0x32a5, 0x00},
-	{0x32a6, 0x30},
-	{0x32a7, 0x8f},
+	{0x32a6, 0x37},
+	{0x32a7, 0x6e},
 	{0x32a8, 0x0f},
-	{0x32a9, 0xf9},
-	{0x32aa, 0x35},
+	{0x32a9, 0xe2},
+	{0x32aa, 0x22},
 	{0x32ab, 0x0f},
-	{0x32ac, 0xee},
-	{0x32ad, 0x6e},
+	{0x32ac, 0xfd},
+	{0x32ad, 0x8b},
 	{0x32ae, 0x00},
-	{0x32af, 0x09},
-	{0x32b0, 0x19},
+	{0x32af, 0x36},
+	{0x32b0, 0x33},
 	{0x32b1, 0x0f},
-	{0x32b2, 0xf0},
-	{0x32b3, 0x57},
+	{0x32b2, 0xa3},
+	{0x32b3, 0xf7},
 	{0x32b4, 0x00},
-	{0x32b5, 0x01},
-	{0x32b6, 0xcc},
-	{0x32b7, 0x0f},
-	{0x32b8, 0xf1},
-	{0x32b9, 0x0b},
+	{0x32b5, 0x1b},
+	{0x32b6, 0xd5},
+	{0x32b7, 0x00},
+	{0x32b8, 0x0a},
+	{0x32b9, 0x4f},
 	{0x32ba, 0x0f},
-	{0x32bb, 0xee},
-	{0x32bc, 0x99},
+	{0x32bb, 0xd6},
+	{0x32bc, 0x4d},
 	{0x32bd, 0x00},
-	{0x32be, 0x11},
-	{0x32bf, 0x3d},
-	{0x32c0, 0x00},
-	{0x32c1, 0x10},
-	{0x32c2, 0x64},
-	{0x32c3, 0x0f},
-	{0x32c4, 0xf6},
-	{0x32c5, 0xab},
+	{0x32be, 0x21},
+	{0x32bf, 0x85},
+	{0x32c0, 0x0f},
+	{0x32c1, 0xfc},
+	{0x32c2, 0x04},
+	{0x32c3, 0x00},
+	{0x32c4, 0x10},
+	{0x32c5, 0x8c},
 	{0x32c6, 0x00},
-	{0x32c7, 0x03},
-	{0x32c8, 0x19},
+	{0x32c7, 0x00},
+	{0x32c8, 0xf5},
 	{0x32c9, 0x0f},
-	{0x32ca, 0xf3},
-	{0x32cb, 0xc9},
+	{0x32ca, 0xd4},
+	{0x32cb, 0xf3},
 	{0x32cc, 0x00},
-	{0x32cd, 0x17},
-	{0x32ce, 0xb3},
+	{0x32cd, 0x3b},
+	{0x32ce, 0x31},
 	{0x32cf, 0x0f},
-	{0x32d0, 0xf2},
-	{0x32d1, 0x3d},
+	{0x32d0, 0xe0},
+	{0x32d1, 0xb3},
 	{0x32d2, 0x0f},
-	{0x32d3, 0xf4},
-	{0x32d4, 0x7e},
+	{0x32d3, 0xe4},
+	{0x32d4, 0xa1},
 	{0x32d5, 0x00},
-	{0x32d6, 0x09},
-	{0x32d7, 0x46},
+	{0x32d6, 0x22},
+	{0x32d7, 0x10},
 	{0x32d8, 0x00},
-	{0x32d9, 0x7c},
-	{0x32da, 0x79},
+	{0x32d9, 0xa7},
+	{0x32da, 0x91},
 	{0x32db, 0x0f},
-	{0x32dc, 0xde},
-	{0x32dd, 0x19},
+	{0x32dc, 0xc6},
+	{0x32dd, 0xd2},
 	{0x32de, 0x00},
-	{0x32df, 0x19},
-	{0x32e0, 0xe8},
+	{0x32df, 0x3a},
+	{0x32e0, 0x5e},
 	{0x32e1, 0x0f},
-	{0x32e2, 0xf3},
-	{0x32e3, 0x41},
+	{0x32e2, 0xd6},
+	{0x32e3, 0xe0},
 	{0x32e4, 0x00},
-	{0x32e5, 0x03},
-	{0x32e6, 0x4c},
+	{0x32e5, 0x0f},
+	{0x32e6, 0xa2},
 	{0x32e7, 0x00},
-	{0x32e8, 0x05},
-	{0x32e9, 0x73},
+	{0x32e8, 0x0b},
+	{0x32e9, 0x02},
 	{0x32ea, 0x0f},
-	{0x32eb, 0xd6},
-	{0x32ec, 0xa5},
+	{0x32eb, 0xb3},
+	{0x32ec, 0xdd},
 	{0x32ed, 0x00},
-	{0x32ee, 0x1f},
-	{0x32ef, 0x81},
+	{0x32ee, 0x2f},
+	{0x32ef, 0xa2},
 	{0x32f0, 0x0f},
-	{0x32f1, 0xdc},
-	{0x32f2, 0xe6},
+	{0x32f1, 0xbb},
+	{0x32f2, 0x1f},
 	{0x32f3, 0x00},
-	{0x32f4, 0x18},
-	{0x32f5, 0x65},
-	{0x32f6, 0x00},
-	{0x32f7, 0x00},
-	{0x32f8, 0x11},
+	{0x32f4, 0x38},
+	{0x32f5, 0x09},
+	{0x32f6, 0x0f},
+	{0x32f7, 0xfc},
+	{0x32f8, 0xc4},
 	{0x32f9, 0x0f},
-	{0x32fa, 0xed},
-	{0x32fb, 0x65},
+	{0x32fa, 0xde},
+	{0x32fb, 0x51},
 	{0x32fc, 0x00},
-	{0x32fd, 0x23},
-	{0x32fe, 0x12},
+	{0x32fd, 0x3c},
+	{0x32fe, 0xdb},
 	{0x32ff, 0x0f},
-	{0x3300, 0xcf},
-	{0x3301, 0x28},
+	{0x3300, 0xc3},
+	{0x3301, 0x2e},
 	{0x3302, 0x00},
-	{0x3303, 0x2b},
-	{0x3304, 0xda},
+	{0x3303, 0x4a},
+	{0x3304, 0x96},
 	{0x3305, 0x0f},
-	{0x3306, 0xef},
-	{0x3307, 0xae},
+	{0x3306, 0xd7},
+	{0x3307, 0x20},
 	{0x3308, 0x0f},
-	{0x3309, 0xeb},
-	{0x330a, 0x13},
+	{0x3309, 0xe3},
+	{0x330a, 0x64},
 	{0x330b, 0x00},
-	{0x330c, 0x27},
-	{0x330d, 0xb8},
+	{0x330c, 0x3b},
+	{0x330d, 0xde},
 	{0x330e, 0x0f},
-	{0x330f, 0xec},
-	{0x3310, 0x69},
+	{0x330f, 0xe2},
+	{0x3310, 0xb6},
 	{0x3311, 0x00},
-	{0x3312, 0x2f},
-	{0x3313, 0x5f},
+	{0x3312, 0x29},
+	{0x3313, 0xfd},
 	{0x3314, 0x0f},
-	{0x3315, 0xdf},
-	{0x3316, 0x4f},
+	{0x3315, 0xd3},
+	{0x3316, 0xee},
 	{0x3317, 0x00},
-	{0x3318, 0x05},
-	{0x3319, 0x70},
+	{0x3318, 0x0c},
+	{0x3319, 0x40},
 	{0x331a, 0x00},
-	{0x331b, 0x0f},
-	{0x331c, 0xd2},
+	{0x331b, 0x1d},
+	{0x331c, 0x96},
 	{0x331d, 0x0f},
-	{0x331e, 0xe1},
-	{0x331f, 0xd8},
+	{0x331e, 0xd4},
+	{0x331f, 0xd9},
 	{0x3320, 0x00},
-	{0x3321, 0x09},
-	{0x3322, 0xcf},
-	{0x3323, 0x0f},
-	{0x3324, 0xf2},
-	{0x3325, 0x6e},
+	{0x3321, 0x0e},
+	{0x3322, 0xa8},
+	{0x3323, 0x00},
+	{0x3324, 0x02},
+	{0x3325, 0xc6},
 	{0x3326, 0x0f},
-	{0x3327, 0xf6},
-	{0x3328, 0xb4},
+	{0x3327, 0xf3},
+	{0x3328, 0xc1},
 	{0x3329, 0x00},
-	{0x332a, 0x0d},
-	{0x332b, 0x87},
+	{0x332a, 0x0f},
+	{0x332b, 0xe2},
 	{0x332c, 0x00},
-	{0x332d, 0x08},
-	{0x332e, 0x1e},
+	{0x332d, 0x03},
+	{0x332e, 0x56},
 	{0x332f, 0x0f},
-	{0x3330, 0xfa},
-	{0x3331, 0x6e},
+	{0x3330, 0xf4},
+	{0x3331, 0xc0},
 	{0x3332, 0x0f},
-	{0x3333, 0xff},
-	{0x3334, 0xaa},
+	{0x3333, 0xfe},
+	{0x3334, 0xc5},
 	{0x3335, 0x0f},
-	{0x3336, 0xf2},
-	{0x3337, 0xc0},
+	{0x3336, 0xe8},
+	{0x3337, 0xb8},
 	{0x3338, 0x00},
-	{0x3339, 0x1d},
-	{0x333a, 0x18},
+	{0x3339, 0x1e},
+	{0x333a, 0xb0},
 	{0x333b, 0x0f},
-	{0x333c, 0xef},
-	{0x333d, 0xed},
+	{0x333c, 0xf2},
+	{0x333d, 0x01},
 	{0x333e, 0x0f},
-	{0x333f, 0xec},
-	{0x3340, 0xf6},
+	{0x333f, 0xe4},
+	{0x3340, 0x68},
 	{0x3341, 0x00},
-	{0x3342, 0x16},
-	{0x3343, 0x8e},
+	{0x3342, 0x27},
+	{0x3343, 0x00},
 	{0x3344, 0x00},
-	{0x3345, 0x9c},
-	{0x3346, 0x52},
+	{0x3345, 0xc0},
+	{0x3346, 0x46},
 	{0x3347, 0x0f},
-	{0x3348, 0xcf},
-	{0x3349, 0xb9},
+	{0x3348, 0xbb},
+	{0x3349, 0x8b},
 	{0x334a, 0x00},
-	{0x334b, 0x29},
-	{0x334c, 0xe9},
+	{0x334b, 0x46},
+	{0x334c, 0xea},
 	{0x334d, 0x0f},
-	{0x334e, 0xe2},
-	{0x334f, 0x83},
+	{0x334e, 0xcc},
+	{0x334f, 0xb7},
 	{0x3350, 0x00},
-	{0x3351, 0x11},
-	{0x3352, 0xcc},
-	{0x3353, 0x0f},
-	{0x3354, 0xff},
-	{0x3355, 0xf4},
+	{0x3351, 0x10},
+	{0x3352, 0x01},
+	{0x3353, 0x00},
+	{0x3354, 0x13},
+	{0x3355, 0xe1},
 	{0x3356, 0x0f},
-	{0x3357, 0xc1},
-	{0x3358, 0xa4},
+	{0x3357, 0x9f},
+	{0x3358, 0xff},
 	{0x3359, 0x00},
-	{0x335a, 0x2f},
-	{0x335b, 0xce},
+	{0x335a, 0x3d},
+	{0x335b, 0x6c},
 	{0x335c, 0x0f},
-	{0x335d, 0xc5},
-	{0x335e, 0xbb},
+	{0x335d, 0xa7},
+	{0x335e, 0x7b},
 	{0x335f, 0x00},
-	{0x3360, 0x35},
-	{0x3361, 0x2a},
+	{0x3360, 0x4b},
+	{0x3361, 0x91},
 	{0x3362, 0x0f},
-	{0x3363, 0xe6},
-	{0x3364, 0x2a},
+	{0x3363, 0xfb},
+	{0x3364, 0x99},
 	{0x3365, 0x0f},
-	{0x3366, 0xf7},
-	{0x3367, 0x44},
+	{0x3366, 0xcc},
+	{0x3367, 0x52},
 	{0x3368, 0x00},
-	{0x3369, 0x31},
-	{0x336a, 0xfe},
+	{0x3369, 0x53},
+	{0x336a, 0x00},
 	{0x336b, 0x0f},
-	{0x336c, 0xb6},
-	{0x336d, 0x84},
+	{0x336c, 0xaa},
+	{0x336d, 0xa2},
 	{0x336e, 0x00},
-	{0x336f, 0x3c},
-	{0x3370, 0x71},
+	{0x336f, 0x64},
+	{0x3370, 0xa2},
 	{0x3371, 0x0f},
-	{0x3372, 0xe5},
-	{0x3373, 0xfe},
+	{0x3372, 0xbe},
+	{0x3373, 0xc4},
 	{0x3374, 0x0f},
-	{0x3375, 0xf2},
-	{0x3376, 0x87},
+	{0x3375, 0xe4},
+	{0x3376, 0xbb},
 	{0x3377, 0x00},
-	{0x3378, 0x29},
-	{0x3379, 0x2b},
+	{0x3378, 0x56},
+	{0x3379, 0xd8},
 	{0x337a, 0x0f},
-	{0x337b, 0xe5},
-	{0x337c, 0x3f},
+	{0x337b, 0xc8},
+	{0x337c, 0xdc},
 	{0x337d, 0x00},
-	{0x337e, 0x45},
-	{0x337f, 0xc6},
+	{0x337e, 0x44},
+	{0x337f, 0xa7},
 	{0x3380, 0x0f},
-	{0x3381, 0xdf},
-	{0x3382, 0xe6},
-	{0x3383, 0x0f},
-	{0x3384, 0xfb},
-	{0x3385, 0x0f},
+	{0x3381, 0xbd},
+	{0x3382, 0xca},
+	{0x3383, 0x00},
+	{0x3384, 0x29},
+	{0x3385, 0xf7},
 	{0x3386, 0x00},
-	{0x3387, 0x0f},
-	{0x3388, 0xf4},
+	{0x3387, 0x08},
+	{0x3388, 0xf2},
 	{0x3389, 0x0f},
-	{0x338a, 0xdf},
-	{0x338b, 0x72},
+	{0x338a, 0xc6},
+	{0x338b, 0x1c},
 	{0x338c, 0x00},
-	{0x338d, 0x0e},
-	{0x338e, 0xaf},
+	{0x338d, 0x28},
+	{0x338e, 0x3b},
 	{0x338f, 0x0f},
-	{0x3390, 0xed},
-	{0x3391, 0x7a},
+	{0x3390, 0xfc},
+	{0x3391, 0x30},
 	{0x3392, 0x0f},
-	{0x3393, 0xe5},
-	{0x3394, 0xab},
+	{0x3393, 0xee},
+	{0x3394, 0x3e},
 	{0x3395, 0x00},
-	{0x3396, 0x18},
-	{0x3397, 0x43},
+	{0x3396, 0x02},
+	{0x3397, 0x32},
 	{0x3398, 0x00},
-	{0x3399, 0x1b},
-	{0x339a, 0x41},
+	{0x3399, 0x25},
+	{0x339a, 0xb6},
 	{0x339b, 0x0f},
-	{0x339c, 0xea},
-	{0x339d, 0x84},
+	{0x339c, 0xe9},
+	{0x339d, 0xd5},
 	{0x339e, 0x0f},
-	{0x339f, 0xfd},
-	{0x33a0, 0xdb},
+	{0x339f, 0xf3},
+	{0x33a0, 0x80},
 	{0x33a1, 0x0f},
-	{0x33a2, 0xe9},
-	{0x33a3, 0xbd},
+	{0x33a2, 0xda},
+	{0x33a3, 0x56},
 	{0x33a4, 0x00},
-	{0x33a5, 0x30},
-	{0x33a6, 0x77},
+	{0x33a5, 0x3c},
+	{0x33a6, 0x4a},
 	{0x33a7, 0x0f},
-	{0x33a8, 0xe9},
-	{0x33a9, 0x93},
+	{0x33a8, 0xe0},
+	{0x33a9, 0x9d},
 	{0x33aa, 0x0f},
-	{0x33ab, 0xd7},
-	{0x33ac, 0xde},
+	{0x33ab, 0xd9},
+	{0x33ac, 0x7d},
 	{0x33ad, 0x00},
-	{0x33ae, 0x2a},
-	{0x33af, 0x14},
+	{0x33ae, 0x34},
+	{0x33af, 0x54},
 	{0x309D, 0x62},
 	{0x309d, 0x22},
-
-/* LC setting End */
-	 },
+	{0x309e, 0x52},
+	{0x309f, 0x3e},
+	{0x30a0, 0x03},
+	{0x30a1, 0x1f},
+	{0x30a2, 0x04},
+	{0x30a3, 0x21},
+	{0x30a4, 0x04},
+	{0x30a5, 0x00},
+	{0x30a6, 0x0c},
+	{0x30a7, 0x7c},
+	{0x30a8, 0x04},
+	{0x30a9, 0x00},
+	{0x30aa, 0x10},
+	{0x30ab, 0x84},
+};
+struct s5k3e2fx_i2c_reg_conf lc_setting_evt5[] = {
 /*EVT5 */
-	{
 /* LC setting Start */
-	 {0x3200, 0x00}, /* 100108 Modify LC setting DNP light source t75-r73*/
+	 {0x3200, 0x00}, /* 100304 Modify LC setting DNP light source t75-r70 to improve reddish issue*/
 	 {0x3201, 0x99},
 	 {0x3202, 0xc1},
 	 {0x3203, 0x0f},
@@ -1288,7 +1256,6 @@ struct s5k3e2fx_i2c_reg_conf lc_setting[2][NUM_LC_REG] = {
 	 {0x309D, 0x62},
 	 {0x309d, 0x22}, /* shading enable */
 	 /*LC setting End */
-	 }
 }; /* lc_setting} */
 
 static struct wake_lock s5k3e2fx_wake_lock;
@@ -1384,7 +1351,7 @@ struct reg_struct {
 	uint8_t reg_30bd_reserved;	/* 0x30BD */
 	uint8_t reg_30c2_reserved;	/* 0x30C2 */
 	uint8_t shade_clk_enable;	/* 0x30AC */
-	uint8_t reg_3051_reserved;	/* 0x3051 */
+	uint8_t reg_3151_reserved;	/* 0x3151 */ /* 100202 the right address is 0x3151 */
 	uint8_t reg_3029_reserved;	/* 0x3029 */
 	uint8_t reg_30bf_reserved;	/* 0x30BF */
 	uint8_t reg_3022_reserved;	/* 0x3022 */
@@ -1401,7 +1368,8 @@ struct reg_struct {
 	uint8_t analogue_gain_code_global_msb;	/* 0x0204 */
 	uint8_t analogue_gain_code_global_lsb;	/* 0x0205 */
 	uint8_t fine_integration_time;	/* 0x0200 */
-	uint8_t coarse_integration_time;	/* 0x0202 */
+	uint8_t coarse_integration_time_msb;	/* 0x0202 */
+	uint8_t coarse_integration_time_lsb;	/* 0x0203 */  /* 100202 Add coarse_integration_time_lsb */
 /* LC Preview/Snapshot difference register */
 /* Preview LC Setting */
 	uint8_t sh4ch_blk_width_r;	/* 0x309E */
@@ -1446,13 +1414,13 @@ struct reg_struct s5k3e2fx_reg_pat[2] = {
 	 0xcc,			/* y_output_size_lsb     REG=0x034F */
 /* X-Y addr setting position. Start */
 	 0x00,			/* x_addr_start_MSB              REG=0x0344 */
-	 0x08,			/* x_addr_start_LSB              REG=0x0345 */
+	 0x00,			/* x_addr_start_LSB              REG=0x0345 */  /* 100202 Change to 00 to the same as DesireC */
 	 0x00,			/* y_addr_start_MSB              REG=0x0346 */
-	 0x08,			/* y_addr_start_LSB              REG=0x0347 */
+	 0x00,			/* y_addr_start_LSB              REG=0x0347 */  /* 100202 Change to 00 to the same as DesireC */
 	 0x0a,			/* x_addr_end_MSB                REG=0x0348 */
-	 0x27,			/* x_addr_end_LSB                REG=0x0349 */
+	 0x2F,			/* x_addr_end_LSB                REG=0x0349 */  /* 100202 Change to 2F to the same as DesireC */
 	 0x07,			/* y_addr_end_MSB                REG=0x034A */
-	 0x9f,			/* y_addr_end_LSB                REG=0x034B */
+	 0xA7,			/* y_addr_end_LSB                REG=0x034B */  /* 100202 Change to A7 to the same as DesireC */
 /* change the setting position */
 /* Frame format */
 	 0x03,			/* frame_length_lines_msb        REG=0x0340 */
@@ -1498,7 +1466,7 @@ struct reg_struct s5k3e2fx_reg_pat[2] = {
 	 0x06,			/* reg_30bd_reserved             REG=0x30BD */
 	 0x0b,			/* reg_30c2_reserved             REG=0x30C2 */
 	 0x81,			/* shade_clk_enable              REG=0x30AC */
-	 0xe6,			/* reg_3051_reserved             REG=0x3051 */
+	 0xe6,			/* reg_3151_reserved             REG=0x3151 */ /* 100202 the right address is 0x3151 */
 	 0x02,			/* reg_3029_reserved             REG=0x3029 */
 	 0x00,			/* reg_30bf_reserved             REG=0x30BF */
 	 0x87,			/* reg_3022_reserved             REG=0x3022 */
@@ -1522,7 +1490,8 @@ struct reg_struct s5k3e2fx_reg_pat[2] = {
 	 REG_ANALOGUE_GAIN_CODE_GLOBAL_LSB_VALUE,
 				/* analogue_gain_code_global_lsb REG=0x0205 */
 	 0x02,			/* fine_integration_time         REG=0x0200 */
-	 0x03,			/* coarse_integration_time       REG=0x0202 */
+	 0x03,			/* coarse_integration_time_msb       REG=0x0202 */
+	 0x00,			/* coarse_integration_time_lsb       REG=0x0203 */  /* 100202 Add coarse_integration_time_lsb */
 /* LC Preview/Snapshot difference register. */
 /* Preview LC config Setting */
 	 0x52,			/* sh4ch_blk_width_r             REG=0x309E */
@@ -1616,7 +1585,7 @@ struct reg_struct s5k3e2fx_reg_pat[2] = {
 	 0x06,			/* reg_30bd_reserved             REG=0x30BD */
 	 0x0b,			/* reg_30c2_reserved             REG=0x30C2 */
 	 0x81,			/* shade_clk_enable              REG=0x30AC */
-	 0xe6,			/* reg_3051_reserved             REG=0x3051 */
+	 0xe6,			/* reg_3151_reserved             REG=0x3151 */ /* 100202 the right address is 0x3151 */
 	 0x02,			/* reg_3029_reserved             REG=0x3029 */
 	 0x00,			/* reg_30bf_reserved             REG=0x30BF */
 	 0x87,			/* reg_3022_reserved             REG=0x3022 */
@@ -1641,7 +1610,8 @@ struct reg_struct s5k3e2fx_reg_pat[2] = {
 	 REG_ANALOGUE_GAIN_CODE_GLOBAL_LSB_VALUE,
 				/* analogue_gain_code_global_lsb REG=0x0205 */
 	 0x02,			/* fine_integration_time         REG=0x0200 */
-	 0x03,			/* coarse_integration_time       REG=0x0202 */
+	 0x03,			/* coarse_integration_time_msb       REG=0x0202 */
+	 0x00,			/* coarse_integration_time_lsb       REG=0x0203 */  /* 100202 Add coarse_integration_time_lsb */
 /* Add LC Preview/Snapshot diff register. */
 /* Snapshot LC config Setting */
 	 0x52,			/* sh4ch_blk_width_r             REG=0x309E */
@@ -1690,7 +1660,17 @@ struct s5k3e2fx_ctrl {
 };
 
 static struct s5k3e2fx_ctrl *s5k3e2fx_ctrl;
+static struct platform_device *s5k3e2fx_pdev;
+
+struct s5k3e2fx_waitevent{
+	uint32_t waked_up;
+	wait_queue_head_t event_wait;
+};
+static struct s5k3e2fx_waitevent s5k3e2fx_event;
+
+
 static DECLARE_WAIT_QUEUE_HEAD(s5k3e2fx_wait_queue);
+DEFINE_SEMAPHORE(s5k3e2fx_sem);
 
 #define MAX_I2C_RETRIES 20
 static int i2c_transfer_retry(struct i2c_adapter *adap,
@@ -1946,9 +1926,20 @@ probe_failure:
 	return rc;
 }
 
+static int __exit s5k3e2fx_i2c_remove(struct i2c_client *client)
+{
+	struct s5k3e2fx_work_t *sensorw = i2c_get_clientdata(client);
+	free_irq(client->irq, sensorw);
+	deinit_suspend();
+	s5k3e2fx_client = NULL;
+	kfree(sensorw);
+	return 0;
+}
+
 static struct i2c_driver s5k3e2fx_i2c_driver = {
 	.id_table = s5k3e2fx_i2c_id,
 	.probe = s5k3e2fx_i2c_probe,
+	.remove = __exit_p(s5k3e2fx_i2c_remove),
 	.driver = {
 		.name = "s5k3e2fx",
 	},
@@ -1968,159 +1959,422 @@ static int s5k3e2fx_test(enum msm_s_test_mode mo)
 	return rc;
 }
 #endif
-static int s5k3e2fx_setting(enum msm_s_reg_update rupdate,
-				enum msm_s_setting rt)
+
+static int s5k3e2fx_setting_INIT_EVT4(void)
+{
+	int rc = 0;
+	struct s5k3e2fx_i2c_reg_conf EVT4_INIT[] = {
+		/*pclk setting*/
+		{0x0305, 0x06},
+		{0x0306, 0x00},
+		{0x0307, 0x83},
+		{0x0301, 0x08},
+		{0x0303, 0x01},
+		{0x0309, 0x08},
+		{0x030b, 0x01},
+		/*output size*/
+		{0x034c, 0x05},
+		{0x034d, 0x10},
+		{0x034e, 0x03},
+		{0x034f, 0xcc},
+		/*frame format (min blanking)*/
+		{0x0340, 0x03},
+		{0x0341, 0xe2},
+		{0x0342, 0x0a},
+		{0x0343, 0xac},
+		/*Binning */
+		{0x0381, 0x01},
+		{0x0383, 0x01},
+		{0x0385, 0x01},
+		{0x0387, 0x03},
+		{0x3014, 0x06},
+		/*MSR setting*/
+		{0x30c4, 0x01},
+		{0x3000, 0x03},
+		{0x3001, 0x94},
+		{0x3002, 0x02},
+		{0x3003, 0x95},
+		{0x3004, 0x0f},
+		{0x3005, 0x05},
+		{0x3006, 0x3c},
+		{0x3007, 0x8c},
+		{0x3008, 0x93},
+		{0x3009, 0x05},
+		{0x300a, 0x3a},
+		{0x300c, 0x02},
+		{0x300d, 0x3e},
+		{0x300f, 0x0e},
+		{0x3010, 0x46},
+		{0x3011, 0x64},
+		{0x3012, 0x1e},
+		{0x301d, 0x3f},
+		{0x3024, 0x04},
+		{0x3028, 0x40},
+		{0x3070, 0xdf},
+		{0x301b, 0x73},
+		{0x307e, 0x02},
+		{0x30bd, 0x06},
+		{0x30c2, 0x0b},
+		{0x30ac, 0x81},
+		{0x3151, 0xe6},
+		{0x3029, 0x02},
+		{0x30bf, 0x00},
+		{0x3022, 0x87},
+		/*tune ADC to got batter yield rate in EDS*/
+		{0x3019, 0x60},
+		/*AF driving strength*/
+		{0x3146, 0x3c},
+		{0x3152, 0x08},
+		/*data pclk driving strength*/
+		{0x315a, 0x7f},
+		/*h sync v sync driving strength*/
+		{0x3159, 0x0f},
+		{0x3157, 0x03},
+		{0x0204, 0x00},
+		{0x0205, 0x80},
+		{0x0202, 0x03},
+		{0x0203, 0xd9},
+		{0x0200, 0x02},
+		{0x3130, 0x03},
+		{0x0100, 0x01},
+	};
+
+	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x0100, 0x00);
+	msleep(30);
+	/* write REG_INIT registers */
+	rc = s5k3e2fx_i2c_write_table(&EVT4_INIT[0],
+		ARRAY_SIZE(EVT4_INIT));
+	return rc;
+}
+
+static int s5k3e2fx_setting_INIT_EVT5(enum msm_s_setting rt)
+{
+	int rc = 0;
+	struct s5k3e2fx_i2c_reg_conf EVT5_INIT[] = {
+		{S5K3E2FX_REG_MODE_SELECT,
+			S5K3E2FX_MODE_SELECT_SW_STANDBY},
+		/*Output Size */
+		{REG_X_OUTPUT_SIZE_MSB,
+			s5k3e2fx_reg_pat[rt].x_output_size_msb},
+		{REG_X_OUTPUT_SIZE_LSB,
+			s5k3e2fx_reg_pat[rt].x_output_size_lsb},
+		{REG_Y_OUTPUT_SIZE_MSB,
+			s5k3e2fx_reg_pat[rt].y_output_size_msb},
+		{REG_Y_OUTPUT_SIZE_LSB,
+			s5k3e2fx_reg_pat[rt].y_output_size_lsb},
+		/* Start-End address */
+/* 100202 Modify X_ADDR and Y_ADDR Start-end is the same between preview and snapshot like DesireC
+		{REG_X_ADDR_START_MSB,
+			s5k3e2fx_reg_pat[rt].x_addr_start_MSB},
+		{REG_X_ADDR_START_LSB,
+			s5k3e2fx_reg_pat[rt].x_addr_start_LSB},
+		{REG_Y_ADDR_START_MSB,
+			s5k3e2fx_reg_pat[rt].y_addr_start_MSB},
+		{REG_Y_ADDR_START_LSB,
+			s5k3e2fx_reg_pat[rt].y_addr_start_LSB},
+		{REG_X_ADDR_END_MSB,
+			s5k3e2fx_reg_pat[rt].x_addr_end_MSB},
+		{REG_X_ADDR_END_LSB,
+			s5k3e2fx_reg_pat[rt].x_addr_end_LSB},
+		{REG_Y_ADDR_END_MSB,
+			s5k3e2fx_reg_pat[rt].y_addr_end_MSB},
+		{REG_Y_ADDR_END_LSB,
+			s5k3e2fx_reg_pat[rt].y_addr_end_LSB},
+*/
+		/* Binning */
+		{REG_X_EVEN_INC,
+			s5k3e2fx_reg_pat[rt].x_even_inc},
+		{REG_X_ODD_INC,
+			s5k3e2fx_reg_pat[rt].x_odd_inc},
+		{REG_Y_EVEN_INC,
+			s5k3e2fx_reg_pat[rt].y_even_inc},
+		{REG_Y_ODD_INC,
+			s5k3e2fx_reg_pat[rt].y_odd_inc},
+		{REG_BINNING_ENABLE,
+			s5k3e2fx_reg_pat[rt].binning_enable},
+		/* Frame format */
+		{REG_FRAME_LENGTH_LINES_MSB,
+			s5k3e2fx_reg_pat[rt].frame_length_lines_msb},
+		{REG_FRAME_LENGTH_LINES_LSB,
+			s5k3e2fx_reg_pat[rt].frame_length_lines_lsb},
+/* 100202 Remove the AEC setting in EVT5_INIT
+		{REG_LINE_LENGTH_PCK_MSB,
+			s5k3e2fx_reg_pat[rt].line_length_pck_msb},
+		{REG_LINE_LENGTH_PCK_LSB,
+			s5k3e2fx_reg_pat[rt].line_length_pck_lsb},
+*/
+		/* MSR setting */
+/* 100202 Remove the AEC and the same value setting in EVT5_INIT
+		{REG_ANALOGUE_GAIN_CODE_GLOBAL_MSB,
+			s5k3e2fx_reg_pat[rt].analogue_gain_code_global_msb},
+		{REG_ANALOGUE_GAIN_CODE_GLOBAL_LSB,
+			s5k3e2fx_reg_pat[rt].analogue_gain_code_global_lsb},
+		{REG_FINE_INTEGRATION_TIME,
+			s5k3e2fx_reg_pat[rt].fine_integration_time},
+		{REG_COARSE_INTEGRATION_TIME,
+			s5k3e2fx_reg_pat[rt].coarse_integration_time_msb},
+		{REG_COARSE_INTEGRATION_TIME_LSB,
+			s5k3e2fx_reg_pat[rt].coarse_integration_time_lsb},
+*/
+		{S5K3E2FX_REG_MODE_SELECT,
+			S5K3E2FX_MODE_SELECT_STREAM},
+	};
+	/*write table*/
+	rc = s5k3e2fx_i2c_write_table(&EVT5_INIT[0], ARRAY_SIZE(EVT5_INIT));
+	if (rc < 0) {
+		pr_err("REG_INIT failed, rc=%d\n", rc);
+		return rc;
+	}
+	return rc;
+}
+
+
+static int s5k3e2fx_setting_PREIODIC_EVT4(enum msm_s_setting rt)
+{
+	int rc = 0;
+	struct s5k3e2fx_i2c_reg_conf EVT4_1[] = {
+		/*output size*/
+		{0x034c, 0x05},
+		{0x034d, 0x10},
+		{0x034e, 0x03},
+		{0x034f, 0xcc},
+		/*frame format (min blanking)*/
+		{0x0340, 0x03},
+		{0x0341, 0xe2},
+		{0x0342, 0x0a},
+		{0x0343, 0xac},
+		/*Binning*/
+		{0x0381, 0x01},
+		{0x0383, 0x01},
+		{0x0385, 0x01},
+		{0x0387, 0x03},
+		{0x3014, 0x06},
+		{0x30bf, 0x00},
+		{0x3022, 0x87},
+		/*tune ADC to got batter yield rate in EDS*/
+		{0x3019, 0x60},
+		/*AF driving strength*/
+		{0x3146, 0x3c},
+		{0x3152, 0x08},
+		/*data pclk driving strength*/
+		{0x315a, 0x7f},
+		{0x3159, 0x0f},
+		/*h sync v sync driving strength*/
+		{0x3157, 0x03},
+		{0x0204, 0x00},
+		{0x0205, 0x80},
+		{0x0202, 0x03},
+		{0x0203, 0xd9},
+		{0x0200, 0x02},
+		{0x3130, 0x03},
+		/*lens shading setting for preview*/
+		{0x309e, 0x52},
+		{0x309f, 0x3e},
+		{0x30a0, 0x03},
+		{0x30a1, 0x1f},
+		{0x30a2, 0x04},
+		{0x30a3, 0x21},
+		{0x30a4, 0x04},
+		{0x30a5, 0x00},
+		{0x30a6, 0x0c},
+		{0x30a7, 0x7c},
+		{0x30a8, 0x04},
+		{0x30a9, 0x00},
+		{0x30aa, 0x10},
+		{0x30ab, 0x84},
+		/*streaimg on*/
+		{0x0100, 0x01},
+	};
+	struct s5k3e2fx_i2c_reg_conf EVT4_2[] = {
+		/*output size*/
+		{0x034c, 0x0a},
+		{0x034d, 0x30},
+		{0x034e, 0x07},
+		{0x034f, 0xa8},
+		/*frame format (min blanking)*/
+		{0x0340, 0x07},
+		{0x0341, 0xb6},
+		{0x0342, 0x0a},
+		{0x0343, 0xac},
+		/*Binning*/
+		{0x0381, 0x01},
+		{0x0383, 0x01},
+		{0x0385, 0x01},
+		{0x0387, 0x01},
+		{0x3014, 0x00},
+		{0x30bf, 0x00},
+		{0x3022, 0x87},
+		/*tune ADC to got batter yield rate in EDS*/
+		{0x3019, 0x60},
+		/*AF driving strength*/
+		{0x3146, 0x3c},
+		{0x3152, 0x08},
+		/*data pclk driving strength*/
+		{0x315a, 0x7f},
+		/*h sync v sync driving strength*/
+		{0x3159, 0x0f},
+		{0x3157, 0x03},
+		{0x0204, 0x00},
+		{0x0205, 0x80},
+		{0x0202, 0x03},
+		{0x0203, 0xd9},
+		{0x0200, 0x02},
+		{0x3130, 0x03},
+		/*lens shading setting for snapshot*/
+		{0x309e, 0x52},
+		{0x309f, 0x7b},
+		{0x30a0, 0x03},
+		{0x30a1, 0x1f},
+		{0x30a2, 0x02},
+		{0x30a3, 0x15},
+		{0x30a4, 0x00},
+		{0x30a5, 0x00},
+		{0x30a6, 0x00},
+		{0x30a7, 0x00},
+		{0x30a8, 0x00},
+		{0x30a9, 0x00},
+		{0x30aa, 0x00},
+		{0x30ab, 0x00},
+		/*streaming on*/
+		{0x0100, 0x01},
+	};
+	struct s5k3e2fx_i2c_reg_conf EVT4_PCLK[] = {
+		/*pclk setting*/
+		{0x0305, 0x06},
+		{0x0306, 0x00},
+		{0x0307, 0x83},
+		{0x0301, 0x08},
+		{0x0303, 0x01},
+		{0x0309, 0x08},
+		{0x030b, 0x01},
+	};
+	/*streaming off*/
+	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x0100, 0x00);
+	msleep(30);
+	/*pclk setting*/
+	rc = s5k3e2fx_i2c_write_table(&EVT4_PCLK[0], ARRAY_SIZE(EVT4_PCLK));
+	/*write table*/
+	if (rt == 0)
+		rc = s5k3e2fx_i2c_write_table(&EVT4_1[0], ARRAY_SIZE(EVT4_1));
+	else
+		rc = s5k3e2fx_i2c_write_table(&EVT4_2[0], ARRAY_SIZE(EVT4_2));
+	return rc;
+}
+
+
+static int s5k3e2fc_setting_PREIODIC_EVT5(enum msm_s_setting rt)
 {
 	int rc = 0;
 	uint16_t num_lperf;
-
-	switch (rupdate) {
-	case S_UPDATE_PERIODIC:{
-			if (rt == S_RES_PREVIEW || rt == S_RES_CAPTURE) {
-				struct s5k3e2fx_i2c_reg_conf tbl_1[] = {
-					{REG_X_OUTPUT_SIZE_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 x_output_size_msb},
-					{REG_X_OUTPUT_SIZE_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 x_output_size_lsb},
-					{REG_Y_OUTPUT_SIZE_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 y_output_size_msb},
-					{REG_Y_OUTPUT_SIZE_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 y_output_size_lsb},
-					/* Start-End address */
-					{REG_X_ADDR_START_MSB,
-					 s5k3e2fx_reg_pat[rt].x_addr_start_MSB},
-					{REG_X_ADDR_START_LSB,
-					 s5k3e2fx_reg_pat[rt].x_addr_start_LSB},
-					{REG_Y_ADDR_START_MSB,
-					 s5k3e2fx_reg_pat[rt].y_addr_start_MSB},
-					{REG_Y_ADDR_START_LSB,
-					 s5k3e2fx_reg_pat[rt].y_addr_start_LSB},
-					{REG_X_ADDR_END_MSB,
-					 s5k3e2fx_reg_pat[rt].x_addr_end_MSB},
-					{REG_X_ADDR_END_LSB,
-					 s5k3e2fx_reg_pat[rt].x_addr_end_LSB},
-					{REG_Y_ADDR_END_MSB,
-					 s5k3e2fx_reg_pat[rt].y_addr_end_MSB},
-					{REG_Y_ADDR_END_LSB,
-					 s5k3e2fx_reg_pat[rt].y_addr_end_LSB},
-					/* Binning */
-					{REG_X_EVEN_INC,
-					 s5k3e2fx_reg_pat[rt].x_even_inc},
-					{REG_X_ODD_INC,
-					 s5k3e2fx_reg_pat[rt].x_odd_inc},
-					{REG_Y_EVEN_INC,
-					 s5k3e2fx_reg_pat[rt].y_even_inc},
-					{REG_Y_ODD_INC,
-					 s5k3e2fx_reg_pat[rt].y_odd_inc},
-					{REG_BINNING_ENABLE,
-					 s5k3e2fx_reg_pat[rt].binning_enable},
-				};
-				struct s5k3e2fx_i2c_reg_conf tbl_2[] = {
-					{REG_FRAME_LENGTH_LINES_MSB, 0},
-					{REG_FRAME_LENGTH_LINES_LSB, 0},
-					{REG_LINE_LENGTH_PCK_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 line_length_pck_msb},
-					{REG_LINE_LENGTH_PCK_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 line_length_pck_lsb},
-					{REG_ANALOGUE_GAIN_CODE_GLOBAL_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 analogue_gain_code_global_msb},
-					{REG_ANALOGUE_GAIN_CODE_GLOBAL_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 analogue_gain_code_global_lsb},
-					{REG_FINE_INTEGRATION_TIME,
-					 s5k3e2fx_reg_pat[rt].
-					 fine_integration_time},
-					{REG_COARSE_INTEGRATION_TIME,
-					 s5k3e2fx_reg_pat[rt].
-					 coarse_integration_time},
-					/* LC Preview/Snapshot difference
-					 * register
+	struct s5k3e2fx_i2c_reg_conf tbl_1[] = {
+					/* skip doing streaming off
+					{S5K3E2FX_REG_MODE_SELECT,
+					S5K3E2FX_MODE_SELECT_SW_STANDBY},
 					 */
-					{REG_SH4CH_BLK_WIDTH_R,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_blk_width_r},
-					{REG_SH4CH_BLK_HEIGHT_R,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_blk_height_r},
-					{REG_SH4CH_STEP_X_R_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_step_x_r_MSB},
-					{REG_SH4CH_STEP_X_R_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_step_x_r_LSB},
-					{REG_SH4CH_STEP_Y_R_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_step_y_r_MSB},
-					{REG_SH4CH_STEP_Y_R_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_step_y_r_LSB},
-					{REG_SH4CH_START_BLK_CNT_X_R,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_start_blk_cnt_x_r},
-					{REG_SH4CH_START_BLK_INT_X_R,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_start_blk_int_x_r},
-					{REG_SH4CH_START_FRAC_X_R_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_start_frac_x_r_MSB},
-					{REG_SH4CH_START_FRAC_X_R_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_start_frac_x_r_LSB},
-					{REG_SH4CH_START_BLK_CNT_Y_R,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_start_blk_cnt_y_r},
-					{REG_SH4CH_START_BLK_INT_Y_R,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_start_blk_int_y_r},
-					{REG_SH4CH_START_FRAC_Y_R_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_start_frac_y_r_MSB},
-					{REG_SH4CH_START_FRAC_Y_R_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 sh4ch_start_frac_y_r_LSB},
-				};
+		{REG_X_OUTPUT_SIZE_MSB,
+			s5k3e2fx_reg_pat[rt].x_output_size_msb},
+		{REG_X_OUTPUT_SIZE_LSB,
+			s5k3e2fx_reg_pat[rt].x_output_size_lsb},
+		{REG_Y_OUTPUT_SIZE_MSB,
+			s5k3e2fx_reg_pat[rt].y_output_size_msb},
+		{REG_Y_OUTPUT_SIZE_LSB,
+			s5k3e2fx_reg_pat[rt].y_output_size_lsb},
+		/* Start-End address */
+/* 100202 Modify X_ADDR and Y_ADDR Start-end is the same between preview and snapshot like DesireC
+		{REG_X_ADDR_START_MSB,
+			s5k3e2fx_reg_pat[rt].x_addr_start_MSB},
+		{REG_X_ADDR_START_LSB,
+			s5k3e2fx_reg_pat[rt].x_addr_start_LSB},
+		{REG_Y_ADDR_START_MSB,
+			s5k3e2fx_reg_pat[rt].y_addr_start_MSB},
+		{REG_Y_ADDR_START_LSB,
+			s5k3e2fx_reg_pat[rt].y_addr_start_LSB},
+		{REG_X_ADDR_END_MSB,
+			s5k3e2fx_reg_pat[rt].x_addr_end_MSB},
+		{REG_X_ADDR_END_LSB,
+			s5k3e2fx_reg_pat[rt].x_addr_end_LSB},
+		{REG_Y_ADDR_END_MSB,
+			s5k3e2fx_reg_pat[rt].y_addr_end_MSB},
+		{REG_Y_ADDR_END_LSB,
+			s5k3e2fx_reg_pat[rt].y_addr_end_LSB},
+*/
+		/* Binning */
+		{REG_X_EVEN_INC,
+			s5k3e2fx_reg_pat[rt].x_even_inc},
+		{REG_X_ODD_INC,
+			s5k3e2fx_reg_pat[rt].x_odd_inc},
+		{REG_Y_EVEN_INC,
+			s5k3e2fx_reg_pat[rt].y_even_inc},
+		{REG_Y_ODD_INC,
+			s5k3e2fx_reg_pat[rt].y_odd_inc},
+		{REG_BINNING_ENABLE,
+			s5k3e2fx_reg_pat[rt].binning_enable},
+	};
+	struct s5k3e2fx_i2c_reg_conf tbl_2[] = {
+		{REG_FRAME_LENGTH_LINES_MSB, 0},
+		{REG_FRAME_LENGTH_LINES_LSB, 0},
+/*  100202 Remove the AEC setting in s5k3e2fc_setting_PREIODIC_EVT5
+		{REG_LINE_LENGTH_PCK_MSB,
+			s5k3e2fx_reg_pat[rt].line_length_pck_msb},
+		{REG_LINE_LENGTH_PCK_LSB,
+			s5k3e2fx_reg_pat[rt].line_length_pck_lsb},
+		{REG_ANALOGUE_GAIN_CODE_GLOBAL_MSB,
+			s5k3e2fx_reg_pat[rt].analogue_gain_code_global_msb},
+		{REG_ANALOGUE_GAIN_CODE_GLOBAL_LSB,
+			s5k3e2fx_reg_pat[rt].analogue_gain_code_global_lsb},
+		{REG_FINE_INTEGRATION_TIME,
+			s5k3e2fx_reg_pat[rt].fine_integration_time},
+		{REG_COARSE_INTEGRATION_TIME,
+			s5k3e2fx_reg_pat[rt].coarse_integration_time_msb},
+		{REG_COARSE_INTEGRATION_TIME_LSB,
+			s5k3e2fx_reg_pat[rt].coarse_integration_time_lsb},
+*/
+		/* LC Preview/Snapshot difference register*/
+		{REG_SH4CH_BLK_WIDTH_R,
+			s5k3e2fx_reg_pat[rt].sh4ch_blk_width_r},
+		{REG_SH4CH_BLK_HEIGHT_R,
+			s5k3e2fx_reg_pat[rt].sh4ch_blk_height_r},
+		{REG_SH4CH_STEP_X_R_MSB,
+			s5k3e2fx_reg_pat[rt].sh4ch_step_x_r_MSB},
+		{REG_SH4CH_STEP_X_R_LSB,
+			s5k3e2fx_reg_pat[rt].sh4ch_step_x_r_LSB},
+		{REG_SH4CH_STEP_Y_R_MSB,
+			s5k3e2fx_reg_pat[rt].sh4ch_step_y_r_MSB},
+		{REG_SH4CH_STEP_Y_R_LSB,
+			s5k3e2fx_reg_pat[rt].sh4ch_step_y_r_LSB},
+		{REG_SH4CH_START_BLK_CNT_X_R,
+			s5k3e2fx_reg_pat[rt].sh4ch_start_blk_cnt_x_r},
+		{REG_SH4CH_START_BLK_INT_X_R,
+			s5k3e2fx_reg_pat[rt].sh4ch_start_blk_int_x_r},
+		{REG_SH4CH_START_FRAC_X_R_MSB,
+			s5k3e2fx_reg_pat[rt].sh4ch_start_frac_x_r_MSB},
+		{REG_SH4CH_START_FRAC_X_R_LSB,
+			s5k3e2fx_reg_pat[rt].sh4ch_start_frac_x_r_LSB},
+		{REG_SH4CH_START_BLK_CNT_Y_R,
+			s5k3e2fx_reg_pat[rt].sh4ch_start_blk_cnt_y_r},
+		{REG_SH4CH_START_BLK_INT_Y_R,
+			s5k3e2fx_reg_pat[rt].sh4ch_start_blk_int_y_r},
+		{REG_SH4CH_START_FRAC_Y_R_MSB,
+			s5k3e2fx_reg_pat[rt].sh4ch_start_frac_y_r_MSB},
+		{REG_SH4CH_START_FRAC_Y_R_LSB,
+			s5k3e2fx_reg_pat[rt].sh4ch_start_frac_y_r_LSB},
+	};
 
-/* add EVT5 sensor Samsung difference MSR setting between Preview and Capture */
+	/* add EVT5 sensor Samsung difference
+	* MSR setting between Preview and Capture
+	*/
 
-				struct s5k3e2fx_i2c_reg_conf
-				    tbl_only_for_EVT5[2][2] = {
-					{	/* S_RES_PREVIEW */
-					 {0x3062, 0x00},
-					 {0x3063, 0xD6},
-					 },
-					{	/* S_RES_CAPTURE */
-					 {0x3062, 0x01},
-					 {0x3063, 0x16},
-					 }
-				};
-
-				/* Most registers are directly applied at next frame after
-				   writing except shutter and analog gain. Shutter and gain are
-				   applied at 2nd or 1st frame later depending on register
-				   writing time. When the camera is switched from preview to
-				   snapshot, the first frame may have wrong shutter/gain and
-				   should be discarded. The register REG_MASK_CORRUPTED_FRAMES
-				   can discard the frame that has wrong shutter/gain. But in
-				   preview mode, the frames should not be dropped. Otherwise
-				   the preview will not be smooth. */
-				if (rt == S_RES_PREVIEW) {
-					/* Frames will be not discarded after exposure and gain are
-					   written. */
-					s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
-						REG_MASK_CORRUPTED_FRAMES, NO_MASK);
-				} else {
-					/* Solve greenish in lowlight. Prevent corrupted frame */
-					s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
-						REG_MASK_CORRUPTED_FRAMES, MASK);
-				}
-
+	struct s5k3e2fx_i2c_reg_conf
+		tbl_only_for_EVT5[2][2] = {
+		{	/* S_RES_PREVIEW */
+			{0x3062, 0x00},
+			{0x3063, 0xD6},
+		},
+		{	/* S_RES_CAPTURE */
+			{0x3062, 0x01},
+			{0x3063, 0x16},
+		}
+	};
 /* solve greenish: hold for both */
 				rc = s5k3e2fx_i2c_write_b(
 					s5k3e2fx_client->addr,
@@ -2129,183 +2383,102 @@ static int s5k3e2fx_setting(enum msm_s_reg_update rupdate,
 				if (rc < 0)
 					return rc;
 
-				CDBG("Binning_enable = 0x %2x"
-				     "[s5k3e2fx.c s5k3e2fx_setting]\r\n",
-				     s5k3e2fx_reg_pat[rt].binning_enable);
+	CDBG("Binning_enable = 0x %2x"
+			"[s5k3e2fx.c s5k3e2fx_setting]\r\n",
+			s5k3e2fx_reg_pat[rt].binning_enable);
+	rc = s5k3e2fx_i2c_write_table(&tbl_1[0], ARRAY_SIZE(tbl_1));
+	if (rc < 0) {
+		pr_err("UPDATE_PERIODIC, tb1_1 failed");
+		return rc;
+	}
 
-				rc = s5k3e2fx_i2c_write_table(&tbl_1[0],
-							ARRAY_SIZE
-							(tbl_1));
-				if (rc < 0) {
-					pr_err("UPDATE_PERIODIC, tb1_1 failed");
-					return rc;
-				}
+	/* only for evt5 */
+	if (g_usModuleVersion == 1) {
+		rc = s5k3e2fx_i2c_write_table(&tbl_only_for_EVT5[rt][0], 2);
+		if (rc < 0)
+			return rc;
+	}
 
-				num_lperf =
-				    (uint16_t) ((s5k3e2fx_reg_pat[rt].
-						 frame_length_lines_msb
-						 << 8) & 0xFF00) +
-				    s5k3e2fx_reg_pat[rt].
-				    frame_length_lines_lsb;
+	num_lperf = (uint16_t) ((s5k3e2fx_reg_pat[rt].frame_length_lines_msb
+		<< 8) & 0xFF00) + s5k3e2fx_reg_pat[rt].frame_length_lines_lsb;
 
-				num_lperf =
-				    num_lperf *
-				    s5k3e2fx_ctrl->fps_divider / 0x0400;
+	num_lperf = num_lperf * s5k3e2fx_ctrl->fps_divider / 0x0400;
 
-				tbl_2[0] =
-				    (struct s5k3e2fx_i2c_reg_conf) {
-					REG_FRAME_LENGTH_LINES_MSB,
-					    (num_lperf & 0xFF00) >> 8};
-				tbl_2[1] =
-				    (struct s5k3e2fx_i2c_reg_conf) {
-					REG_FRAME_LENGTH_LINES_LSB,
-					    (num_lperf & 0x00FF)};
+	tbl_2[0] = (struct s5k3e2fx_i2c_reg_conf) {REG_FRAME_LENGTH_LINES_MSB,
+			(num_lperf & 0xFF00) >> 8};
+	tbl_2[1] = (struct s5k3e2fx_i2c_reg_conf) {REG_FRAME_LENGTH_LINES_LSB,
+			(num_lperf & 0x00FF)};
 
-				rc = s5k3e2fx_i2c_write_table(&tbl_2[0],
-							ARRAY_SIZE
-							(tbl_2));
-				if (rc < 0) {
-					pr_err("UPDATE_PERIODIC, tb1_2 failed");
-					return rc;
-				}
+	rc = s5k3e2fx_i2c_write_table(&tbl_2[0], ARRAY_SIZE(tbl_2));
+	if (rc < 0) {
+		pr_err("UPDATE_PERIODIC, tb1_2 failed");
+		return rc;
+	}
 
-				/* only for evt5 */
-				if (g_usModuleVersion == 1) {
-					rc = s5k3e2fx_i2c_write_table
-					    (&tbl_only_for_EVT5[rt][0],
-					     2);
-					if (rc < 0)
-						return rc;
-				}
+/* solve greenish: only release for preview */
+	if (s5k3e2fx_ctrl->sensormode == SENSOR_PREVIEW_MODE)
+	{
+		rc = s5k3e2fx_i2c_write_b(
+			s5k3e2fx_client->addr,
+			REG_GROUPED_PARAMETER_HOLD,
+			GROUPED_PARAMETER_UPDATE);
+		if (rc < 0)
+			return rc;
+	}
 
-				/* solve greenish: only release for preview */
-				if (s5k3e2fx_ctrl->sensormode == SENSOR_PREVIEW_MODE)
-				{
-					rc = s5k3e2fx_i2c_write_b(
-						s5k3e2fx_client->addr,
-						REG_GROUPED_PARAMETER_HOLD,
-						GROUPED_PARAMETER_UPDATE);
-					if (rc < 0)
-						return rc;
-				}
 
-				rc = s5k3e2fx_i2c_write_b
-					(s5k3e2fx_client->addr,
-					S5K3E2FX_REG_MODE_SELECT,
-					S5K3E2FX_MODE_SELECT_STREAM);
-				if (rc < 0)
-					return rc;
-			}
-		break; /* UPDATE_PERIODIC */
+	rc = s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
+			S5K3E2FX_REG_MODE_SELECT,
+			S5K3E2FX_MODE_SELECT_STREAM);
+	if (rc < 0)
+		return rc;
+
+	return 0;
+}
+
+
+static int s5k3e2fx_setting(enum msm_s_reg_update rupdate,
+				enum msm_s_setting rt)
+{
+	int rc = 0;
+	pr_info("s5k3e2fx_setting rupdate:%d g_usModuleVersion:%d\n",
+		rupdate, g_usModuleVersion);
+	switch (rupdate) {
+	case S_UPDATE_PERIODIC:{
+		if (g_usModuleVersion == 1)
+			rc = s5k3e2fc_setting_PREIODIC_EVT5(rt);
+		else
+			rc = s5k3e2fx_setting_PREIODIC_EVT4(rt);
 		}
+		break; /* UPDATE_PERIODIC */
+
 	case S_REG_INIT:{
+		if (g_usModuleVersion == 1) {
+			/*EVT5*/
 			if (rt == S_RES_PREVIEW || rt == S_RES_CAPTURE) {
-				struct s5k3e2fx_i2c_reg_conf tbl_3[] = {
-/* {S5K3E2FX_REG_SOFTWARE_RESET, S5K3E2FX_SOFTWARE_RESET},*/
-					{S5K3E2FX_REG_MODE_SELECT,
-					 S5K3E2FX_MODE_SELECT_SW_STANDBY},
-					/*Output Size */
-					{REG_X_OUTPUT_SIZE_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 x_output_size_msb},
-					{REG_X_OUTPUT_SIZE_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 x_output_size_lsb},
-					{REG_Y_OUTPUT_SIZE_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 y_output_size_msb},
-					{REG_Y_OUTPUT_SIZE_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 y_output_size_lsb},
-					/* Start-End address */
-					{REG_X_ADDR_START_MSB,
-					 s5k3e2fx_reg_pat[rt].x_addr_start_MSB},
-					{REG_X_ADDR_START_LSB,
-					 s5k3e2fx_reg_pat[rt].x_addr_start_LSB},
-					{REG_Y_ADDR_START_MSB,
-					 s5k3e2fx_reg_pat[rt].y_addr_start_MSB},
-					{REG_Y_ADDR_START_LSB,
-					 s5k3e2fx_reg_pat[rt].y_addr_start_LSB},
-					{REG_X_ADDR_END_MSB,
-					 s5k3e2fx_reg_pat[rt].x_addr_end_MSB},
-					{REG_X_ADDR_END_LSB,
-					 s5k3e2fx_reg_pat[rt].x_addr_end_LSB},
-					{REG_Y_ADDR_END_MSB,
-					 s5k3e2fx_reg_pat[rt].y_addr_end_MSB},
-					{REG_Y_ADDR_END_LSB,
-					 s5k3e2fx_reg_pat[rt].y_addr_end_LSB},
-					/* Binning */
-					{REG_X_EVEN_INC,
-					 s5k3e2fx_reg_pat[rt].x_even_inc},
-					{REG_X_ODD_INC,
-					 s5k3e2fx_reg_pat[rt].x_odd_inc},
-					{REG_Y_EVEN_INC,
-					 s5k3e2fx_reg_pat[rt].y_even_inc},
-					{REG_Y_ODD_INC,
-					 s5k3e2fx_reg_pat[rt].y_odd_inc},
-					{REG_BINNING_ENABLE,
-					 s5k3e2fx_reg_pat[rt].binning_enable},
-					/* Frame format */
-					{REG_FRAME_LENGTH_LINES_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 frame_length_lines_msb},
-					{REG_FRAME_LENGTH_LINES_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 frame_length_lines_lsb},
-					{REG_LINE_LENGTH_PCK_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 line_length_pck_msb},
-					{REG_LINE_LENGTH_PCK_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 line_length_pck_lsb},
-					/* MSR setting */
-					{REG_ANALOGUE_GAIN_CODE_GLOBAL_MSB,
-					 s5k3e2fx_reg_pat[rt].
-					 analogue_gain_code_global_msb},
-					{REG_ANALOGUE_GAIN_CODE_GLOBAL_LSB,
-					 s5k3e2fx_reg_pat[rt].
-					 analogue_gain_code_global_lsb},
-					{REG_FINE_INTEGRATION_TIME,
-					 s5k3e2fx_reg_pat[rt].
-					 fine_integration_time},
-					{REG_COARSE_INTEGRATION_TIME,
-					 s5k3e2fx_reg_pat[rt].
-					 coarse_integration_time},
-					{S5K3E2FX_REG_MODE_SELECT,
-					 S5K3E2FX_MODE_SELECT_STREAM},
-				};
 				unsigned short rData = 0;
 				mdelay(1);
-				s5k3e2fx_i2c_read_b(s5k3e2fx_client->
-						    addr,
-						    REG_3150_RESERVED,
-						    &rData);
-				s5k3e2fx_i2c_write_b(s5k3e2fx_client->
-						     addr,
-						     REG_3150_RESERVED,
-						     (rData & 0xFFFE));
+				s5k3e2fx_i2c_read_b(s5k3e2fx_client->addr,
+					REG_3150_RESERVED, &rData);
+				s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
+					REG_3150_RESERVED, (rData & 0xFFFE));
 				mdelay(1);
-				s5k3e2fx_i2c_read_b(s5k3e2fx_client->
-						    addr,
-						    REG_TYPE1_AF_ENABLE,
-						    &rData);
-				s5k3e2fx_i2c_write_b(s5k3e2fx_client->
-						addr,
-						REG_TYPE1_AF_ENABLE,
-						(rData | 0x0001));
+				s5k3e2fx_i2c_read_b(s5k3e2fx_client->addr,
+					REG_TYPE1_AF_ENABLE, &rData);
+				s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
+					REG_TYPE1_AF_ENABLE, (rData | 0x0001));
 				mdelay(1);
-
 				/* reset fps_divider */
 				s5k3e2fx_ctrl->fps_divider = 1 * 0x0400;
 				/* write REG_INIT registers */
-				rc = s5k3e2fx_i2c_write_table(&tbl_3[0],
-							ARRAY_SIZE
-							(tbl_3));
-				if (rc < 0) {
-					pr_err("REG_INIT failed, rc=%d\n", rc);
-					return rc;
-				}
+				s5k3e2fx_setting_INIT_EVT5(rt);
 			}
+		} else{
+			/*EVT4*/
+			s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
+					REG_3150_RESERVED, 0x50);
+			s5k3e2fx_setting_INIT_EVT4();
+		}
 		}
 		break; /* REG_INIT */
 
@@ -2317,10 +2490,127 @@ static int s5k3e2fx_setting(enum msm_s_reg_update rupdate,
 	return rc;
 }
 
-static int s5k3e2fx_sensor_open_init(const struct msm_camera_sensor_info *data)
-{
-	int rc;
+#define MAX_LAYER_NUM 5
+#define FIRST_LAYER 9
+#define FUSE_ID_FIRST_ADDR 14
 
+static int s5k3e2fx_i2c_read_fuseid(struct sensor_cfg_data *cdata)
+{
+
+	uint32_t otp_vendorid_index = 0;
+	uint32_t otp_fuseid_index = 0;
+	unsigned short otp_vendorid1[MAX_LAYER_NUM];
+	unsigned short otp_vendorid2[MAX_LAYER_NUM];
+	unsigned short otp_vendorid3[MAX_LAYER_NUM];
+	unsigned short otp_fuseid1[MAX_LAYER_NUM];
+	unsigned short otp_fuseid2[MAX_LAYER_NUM];
+	unsigned short otp_fuseid3[MAX_LAYER_NUM];
+	for (otp_vendorid_index = 0;
+		otp_vendorid_index < MAX_LAYER_NUM;
+		otp_vendorid_index++) {
+
+		s5k3e2fx_i2c_write_b(
+			s5k3e2fx_client->addr,
+			0x311A, FIRST_LAYER+otp_vendorid_index);
+		s5k3e2fx_i2c_read_b(
+			s5k3e2fx_client->addr,
+			0x311B, &otp_vendorid1[otp_vendorid_index]);
+		s5k3e2fx_i2c_read_b(
+			s5k3e2fx_client->addr,
+			0x311C, &otp_vendorid2[otp_vendorid_index]);
+		s5k3e2fx_i2c_read_b(
+			s5k3e2fx_client->addr,
+			0x311D, &otp_vendorid3[otp_vendorid_index]);
+		pr_info("s5k3e2fx: otp_vendorid1[%d]:0x%4x\n",
+			otp_vendorid_index, otp_vendorid1[otp_vendorid_index]);
+		pr_info("s5k3e2fx: otp_vendorid2[%d]:0x%4x\n",
+			otp_vendorid_index, otp_vendorid2[otp_vendorid_index]);
+		pr_info("s5k3e2fx: otp_vendorid3[%d]:0x%4x\n",
+			otp_vendorid_index, otp_vendorid3[otp_vendorid_index]);
+		if ((otp_vendorid1[otp_vendorid_index] == 0) &&
+			(otp_vendorid2[otp_vendorid_index] == 0) &&
+			(otp_vendorid3[otp_vendorid_index] == 0) &&
+			(otp_vendorid_index != 0)) {
+			break;
+		}
+	}
+	otp_vendorid_index = otp_vendorid_index-1;
+	/*read fuse id from layer14~layer18.
+	*The last non-all-zero layer contains
+	*correct fuse id */
+
+	for (otp_fuseid_index = 0;
+		otp_fuseid_index < MAX_LAYER_NUM;
+		otp_fuseid_index++) {
+		/*give OTP the address you want to read*/
+		s5k3e2fx_i2c_write_b(
+			s5k3e2fx_client->addr,
+			0x311A, FUSE_ID_FIRST_ADDR+otp_fuseid_index);
+		s5k3e2fx_i2c_read_b(
+			s5k3e2fx_client->addr,
+			0x311B, &otp_fuseid1[otp_fuseid_index]);
+		s5k3e2fx_i2c_read_b(
+			s5k3e2fx_client->addr,
+			0x311C, &otp_fuseid2[otp_fuseid_index]);
+		s5k3e2fx_i2c_read_b(
+			s5k3e2fx_client->addr,
+			0x311D, &otp_fuseid3[otp_fuseid_index]);
+		pr_info("s5k3e2fx: otp_fuseid1[%d]:0x%4x\n",
+			otp_fuseid_index, otp_fuseid1[otp_fuseid_index]);
+		pr_info("s5k3e2fx: otp_fuseid2[%d]:0x%4x\n",
+			otp_fuseid_index, otp_fuseid2[otp_fuseid_index]);
+		pr_info("s5k3e2fx: otp_fuseid3[%d]:0x%4x\n",
+			otp_fuseid_index, otp_fuseid3[otp_fuseid_index]);
+		if ((otp_fuseid1[otp_fuseid_index] == 0) &&
+			(otp_fuseid2[otp_fuseid_index] == 0) &&
+			(otp_fuseid3[otp_fuseid_index] == 0) &&
+			(otp_fuseid_index != 0)) {
+				break;
+			}
+	}
+	otp_fuseid_index = otp_fuseid_index-1;
+	cdata->cfg.fuse.fuse_id_word1 = otp_vendorid_index;
+	cdata->cfg.fuse.fuse_id_word2 = otp_fuseid_index;
+	cdata->cfg.fuse.fuse_id_word3 =
+		(((uint32_t)otp_vendorid1[otp_vendorid_index])<<16) |
+		(((uint32_t)otp_vendorid2[otp_vendorid_index])<<8) |
+		((uint32_t)otp_vendorid3[otp_vendorid_index]);
+	cdata->cfg.fuse.fuse_id_word4 =
+		(((uint32_t)otp_fuseid1[otp_fuseid_index])<<16) |
+		(((uint32_t)otp_fuseid2[otp_fuseid_index])<<8) |
+		((uint32_t)otp_fuseid3[otp_fuseid_index]);
+	pr_info("s5k3e2fx: fuse->fuse_id_word1:%d\n",
+		cdata->cfg.fuse.fuse_id_word1);
+	pr_info("s5k3e2fx: fuse->fuse_id_word2:%d\n",
+		cdata->cfg.fuse.fuse_id_word2);
+	pr_info("s5k3e2fx: fuse->fuse_id_word3:0x%08x\n",
+		cdata->cfg.fuse.fuse_id_word3);
+	pr_info("s5k3e2fx: fuse->fuse_id_word4:0x%08x\n",
+		cdata->cfg.fuse.fuse_id_word4);
+	return 0;
+}
+
+static int s5k3e2fx_sensor_open_init(struct msm_camera_sensor_info *data)
+{
+	int rc = 0;
+	int timeout;
+
+	down(&s5k3e2fx_sem);
+
+	/*check whether resume done*/
+	timeout = wait_event_interruptible_timeout(
+		s5k3e2fx_event.event_wait,
+		s5k3e2fx_event.waked_up,
+		30*HZ);
+
+	pr_info("wait event : %d timeout:%d\n",
+		s5k3e2fx_event.waked_up, timeout);
+	if (timeout == 0) {
+		up(&s5k3e2fx_sem);
+		return rc;
+	}
+
+	msm_camio_probe_on(s5k3e2fx_pdev);
 	CDBG("%s %s:%d\n", __FILE__, __func__, __LINE__);
 	s5k3e2fx_ctrl = kzalloc(sizeof(struct s5k3e2fx_ctrl), GFP_KERNEL);
 	if (!s5k3e2fx_ctrl) {
@@ -2349,6 +2639,7 @@ static int s5k3e2fx_sensor_open_init(const struct msm_camera_sensor_info *data)
 	if (rc < 0)
 		goto init_fail1;
 
+	pr_info("s5k3e2fx_ctrl->prev_res:%d\n",s5k3e2fx_ctrl->prev_res);
 	if (s5k3e2fx_ctrl->prev_res == S_QTR_SIZE)
 		rc = s5k3e2fx_setting(S_REG_INIT, S_RES_PREVIEW);
 	else
@@ -2367,14 +2658,19 @@ static int s5k3e2fx_sensor_open_init(const struct msm_camera_sensor_info *data)
 	goto init_done;
 
 init_fail1:
-	kfree(s5k3e2fx_ctrl);
+	if (s5k3e2fx_ctrl) {
+		kfree(s5k3e2fx_ctrl);
+		s5k3e2fx_ctrl = NULL;
+	}
 init_done:
+	up(&s5k3e2fx_sem);
 	return rc;
 }
 
 static void s5k3e2fx_suspend_sensor(void)
 {
 	unsigned short rData = 0;
+
 	 /*AF*/
 	s5k3e2fx_i2c_read_b(s5k3e2fx_client->addr,
 			REG_TYPE1_AF_ENABLE, &rData);
@@ -2387,10 +2683,13 @@ static void s5k3e2fx_suspend_sensor(void)
 	msleep(210);		/*for 5FPS */
 	/* hi z */
 	s5k3e2fx_i2c_read_b(s5k3e2fx_client->addr, REG_3150_RESERVED, &rData);
-	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
+	if (g_usModuleVersion == 1)
+		s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
 			REG_3150_RESERVED, (rData | 0x0001));
+	else
+		s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
+			REG_3150_RESERVED, 0x51);
 	mdelay(1);
-
 }
 
 static int s5k3e2fx_power_down(void)
@@ -2406,8 +2705,11 @@ static int s5k3e2fx_sensor_release(void)
 
 	s5k3e2fx_suspend_sensor();
 
-	kfree(s5k3e2fx_ctrl);
-	s5k3e2fx_ctrl = NULL;
+	msm_camio_probe_off(s5k3e2fx_pdev);
+	if (s5k3e2fx_ctrl) {
+		kfree(s5k3e2fx_ctrl);
+		s5k3e2fx_ctrl = NULL;
+	}
 
 	allow_suspend();
 
@@ -2420,7 +2722,6 @@ static int s5k3e2fx_probe_init_lens_correction(
 		const struct msm_camera_sensor_info *data)
 {
 	int rc = 0;
-
 	/* LC setting */
 	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
 			     S5K3E2FX_REG_SOFTWARE_RESET,
@@ -2429,19 +2730,46 @@ static int s5k3e2fx_probe_init_lens_correction(
 	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
 			     S5K3E2FX_REG_MODE_SELECT,
 			     S5K3E2FX_MODE_SELECT_SW_STANDBY);
+
 	/*20090811  separates the EVT4/EVT5 sensor init and LC setting start */
-	s5k3e2fx_i2c_write_table(&Init_setting[g_usModuleVersion][0],
-				 NUM_INIT_REG);
+	if (g_usModuleVersion == 0)
+		s5k3e2fx_i2c_write_table(
+			&Init_setting_evt4[0],
+			ARRAY_SIZE(Init_setting_evt4));
+	else
+		s5k3e2fx_i2c_write_table(
+			&Init_setting_evt5[0],
+			ARRAY_SIZE(Init_setting_evt5));
 
-	/* 090911  Add for Samsung VCM calibration current Start */
-	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3112, 0x0A);
-	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3112, 0x09);
-	mdelay(5);
-	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3145, 0x04);
-	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3146, 0x80);
-	/* 090911 Add for Samsung VCM calibration current End */
+	if (g_usModuleVersion == 1) {
+		/*Only for EVT5*/
+		/* 090911  Add for Samsung VCM calibration current Start */
+		s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3112, 0x0A);
+		s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3112, 0x09);
+		mdelay(5);
+		s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3145, 0x04);
+		s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3146, 0x80);
+		/* 090911 Add for Samsung VCM calibration current End */
+	} else{
+		/*for AWB auto calibration*/
+		s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3110, 0x03);
+		s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3112, 0x0A);
+		msleep(5);
+		s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3110, 0x03);
+		s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3112, 0x09);
+	}
 
-	s5k3e2fx_i2c_write_table(&lc_setting[g_usModuleVersion][0], NUM_LC_REG);
+	if (g_usModuleVersion == 0)
+		s5k3e2fx_i2c_write_table(
+			&lc_setting_evt4[0],
+			ARRAY_SIZE(lc_setting_evt4));
+	else
+		s5k3e2fx_i2c_write_table(
+			&lc_setting_evt5[0],
+			ARRAY_SIZE(lc_setting_evt5));
+
+    /* Solve EVT5 greenish in lowlight, prevent corrupted frame*/
+    s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x0105,0x1);
 
 	/*20090811  separates the EVT4/EVT5 sensor init and LC setting end */
 	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
@@ -2504,8 +2832,12 @@ static uint32_t s5k3e2fx_get_pict_max_exp_lc(void)
 		snapshot_lines_per_frame =
 		    s5k3e2fx_reg_pat[S_RES_PREVIEW].size_h +
 		    s5k3e2fx_reg_pat[S_RES_PREVIEW].blk_l;
-	else
-		snapshot_lines_per_frame = 3961 * 3;
+	else {
+		/* snapshot max linecount
+		(should be larger than transmitted preview max linecount of
+		preview ISO and chromatix gain-line table) */
+		snapshot_lines_per_frame = 3000; //3961 * 3;
+	}
 
 	return snapshot_lines_per_frame;
 }
@@ -2519,7 +2851,7 @@ static int s5k3e2fx_set_fps(struct fps_cfg *fps)
 
 	CDBG("s5k3e2fx_ctrl->fps_divider = %d\n",
 		s5k3e2fx_ctrl->fps_divider);
-
+#if 0
 	rc = s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
 				  REG_FRAME_LENGTH_LINES_MSB,
 				  (((s5k3e2fx_reg_pat[S_RES_PREVIEW].size_h +
@@ -2535,9 +2867,9 @@ static int s5k3e2fx_set_fps(struct fps_cfg *fps)
 				     s5k3e2fx_reg_pat[S_RES_PREVIEW].blk_l) *
 				    s5k3e2fx_ctrl->fps_divider /
 				    0x400) & 0xFF00));
-
 set_fps_done:
 	return rc;
+#endif
 }
 
 static int s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
@@ -2545,7 +2877,7 @@ static int s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 	int rc = 0;
 
 	uint16_t max_legal_gain = 0x0200;
-	uint32_t ll_ratio;	/* Q10 */
+	//uint32_t ll_ratio;	/* Q10 */
 	uint32_t ll_pck, fl_lines;
 	uint16_t offset = 4;
 	uint32_t gain_msb, gain_lsb;
@@ -2554,8 +2886,10 @@ static int s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 
 	struct s5k3e2fx_i2c_reg_conf tbl[2];
 
-	CDBG("Line:%d s5k3e2fx_write_exp_gain gain %d line %d\n",
-		__LINE__, gain, line);
+	CDBG("Line:%d s5k3e2fx_write_exp_gain \n", __LINE__);
+//printk("Steven Enter write_exp_gain User Space Gain and Line:gain = %4d, line = %6d \n", gain, line);
+//	if ((gain == 0) || (line == 0))  /* 100223 Mask this for Bright Flash In Beginning */
+//		return rc;
 
 	if (s5k3e2fx_ctrl->sensormode == SENSOR_PREVIEW_MODE) {
 
@@ -2563,23 +2897,24 @@ static int s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 		s5k3e2fx_ctrl->my_reg_line_count = (uint16_t) line;
 
 		fl_lines = s5k3e2fx_reg_pat[S_RES_PREVIEW].size_h +
-		    s5k3e2fx_reg_pat[S_RES_PREVIEW].blk_l;
+		    s5k3e2fx_reg_pat[S_RES_PREVIEW].blk_l;  /* 972 + 18 = 990 */
 
 		ll_pck = s5k3e2fx_reg_pat[S_RES_PREVIEW].size_w +
-		    s5k3e2fx_reg_pat[S_RES_PREVIEW].blk_p;
+		    s5k3e2fx_reg_pat[S_RES_PREVIEW].blk_p;  /* 1296 + 1436 = 2732 */
 
 	} else {
 
 		fl_lines = s5k3e2fx_reg_pat[S_RES_CAPTURE].size_h +
-		    s5k3e2fx_reg_pat[S_RES_CAPTURE].blk_l;
+		    s5k3e2fx_reg_pat[S_RES_CAPTURE].blk_l;  /* 1960 + 14 = 1974 */
 
 		ll_pck = s5k3e2fx_reg_pat[S_RES_CAPTURE].size_w +
-		    s5k3e2fx_reg_pat[S_RES_CAPTURE].blk_p;
+		    s5k3e2fx_reg_pat[S_RES_CAPTURE].blk_p;  /* 2608 + 124 = 2732 */
 	}
 
 	if (gain > max_legal_gain)
 		gain = max_legal_gain;
 
+#if 0
 	/* in Q10 */
 	line = (line * s5k3e2fx_ctrl->fps_divider);
 
@@ -2587,6 +2922,29 @@ static int s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 		ll_ratio = (line / (fl_lines - offset));
 	else
 		ll_ratio = 0x400;
+
+	ll_pck = ll_pck * ll_ratio / 0x400;
+	line = line / ll_ratio;
+#else
+	// solving accuracy lossing by calculating separately
+	if (fl_lines < (line * s5k3e2fx_ctrl->fps_divider / 0x400)){
+		/* ll_ratio =
+			(line * s5k3e2fx_ctrl->fps_divider / (fl_lines - offset)); */
+
+		ll_pck = ll_pck *
+			(line * s5k3e2fx_ctrl->fps_divider / (fl_lines - offset)) /
+			0x400;
+
+		/* line = line * s5k3e2fx_ctrl->fps_divider /
+			(line * s5k3e2fx_ctrl->fps_divider / (fl_lines - offset)); */
+		line = fl_lines - offset;
+	}
+	else{
+		/* ll_ratio = 0x400; */
+		/* ll_pck = ll_pck * 0x400 / 0x400; */
+		line = line * s5k3e2fx_ctrl->fps_divider / 0x400;
+	}
+#endif
 
 /* solve greenish: only release for preview */
 	if (s5k3e2fx_ctrl->sensormode == SENSOR_PREVIEW_MODE) {
@@ -2611,9 +2969,8 @@ static int s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 	if (rc < 0)
 		goto write_gain_done;
 #if 1 /* Solve EVT5 greenish in lowlight*/
-	ll_pck = ll_pck * ll_ratio;
-	ll_pck_msb = ((ll_pck / 0x400) & 0xFF00) >> 8;
-	ll_pck_lsb = (ll_pck / 0x400) & 0x00FF;
+	ll_pck_msb = (ll_pck & 0xFF00) >> 8;
+	ll_pck_lsb = ll_pck & 0x00FF;
 	tbl[0].waddr = REG_LINE_LENGTH_PCK_MSB;
 	tbl[0].bdata = ll_pck_msb;
 	tbl[1].waddr = REG_LINE_LENGTH_PCK_LSB;
@@ -2622,6 +2979,7 @@ static int s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 	rc = s5k3e2fx_i2c_write_table(&tbl[0], ARRAY_SIZE(tbl));
 	if (rc < 0)
 		goto write_gain_done;
+
 #else
 	if (line / 0x400 + offset > fl_lines)
 		ll_pck = line / 0x400 + offset;
@@ -2639,8 +2997,7 @@ static int s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 	if (rc < 0)
 		goto write_gain_done;
 #endif
-
-	line = line / 0x400;
+	CDBG("line %d, fl_lines %d\n", line, fl_lines);
 	intg_t_msb = (line & 0xFF00) >> 8;
 	intg_t_lsb = (line & 0x00FF);
 	tbl[0].waddr = REG_COARSE_INTEGRATION_TIME;
@@ -2650,15 +3007,13 @@ static int s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 	rc = s5k3e2fx_i2c_write_table(&tbl[0], ARRAY_SIZE(tbl));
 
 /* solve greenish: release for both */
-		rc = s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
-					  REG_GROUPED_PARAMETER_HOLD,
-					  GROUPED_PARAMETER_UPDATE);
-		if (rc < 0) {
-			pr_err("s5k3e2fx_i2c_write_b failed on line %d\n",
-				__LINE__);
-			return rc;
-		}
-
+	rc = s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
+				  REG_GROUPED_PARAMETER_HOLD,
+				  GROUPED_PARAMETER_UPDATE);
+	if (rc < 0) {
+		pr_err("s5k3e2fx_i2c_write_b failed on line %d\n", __LINE__);
+		return rc;
+	}
 write_gain_done:
 	return rc;
 }
@@ -2674,19 +3029,23 @@ static int s5k3e2fx_set_pict_exp_gain(uint16_t gain, uint32_t line)
 static int s5k3e2fx_video_config(int mode, int res)
 {
 	int rc;
+	struct msm_camera_sensor_info *sinfo = s5k3e2fx_pdev->dev.platform_data;
+	CDBG("s5k3e2fx_video_config res:%d\n", res);
+/* 100202 Move these setting from down	*/
+	s5k3e2fx_ctrl->prev_res = res;
+	s5k3e2fx_ctrl->curr_res = res;
+	s5k3e2fx_ctrl->sensormode = mode;
 
 	switch (res) {
 	case S_QTR_SIZE:
-		pr_info("start sensor S_RES_PREVIEW config: %d\n", __LINE__);
 		rc = s5k3e2fx_setting(S_UPDATE_PERIODIC, S_RES_PREVIEW);
 		if (rc < 0)
 			return rc;
-		/* only apply my_reg for returning preview*/
-		rc = s5k3e2fx_write_exp_gain(s5k3e2fx_ctrl->my_reg_gain,
-				     s5k3e2fx_ctrl->my_reg_line_count);
 		break;
 
 	case S_FULL_SIZE:
+		pr_info("KPI PA: start sensor snapshot config: %d\n", __LINE__);
+		sinfo->kpi_sensor_start = ktime_to_ns(ktime_get());
 		rc = s5k3e2fx_setting(S_UPDATE_PERIODIC, S_RES_CAPTURE);
 		if (rc < 0)
 			return rc;
@@ -2695,10 +3054,14 @@ static int s5k3e2fx_video_config(int mode, int res)
 	default:
 		return 0;
 	}
-
+/* 100202 Move these setting up
 	s5k3e2fx_ctrl->prev_res = res;
 	s5k3e2fx_ctrl->curr_res = res;
 	s5k3e2fx_ctrl->sensormode = mode;
+*/
+
+	rc = s5k3e2fx_write_exp_gain(s5k3e2fx_ctrl->my_reg_gain,
+				     s5k3e2fx_ctrl->my_reg_line_count);
 
 	return rc;
 }
@@ -2720,7 +3083,9 @@ static int s5k3e2fx_set_default_focus(void)
 	return rc;
 }
 
-static int s5k3e2fx_move_focus(int direction, int num_steps)
+static int s5k3e2fx_move_focus(
+	int direction, int num_steps,int coarse_delay,int fine_delay,
+	int step_dir, int init_code_offset_max)
 {
 	int rc = 0;
 	int i;
@@ -2731,11 +3096,30 @@ static int s5k3e2fx_move_focus(int direction, int num_steps)
 	uint8_t next_pos_msb, next_pos_lsb;
 	int16_t s_move[5];
 	uint32_t gain;		/* Q10 format */
+	int16_t step_direction_pre_define;
+	int16_t init_code_offset_pre_define;
+	int16_t coarse_search_delay;
+	int16_t fine_search_delay;
+
+	if (g_usModuleVersion == 1) { /* EVT5 */
+		step_direction_pre_define = step_dir;
+		init_code_offset_pre_define = init_code_offset_max;
+		/*fine search delay time is turnable*/
+		coarse_search_delay = coarse_delay;
+		fine_search_delay = fine_delay;
+	} else {
+		step_direction_pre_define = 20;
+		init_code_offset_pre_define = 738;
+		coarse_search_delay = 6;
+		fine_search_delay = 4;
+	}
+
+pr_info("%s step_direction_pre_define %d\n", __func__, step_direction_pre_define);
 
 	if (direction == MOVE_NEAR)
-		step_direction = 20;
+		step_direction = step_direction_pre_define;
 	else if (direction == MOVE_FAR)
-		step_direction = -20;
+		step_direction = 0 - step_direction_pre_define;
 	else {
 		pr_err("s5k3e2fx_move_focus failed at line %d ...\n", __LINE__);
 		return -EINVAL;
@@ -2760,8 +3144,8 @@ static int s5k3e2fx_move_focus(int direction, int num_steps)
 	for (i = 0; i <= 4; i++) {
 		next_pos = (int16_t) (pos_offset + s_move[i]);
 
-		if (next_pos > (738 + init_code))
-			next_pos = 738 + init_code;
+		if (next_pos > (init_code_offset_max + init_code))
+			next_pos = init_code_offset_pre_define + init_code;
 		else if (next_pos < 0)
 			next_pos = 0;
 
@@ -2785,155 +3169,16 @@ static int s5k3e2fx_move_focus(int direction, int num_steps)
 
 		pos_offset = next_pos;
 		s5k3e2fx_ctrl->curr_lens_pos = pos_offset - init_code;
-		if (num_steps > 1)
-			mdelay(6);
+
+		if(num_steps > 1)
+			mdelay(coarse_search_delay);
 		else
-			mdelay(4);
+			mdelay(fine_search_delay);
 	}
 
 	return rc;
 }
 
-static int s5k3e2fx_sensor_config(void __user *argp)
-{
-	struct sensor_cfg_data cdata;
-	long rc = 0;
-
-	if (copy_from_user(&cdata,
-			   (void *)argp, sizeof(struct sensor_cfg_data)))
-		return -EFAULT;
-
-	CDBG("%s: cfgtype = %d\n", __func__, cdata.cfgtype);
-	switch (cdata.cfgtype) {
-	case CFG_GET_PICT_FPS:
-		s5k3e2fx_get_pict_fps(cdata.cfg.gfps.prevfps,
-				      &(cdata.cfg.gfps.pictfps));
-
-		if (copy_to_user((void *)argp, &cdata,
-				 sizeof(struct sensor_cfg_data)))
-			rc = -EFAULT;
-		break;
-
-	case CFG_GET_PREV_L_PF:
-		cdata.cfg.prevl_pf = s5k3e2fx_get_prev_lines_pf();
-
-		if (copy_to_user((void *)argp,
-				 &cdata, sizeof(struct sensor_cfg_data)))
-			rc = -EFAULT;
-		break;
-
-	case CFG_GET_PREV_P_PL:
-		cdata.cfg.prevp_pl = s5k3e2fx_get_prev_pixels_pl();
-
-		if (copy_to_user((void *)argp,
-				 &cdata, sizeof(struct sensor_cfg_data)))
-			rc = -EFAULT;
-		break;
-
-	case CFG_GET_PICT_L_PF:
-		cdata.cfg.pictl_pf = s5k3e2fx_get_pict_lines_pf();
-
-		if (copy_to_user((void *)argp,
-				 &cdata, sizeof(struct sensor_cfg_data)))
-			rc = -EFAULT;
-		break;
-
-	case CFG_GET_PICT_P_PL:
-		cdata.cfg.pictp_pl = s5k3e2fx_get_pict_pixels_pl();
-
-		if (copy_to_user((void *)argp,
-				 &cdata, sizeof(struct sensor_cfg_data)))
-			rc = -EFAULT;
-		break;
-
-	case CFG_GET_PICT_MAX_EXP_LC:
-		cdata.cfg.pict_max_exp_lc = s5k3e2fx_get_pict_max_exp_lc();
-
-		if (copy_to_user((void *)argp,
-				 &cdata, sizeof(struct sensor_cfg_data)))
-			rc = -EFAULT;
-		break;
-
-	case CFG_SET_FPS:
-	case CFG_SET_PICT_FPS:
-		rc = s5k3e2fx_set_fps(&(cdata.cfg.fps));
-		break;
-
-	case CFG_SET_EXP_GAIN:
-		rc = s5k3e2fx_write_exp_gain(cdata.cfg.exp_gain.gain,
-					     cdata.cfg.exp_gain.line);
-		break;
-
-	case CFG_SET_PICT_EXP_GAIN:
-		rc = s5k3e2fx_set_pict_exp_gain(cdata.cfg.exp_gain.gain,
-						cdata.cfg.exp_gain.line);
-		break;
-
-	case CFG_SET_MODE:
-		rc = s5k3e2fx_video_config(cdata.mode, cdata.rs);
-		break;
-
-	case CFG_PWR_DOWN:
-		rc = s5k3e2fx_power_down();
-		break;
-
-	case CFG_MOVE_FOCUS:
-		rc = s5k3e2fx_move_focus(cdata.cfg.focus.dir,
-					 cdata.cfg.focus.steps);
-		break;
-
-	case CFG_SET_DEFAULT_FOCUS:
-		rc = s5k3e2fx_set_default_focus();
-		break;
-
-/*	case CFG_GET_AF_MAX_STEPS: */
-	case CFG_SET_EFFECT:
-		rc = s5k3e2fx_set_default_focus();
-		break;
-
-	case CFG_SET_LENS_SHADING:
-	default:
-		rc = -EFAULT;
-		break;
-	}
-
-	prevent_suspend();
-	return rc;
-}
-
-static int s5k3e2fx_sensor_probe(const struct msm_camera_sensor_info *info,
-				 struct msm_sensor_ctrl *s)
-{
-	int rc = 0;
-	pr_info("%s\n", __func__);
-
-	rc = i2c_add_driver(&s5k3e2fx_i2c_driver);
-	if (rc < 0 || s5k3e2fx_client == NULL) {
-		rc = -ENOTSUPP;
-		goto probe_fail;
-	}
-
-	msm_camio_clk_rate_set(S5K3E2FX_DEF_MCLK);
-	msleep(20);
-
-	rc = s5k3e2fx_probe_init_sensor(info);
-	if (rc < 0)
-		goto probe_fail;
-
-	/* lens correction */
-	s5k3e2fx_probe_init_lens_correction(info);
-	init_suspend();
-
-	s->s_init = s5k3e2fx_sensor_open_init;
-	s->s_release = s5k3e2fx_sensor_release;
-	s->s_config = s5k3e2fx_sensor_config;
-
-	return rc;
-
-probe_fail:
-	pr_err("SENSOR PROBE FAILS!\n");
-	return rc;
-}
 
 static int s5k3e2fx_suspend(struct platform_device *pdev, pm_message_t state)
 {
@@ -2942,8 +3187,10 @@ static int s5k3e2fx_suspend(struct platform_device *pdev, pm_message_t state)
 
 	if (!sinfo->need_suspend)
 		return 0;
+	s5k3e2fx_event.waked_up = 0;
 
-	CDBG("s5k3e2fx: camera suspend\n");
+
+	pr_info("s5k3e2fx: camera suspend\n");
 	rc = gpio_request(sinfo->sensor_reset, "s5k3e2fx");
 	if (!rc)
 		gpio_direction_output(sinfo->sensor_reset, 0);
@@ -3035,23 +3282,29 @@ static void s5k3e2fx_sensor_resume_setting(void)
 	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x0202, 0x03);
 	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x0200, 0x02);
 }
-static int s5k3e2fx_resume(struct platform_device *pdev)
+
+static void s5k3e2fx_resume(struct early_suspend *handler)
 {
-	int rc = 0;
-	struct msm_camera_sensor_info *sinfo = pdev->dev.platform_data;
+	struct msm_camera_sensor_info *sinfo = s5k3e2fx_pdev->dev.platform_data;
 
 	if (!sinfo->need_suspend)
-		return 0;
+		return;
 
-	CDBG("s5k3e2fx_resume\n");
+	/*check whether already suspend*/
+	if (s5k3e2fx_event.waked_up == 1) {
+		pr_info("S5k3e2fx: No nesesary to do Resume\n");
+		return;
+	}
+
+	pr_info("s5k3e2fx_resume\n");
 	/*init msm,clk ,GPIO,enable */
-	msm_camio_probe_on(pdev);
+	msm_camio_probe_on(s5k3e2fx_pdev);
 	msm_camio_clk_enable(CAMIO_MDC_CLK);
 
-	CDBG("msm_camio_probe_on\n");
+	pr_info("msm_camio_probe_on\n");
 	/*read sensor ID and pull down reset */
 	msm_camio_clk_rate_set(S5K3E2FX_DEF_MCLK);
-	CDBG("msm_camio_clk_rate_set\n");
+	pr_info("msm_camio_clk_rate_set\n");
 	msleep(20);
 	s5k3e2fx_probe_init_sensor(sinfo);
 	CDBG("s5k3e2fx_probe_init_sensor\n");
@@ -3063,6 +3316,7 @@ static int s5k3e2fx_resume(struct platform_device *pdev)
 	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
 			     S5K3E2FX_REG_MODE_SELECT,
 			     S5K3E2FX_MODE_SELECT_STREAM);
+
 	/*software standby */
 	msleep(25);
 	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3130, 0x00);
@@ -3075,14 +3329,226 @@ static int s5k3e2fx_resume(struct platform_device *pdev)
 	s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr, 0x3150, 0x51);
 	msleep(240);
 	/*set RST to low */
-	msm_camio_probe_off(pdev);
+	msm_camio_probe_off(s5k3e2fx_pdev);
 	msm_camio_clk_disable(CAMIO_MDC_CLK);
-	CDBG("s5k3e2fx:resume done\n");
+	s5k3e2fx_event.waked_up = 1;
+	wake_up(&s5k3e2fx_event.event_wait);
+	pr_info("s5k3e2fx:resume done\n");
+	return;
+}
+
+
+static struct early_suspend early_suspend_s5k3e2fx = {
+	.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN+1,
+	.resume = s5k3e2fx_resume,
+	.suspend = NULL,
+};
+
+static const char *s5k3e2fxVendor = "Samsung";
+static const char *s5k3e2fxNAME = "s5k3e2fx";
+static const char *s5k3e2fxSize = "5M";
+
+static ssize_t sensor_vendor_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t ret = 0;
+
+	sprintf(buf, "%s %s %s\n", s5k3e2fxVendor, s5k3e2fxNAME, s5k3e2fxSize);
+	ret = strlen(buf) + 1;
+
+	return ret;
+}
+
+static DEVICE_ATTR(sensor, 0444, sensor_vendor_show, NULL);
+
+static struct kobject *android_s5k3e2fx;
+
+static int s5k3e2fx_sysfs_init(void)
+{
+	int ret ;
+	pr_info("s5k3e2fx:kobject creat and add\n");
+	android_s5k3e2fx = kobject_create_and_add("android_camera", NULL);
+	if (android_s5k3e2fx == NULL) {
+		pr_info("s5k3e2fx_sysfs_init: subsystem_register " \
+		"failed\n");
+		ret = -ENOMEM;
+		return ret ;
+	}
+	pr_info("s5k3e2fx:sysfs_create_file\n");
+	ret = sysfs_create_file(android_s5k3e2fx, &dev_attr_sensor.attr);
+	if (ret) {
+		pr_info("s5k3e2fx_sysfs_init: sysfs_create_file " \
+		"failed\n");
+		kobject_del(android_s5k3e2fx);
+	}
+	return 0 ;
+}
+
+
+static int s5k3e2fx_sensor_config(void __user *argp)
+{
+	struct sensor_cfg_data cdata;
+	long rc = 0;
+
+	if (copy_from_user(&cdata,
+			   (void *)argp, sizeof(struct sensor_cfg_data)))
+		return -EFAULT;
+
+	CDBG("%s: cfgtype = %d\n", __func__, cdata.cfgtype);
+	switch (cdata.cfgtype) {
+	case CFG_GET_PICT_FPS:
+		s5k3e2fx_get_pict_fps(cdata.cfg.gfps.prevfps,
+				      &(cdata.cfg.gfps.pictfps));
+
+		if (copy_to_user((void *)argp, &cdata,
+				 sizeof(struct sensor_cfg_data)))
+			rc = -EFAULT;
+		break;
+
+	case CFG_GET_PREV_L_PF:
+		cdata.cfg.prevl_pf = s5k3e2fx_get_prev_lines_pf();
+
+		if (copy_to_user((void *)argp,
+				 &cdata, sizeof(struct sensor_cfg_data)))
+			rc = -EFAULT;
+		break;
+
+	case CFG_GET_PREV_P_PL:
+		cdata.cfg.prevp_pl = s5k3e2fx_get_prev_pixels_pl();
+
+		if (copy_to_user((void *)argp,
+				 &cdata, sizeof(struct sensor_cfg_data)))
+			rc = -EFAULT;
+		break;
+
+	case CFG_GET_PICT_L_PF:
+		cdata.cfg.pictl_pf = s5k3e2fx_get_pict_lines_pf();
+
+		if (copy_to_user((void *)argp,
+				 &cdata, sizeof(struct sensor_cfg_data)))
+			rc = -EFAULT;
+		break;
+
+	case CFG_GET_PICT_P_PL:
+		cdata.cfg.pictp_pl = s5k3e2fx_get_pict_pixels_pl();
+
+		if (copy_to_user((void *)argp,
+				 &cdata, sizeof(struct sensor_cfg_data)))
+			rc = -EFAULT;
+		break;
+
+	case CFG_GET_PICT_MAX_EXP_LC:
+		cdata.cfg.pict_max_exp_lc = s5k3e2fx_get_pict_max_exp_lc();
+
+		if (copy_to_user((void *)argp,
+				 &cdata, sizeof(struct sensor_cfg_data)))
+			rc = -EFAULT;
+		break;
+
+	case CFG_SET_FPS:
+	case CFG_SET_PICT_FPS:
+		rc = s5k3e2fx_set_fps(&(cdata.cfg.fps));
+		break;
+
+	case CFG_SET_EXP_GAIN:
+		rc = s5k3e2fx_write_exp_gain(cdata.cfg.exp_gain.gain,
+					     cdata.cfg.exp_gain.line);
+		break;
+
+	case CFG_SET_PICT_EXP_GAIN:
+		rc = s5k3e2fx_set_pict_exp_gain(cdata.cfg.exp_gain.gain,
+						cdata.cfg.exp_gain.line);
+		break;
+
+	case CFG_SET_MODE:
+		pr_info("CFG_SET_MODE\n");
+		rc = s5k3e2fx_video_config(cdata.mode, cdata.rs);
+		break;
+
+	case CFG_PWR_DOWN:
+		rc = s5k3e2fx_power_down();
+		break;
+
+	case CFG_MOVE_FOCUS:
+		rc = s5k3e2fx_move_focus(cdata.cfg.focus.dir,
+					 cdata.cfg.focus.steps,
+					 cdata.cfg.focus.coarse_delay,
+					 cdata.cfg.focus.fine_delay,
+					 cdata.cfg.focus.step_dir,
+					 cdata.cfg.focus.init_code_offset_max);
+		break;
+
+	case CFG_SET_DEFAULT_FOCUS:
+		rc = s5k3e2fx_set_default_focus();
+		break;
+
+	/*case CFG_GET_AF_MAX_STEPS: */
+	case CFG_SET_EFFECT:
+		rc = s5k3e2fx_set_default_focus();
+		break;
+
+	case CFG_I2C_IOCTL_R_OTP:{
+		rc = s5k3e2fx_i2c_read_fuseid(&cdata);
+		if (copy_to_user(argp, &cdata, sizeof(struct sensor_cfg_data)))
+			rc = -EFAULT;
+		}
+		break;
+	case CFG_SET_LENS_SHADING:
+	default:
+		rc = -EFAULT;
+		break;
+	}
+
+	prevent_suspend();
+	return rc;
+}
+
+static int s5k3e2fx_sensor_probe(struct msm_camera_sensor_info *info,
+				 struct msm_sensor_ctrl *s)
+{
+	int rc = 0;
+	pr_info("%s\n", __func__);
+
+	rc = i2c_add_driver(&s5k3e2fx_i2c_driver);
+	if (rc < 0 || s5k3e2fx_client == NULL) {
+		rc = -ENOTSUPP;
+		goto probe_fail;
+	}
+
+	msm_camio_clk_rate_set(S5K3E2FX_DEF_MCLK);
+	msleep(20);
+
+	rc = s5k3e2fx_probe_init_sensor(info);
+	if (rc < 0)
+		goto probe_fail;
+
+	/* lens correction */
+	s5k3e2fx_probe_init_lens_correction(info);
+	init_suspend();
+
+	s->s_init = s5k3e2fx_sensor_open_init;
+	s->s_release = s5k3e2fx_sensor_release;
+	s->s_config = s5k3e2fx_sensor_config;
+
+	/*register late resuem*/
+	register_early_suspend(&early_suspend_s5k3e2fx);
+	/*init wait event*/
+	init_waitqueue_head(&s5k3e2fx_event.event_wait);
+	/*init waked_up value*/
+	s5k3e2fx_event.waked_up = 1;
+	/*write sysfs*/
+	s5k3e2fx_sysfs_init();
+
+	return rc;
+
+probe_fail:
+	pr_err("SENSOR PROBE FAILS!\n");
 	return rc;
 }
 
 static int __s5k3e2fx_probe(struct platform_device *pdev)
 {
+	s5k3e2fx_pdev = pdev;
 	return msm_camera_drv_start(pdev, s5k3e2fx_sensor_probe);
 }
 
@@ -3093,7 +3559,6 @@ static struct platform_driver msm_camera_driver = {
 		.owner = THIS_MODULE,
 	},
 	.suspend = s5k3e2fx_suspend,
-	.resume = s5k3e2fx_resume,
 };
 
 static int __init s5k3e2fx_init(void)

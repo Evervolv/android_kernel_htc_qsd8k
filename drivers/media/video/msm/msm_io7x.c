@@ -55,7 +55,7 @@ static struct msm_camera_io_ext camio_ext;
 static struct resource *appio, *mdcio;
 void __iomem *appbase, *mdcbase;
 
-int clk_set_flags(struct clk *clk, unsigned long flags);
+extern int clk_set_flags(struct clk *clk, unsigned long flags);
 
 int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 {
@@ -79,7 +79,8 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 		break;
 	}
 
-	if (!IS_ERR(clk)) {
+	/* HTC: check clk */
+	if (!IS_ERR(clk) && clk) {
 		clk_enable(clk);
 		rc = 0;
 	}
@@ -108,8 +109,8 @@ int msm_camio_clk_disable(enum msm_camio_clk_type clktype)
 	default:
 		break;
 	}
-
-	if (!IS_ERR(clk)) {
+	/* HTC: check clk */
+	if (!IS_ERR(clk) && clk) {
 		clk_disable(clk);
 		clk_put(clk);
 		rc = 0;
@@ -141,7 +142,8 @@ int msm_camio_enable(struct platform_device *pdev)
 		goto enable_fail;
 	}
 
-	appbase = ioremap(camio_ext.appphy, camio_ext.appsz);
+	appbase = ioremap(camio_ext.appphy,
+		camio_ext.appsz);
 	if (!appbase) {
 		rc = -ENOMEM;
 		goto apps_no_mem;
@@ -154,17 +156,21 @@ int msm_camio_enable(struct platform_device *pdev)
 		goto mdc_busy;
 	}
 
-	mdcbase = ioremap(camio_ext.mdcphy, camio_ext.mdcsz);
+	mdcbase = ioremap(camio_ext.mdcphy,
+		camio_ext.mdcsz);
 	if (!mdcbase) {
 		rc = -ENOMEM;
 		goto mdc_no_mem;
 	}
 
-	camdev->camera_gpio_on();
-
 	msm_camio_clk_enable(CAMIO_VFE_CLK);
 	msm_camio_clk_enable(CAMIO_MDC_CLK);
 	msm_camio_clk_enable(CAMIO_VFE_MDC_CLK);
+
+	mdelay(2);
+	camdev->camera_gpio_on();
+	mdelay(2);
+
 	return 0;
 
 mdc_no_mem:
@@ -187,11 +193,12 @@ void msm_camio_disable(struct platform_device *pdev)
 	iounmap(appbase);
 	release_mem_region(camio_ext.appphy, camio_ext.appsz);
 
-	camdev->camera_gpio_off();
 
 	msm_camio_clk_disable(CAMIO_VFE_CLK);
 	msm_camio_clk_disable(CAMIO_MDC_CLK);
 	msm_camio_clk_disable(CAMIO_VFE_MDC_CLK);
+
+	camdev->camera_gpio_off();
 }
 
 void msm_camio_camif_pad_reg_reset(void)
@@ -204,10 +211,13 @@ void msm_camio_camif_pad_reg_reset(void)
 
 	reg = (readl(mdcbase)) & CAMIF_CFG_RMSK;
 
-	mask = CAM_SEL_BMSK | CAM_PCLK_SRC_SEL_BMSK | CAM_PCLK_INVERT_BMSK;
+	mask = CAM_SEL_BMSK |
+		CAM_PCLK_SRC_SEL_BMSK |
+		CAM_PCLK_INVERT_BMSK;
 
 	value = 1 << CAM_SEL_SHFT |
-	    3 << CAM_PCLK_SRC_SEL_SHFT | 0 << CAM_PCLK_INVERT_SHFT;
+		3 << CAM_PCLK_SRC_SEL_SHFT |
+		0 << CAM_PCLK_INVERT_SHFT;
 
 	writel((reg & (~mask)) | (value & mask), mdcbase);
 	mdelay(10);

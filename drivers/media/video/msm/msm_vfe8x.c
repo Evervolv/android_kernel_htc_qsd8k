@@ -22,6 +22,7 @@
 #include <mach/irqs.h>
 #include <linux/clk.h>
 #include "msm_vfe8x_proc.h"
+#include <mach/camera.h>
 
 #define ON  1
 #define OFF 0
@@ -91,9 +92,10 @@ static void vfe_config_axi(int mode,
 			   struct axidata *ad,
 			   struct vfe_cmd_axi_output_config *ao)
 {
-	struct msm_pmem_region *regptr;
+	struct msm_pmem_region *regptr, *regptr1;
 	int i, j;
 	uint32_t *p1, *p2;
+    regptr1 = NULL;
 
 	if (mode == OUTPUT_1 || mode == OUTPUT_1_AND_2) {
 		regptr = ad->region;
@@ -141,6 +143,59 @@ static void vfe_config_axi(int mode,
 			regptr++;
 		}
 	}
+#ifdef CONFIG_720P_CAMERA
+	/* For video configuration */
+	if (mode == OUTPUT_1_AND_3) {
+		/* this is preview buffer. */
+		regptr =  &(ad->region[0]);
+		/* this is video buffer. */
+		regptr1 = &(ad->region[ad->bufnum1]);
+		CDBG("bufnum1 = %d\n", ad->bufnum1);
+		CDBG("bufnum2 = %d\n", ad->bufnum2);
+
+	for (i = 0; i < ad->bufnum1; i++) {
+		p1 = &(ao->output1.outputY.outFragments[i][0]);
+		p2 = &(ao->output1.outputCbcr.outFragments[i][0]);
+
+		CDBG("config_axi: O1, phy = 0x%lx, y_off = %d, "\
+			 "cbcr_off = %d\n", regptr->paddr,
+						 regptr->info.y_off, regptr->info.cbcr_off);
+
+			for (j = 0; j < ao->output1.fragmentCount; j++) {
+
+				*p1 = regptr->paddr + regptr->info.y_off;
+				CDBG("vfe_config_axi: p1 = 0x%x\n", *p1);
+				p1++;
+
+				*p2 = regptr->paddr + regptr->info.cbcr_off;
+				CDBG("vfe_config_axi: p2 = 0x%x\n", *p2);
+				p2++;
+			}
+			regptr++;
+		}
+	for (i = 0; i < ad->bufnum2; i++) {
+		p1 = &(ao->output2.outputY.outFragments[i][0]);
+		p2 = &(ao->output2.outputCbcr.outFragments[i][0]);
+
+		CDBG("config_axi: O2, phy = 0x%lx, y_off = %d, "\
+			 "cbcr_off = %d\n", regptr1->paddr,
+						 regptr1->info.y_off, regptr1->info.cbcr_off);
+
+			for (j = 0; j < ao->output2.fragmentCount; j++) {
+
+				*p1 = regptr1->paddr + regptr1->info.y_off;
+				CDBG("vfe_config_axi: p1 = 0x%x\n", *p1);
+				p1++;
+
+				*p2 = regptr1->paddr + regptr1->info.cbcr_off;
+				CDBG("vfe_config_axi: p2 = 0x%x\n", *p2);
+				p2++;
+			}
+			regptr1++;
+		}
+	}
+#endif
+
 }
 
 #define ERR_COPY_FROM_USER() \
@@ -503,13 +558,6 @@ static int vfe_proc_general(struct msm_vfe_command_8k *cmd)
 	case VFE_CMD_ID_TEST_GEN_START:
 		break;
 
-	case VFE_CMD_ID_EPOCH1_CONFIG:{
-			struct vfe_cmds_camif_epoch epoch1;
-			CHECKED_COPY_FROM_USER(&epoch1);
-			vfe_epoch1_config(&epoch1);
-		}
-		break;
-
 /*
   acknowledge from upper layer
 	these are not in general command.
@@ -622,6 +670,9 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			b = (struct msm_frame *)(cmd->value);
 			p = *(unsigned long *)data;
 
+#ifndef CONFIG_720P_CAMERA
+			b->path = MSM_FRAME_ENC;
+
 			fack.ybufaddr[0] = (uint32_t) (p + b->y_off);
 
 			fack.chromabufaddr[0] = (uint32_t) (p + b->cbcr_off);
@@ -632,8 +683,19 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			if (b->path == MSM_FRAME_ENC ||
 			    b->path == MSM_FRAME_PREV_2)
 				vfe_output2_ack(&fack);
+#else
 
+			fack.ybufaddr[0] = (uint32_t) (p + b->y_off);
 
+			fack.chromabufaddr[0] = (uint32_t) (p + b->cbcr_off);
+
+		if (b->path == OUTPUT_TYPE_P)
+			vfe_output_p_ack(&fack);
+
+		if ((b->path == OUTPUT_TYPE_V)
+			 || (b->path == OUTPUT_TYPE_S))
+			vfe_output_v_ack(&fack);
+#endif
 		}
 		break;
 
@@ -659,7 +721,7 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			vfe_stats_af_ack(&ack);
 		}
 		break;
-
+#ifndef CONFIG_720P_CAMERA
 	case CMD_AXI_CFG_OUT1: {
 
 			BUG_ON(!axid);
@@ -693,8 +755,7 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 		}
 		break;
 
-	case CMD_AXI_CFG_O1_AND_O2:
-	case CMD_AXI_CFG_SNAP_O1_AND_O2: {
+	case CMD_AXI_CFG_SNAP_O1_AND_O2:{
 
 			BUG_ON(!axid);
 
@@ -708,7 +769,57 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			vfe_axi_output_config(&axio);
 		}
 		break;
+#else
+	case CMD_AXI_CFG_PREVIEW:
+	case CMD_RAW_PICT_AXI_CFG: {
 
+			BUG_ON(!axid);
+
+			if (copy_from_user(&axio, (void __user *)(vfecmd.value),
+				sizeof(axio))) {
+				pr_err("%s %d: copy_from_user failed\n",
+					__func__, __LINE__);
+			return -EFAULT;
+		}
+
+			vfe_config_axi(OUTPUT_2, axid, &axio);
+
+			axio.outputDataSize = 0;
+			vfe_axi_output_config(&axio);
+	}
+		break;
+
+	case CMD_AXI_CFG_SNAP: {
+
+			BUG_ON(!axid);
+
+			if (copy_from_user(&axio, (void __user *)(vfecmd.value),
+				sizeof(axio))) {
+				pr_err("%s %d: copy_from_user failed\n",
+					__func__, __LINE__);
+			return -EFAULT;
+		}
+
+			vfe_config_axi(OUTPUT_1_AND_2, axid, &axio);
+			vfe_axi_output_config(&axio);
+	}
+		break;
+
+	case CMD_AXI_CFG_VIDEO: {
+			BUG_ON(!axid);
+
+			if (copy_from_user(&axio, (void __user *)(vfecmd.value),
+				sizeof(axio))) {
+				pr_err("%s %d: copy_from_user failed\n",
+					__func__, __LINE__);
+			return -EFAULT;
+		}
+			vfe_config_axi(OUTPUT_1_AND_3, axid, &axio);
+			axio.outputDataSize = 0;
+			vfe_axi_output_config(&axio);
+	}
+		break;
+#endif
 	default:
 		break;
 	}			/* switch */

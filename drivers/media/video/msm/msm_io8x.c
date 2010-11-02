@@ -79,7 +79,7 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 		break;
 	}
 
-	if (!IS_ERR(clk)) {
+	if (!IS_ERR(clk) && clk != NULL) {
 		/* Set rate here *before* enabling the block to prevent
 		 * unstable clock from source.
 		 */
@@ -120,7 +120,7 @@ int msm_camio_clk_disable(enum msm_camio_clk_type clktype)
 		break;
 	}
 
-	if (!IS_ERR(clk)) {
+	if (!IS_ERR(clk) && clk != NULL) {
 		clk_disable(clk);
 		clk_put(clk);
 	} else

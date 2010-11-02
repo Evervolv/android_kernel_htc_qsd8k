@@ -21,11 +21,11 @@
 #include <linux/uaccess.h>
 #include <linux/fs.h>
 #include <linux/android_pmem.h>
-#include <linux/sched.h>
+#include <mach/msm_adsp.h>
 #include <linux/delay.h>
 #include <linux/wait.h>
+#include <linux/sched.h>
 #include <linux/clk.h>
-#include <mach/msm_adsp.h>
 #include "msm_vfe7x.h"
 
 #define QDSP_CMDQUEUE QDSP_vfeCommandQueue
@@ -54,9 +54,6 @@ static void *vfe_syncdata;
 static uint8_t vfestopped;
 
 static struct stop_event stopevent;
-
-static struct clk *ebi1_clk;
-static const char *const ebi1_clk_name = "ebi1_clk";
 
 static void vfe_7x_convert(struct msm_vfe_phy_info *pinfo,
 			   enum vfe_resp_msg type,
@@ -234,7 +231,6 @@ static void vfe_7x_release(struct platform_device *pdev)
 {
 	struct msm_sensor_ctrl *sctrl =
 		&((struct msm_sync *)vfe_syncdata)->sctrl;
-
 	mutex_lock(&vfe_lock);
 	vfe_syncdata = NULL;
 	mutex_unlock(&vfe_lock);
@@ -256,12 +252,6 @@ static void vfe_7x_release(struct platform_device *pdev)
 
 	msm_camio_disable(pdev);
 
-	if (ebi1_clk) {
-		clk_set_rate(ebi1_clk, 0);
-		clk_put(ebi1_clk);
-		ebi1_clk = 0;
-	}
-
 	kfree(extdata);
 	extdata = 0;
 }
@@ -278,20 +268,7 @@ static int vfe_7x_init(struct msm_vfe_callback *presp,
 	if (presp && presp->vfe_resp)
 		resp = presp;
 	else
-		return -EIO;
-
-	ebi1_clk = clk_get(NULL, ebi1_clk_name);
-	if (!ebi1_clk) {
-		pr_err("%s: could not get %s\n", __func__, ebi1_clk_name);
-		return -EIO;
-	}
-
-	rc = clk_set_rate(ebi1_clk, 128000000);
-	if (rc < 0) {
-		pr_err("%s: clk_set_rate(%s) failed: %d\n", __func__,
-			ebi1_clk_name, rc);
-		return rc;
-	}
+		return -EFAULT;
 
 	/* Bring up all the required GPIOs and Clocks */
 	rc = msm_camio_enable(dev);
@@ -393,60 +370,77 @@ static int vfe_7x_config_axi(int mode, struct axidata *ad, struct axiout *ao)
 
 static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 {
-	int rc = 0;
-	int i;
-
-	struct msm_pmem_region *regptr = NULL;
+	struct msm_pmem_region *regptr;
+	unsigned char buf[256];
 
 	struct vfe_stats_ack sack;
-	struct axidata *axid = NULL;
+	struct axidata *axid;
+	uint32_t i;
 
-	struct axiout axio;
+	struct vfe_stats_we_cfg *scfg = NULL;
+	struct vfe_stats_af_cfg *sfcfg = NULL;
+
+	struct axiout *axio = NULL;
+	void *cmd_data = NULL;
 	void *cmd_data_alloc = NULL;
-	struct msm_vfe_command_7k vfecmd;
+	long rc = 0;
+	struct msm_vfe_command_7k *vfecmd;
+
+	vfecmd = kmalloc(sizeof(struct msm_vfe_command_7k), GFP_ATOMIC);
+	if (!vfecmd) {
+		pr_err("vfecmd alloc failed!\n");
+		return -ENOMEM;
+	}
 
 	if (cmd->cmd_type != CMD_FRAME_BUF_RELEASE &&
 	    cmd->cmd_type != CMD_STATS_BUF_RELEASE &&
 	    cmd->cmd_type != CMD_STATS_AF_BUF_RELEASE) {
-		if (copy_from_user(&vfecmd,
+		if (copy_from_user(vfecmd,
 				   (void __user *)(cmd->value),
 				   sizeof(struct msm_vfe_command_7k))) {
 			rc = -EFAULT;
-			goto config_error;
+			goto config_failure;
 		}
 	}
 
 	switch (cmd->cmd_type) {
 	case CMD_STATS_AEC_AWB_ENABLE:
 	case CMD_STATS_AXI_CFG:{
-			struct vfe_stats_we_cfg scfg;
 			axid = data;
 			if (!axid) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_failure;
 			}
 
-			if (vfecmd.length != sizeof(typeof(scfg))) {
+			scfg =
+			    kmalloc(sizeof(struct vfe_stats_we_cfg),
+				    GFP_ATOMIC);
+			if (!scfg) {
+				rc = -ENOMEM;
+				goto config_failure;
+			}
+
+			if (vfecmd->length != sizeof(typeof(*scfg))) {
 				rc = -EIO;
 				pr_err
 				    ("msm_camera: %s: cmd %d: "\
 				     "user-space data size %d "\
 				     "!= kernel data size %d\n", __func__,
-				     cmd->cmd_type, vfecmd.length,
-				     sizeof(typeof(scfg)));
-				goto config_error;
+				     cmd->cmd_type, vfecmd->length,
+				     sizeof(typeof(*scfg)));
+				goto config_failure;
 			}
 
-			if (copy_from_user(&scfg,
-					   (void __user *)(vfecmd.value),
-					   vfecmd.length)) {
+			if (copy_from_user(scfg,
+					   (void __user *)(vfecmd->value),
+					   vfecmd->length)) {
 
 				rc = -EFAULT;
-				goto config_error;
+				goto config_done;
 			}
 
 			CDBG("STATS_ENABLE: bufnum = %d, enabling = %d\n",
-			     axid->bufnum1, scfg.wb_expstatsenable);
+			     axid->bufnum1, scfg->wb_expstatsenable);
 
 			if (axid->bufnum1 > 0) {
 				regptr = axid->region;
@@ -456,48 +450,57 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 					CDBG("STATS_ENABLE, phy = 0x%lx\n",
 					     regptr->paddr);
 
-					scfg.wb_expstatoutputbuffer[i] =
+					scfg->wb_expstatoutputbuffer[i] =
 					    (void *)regptr->paddr;
 					regptr++;
 				}
 
-				vfecmd.value = &scfg;
+				cmd_data = scfg;
 
 			} else {
 				rc = -EINVAL;
-				goto config_error;
+				goto config_done;
 			}
 		}
 		break;
 
 	case CMD_STATS_AF_ENABLE:
 	case CMD_STATS_AF_AXI_CFG:{
-			struct vfe_stats_af_cfg sfcfg;
 			axid = data;
 			if (!axid) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_failure;
 			}
 
-			if (vfecmd.length > sizeof(typeof(sfcfg))) {
+			sfcfg =
+			    kmalloc(sizeof(struct vfe_stats_af_cfg),
+				    GFP_ATOMIC);
+
+			if (!sfcfg) {
+				rc = -ENOMEM;
+				goto config_failure;
+			}
+
+			if (vfecmd->length > sizeof(typeof(*sfcfg))) {
 				pr_err
 				    ("msm_camera: %s: cmd %d: user-space "\
 				     "data %d exceeds kernel buffer %d\n",
-				     __func__, cmd->cmd_type, vfecmd.length,
-				     sizeof(typeof(sfcfg)));
+				     __func__, cmd->cmd_type, vfecmd->length,
+				     sizeof(typeof(*sfcfg)));
 				rc = -EIO;
-				goto config_error;
+				goto config_failure;
 			}
 
-			if (copy_from_user(&sfcfg,
-					   (void __user *)(vfecmd.value),
-					   vfecmd.length)) {
+			if (copy_from_user(sfcfg,
+					   (void __user *)(vfecmd->value),
+					   vfecmd->length)) {
+
 				rc = -EFAULT;
-				goto config_error;
+				goto config_done;
 			}
 
 			CDBG("AF_ENABLE: bufnum = %d, enabling = %d\n",
-			     axid->bufnum1, sfcfg.af_enable);
+			     axid->bufnum1, sfcfg->af_enable);
 
 			if (axid->bufnum1 > 0) {
 				regptr = axid->region;
@@ -507,17 +510,17 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 					CDBG("STATS_ENABLE, phy = 0x%lx\n",
 					     regptr->paddr);
 
-					sfcfg.af_outbuf[i] =
+					sfcfg->af_outbuf[i] =
 					    (void *)regptr->paddr;
 
 					regptr++;
 				}
 
-				vfecmd.value = &sfcfg;
+				cmd_data = sfcfg;
 
 			} else {
 				rc = -EINVAL;
-				goto config_error;
+				goto config_done;
 			}
 		}
 		break;
@@ -528,7 +531,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			struct vfe_outputack fack;
 			if (!data) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_failure;
 			}
 
 			b = (struct msm_frame *)(cmd->value);
@@ -541,9 +544,9 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			fack.output2newcbcrbufferaddress =
 			    (void *)(p + b->cbcr_off);
 
-			vfecmd.queue = QDSP_CMDQUEUE;
-			vfecmd.length = sizeof(struct vfe_outputack);
-			vfecmd.value = &fack;
+			vfecmd->queue = QDSP_CMDQUEUE;
+			vfecmd->length = sizeof(struct vfe_outputack);
+			cmd_data = &fack;
 		}
 		break;
 
@@ -554,15 +557,15 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			CDBG("vfe_7x_config: CMD_STATS_BUF_RELEASE\n");
 			if (!data) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_failure;
 			}
 
 			sack.header = STATS_WE_ACK;
 			sack.bufaddr = (void *)*(uint32_t *) data;
 
-			vfecmd.queue = QDSP_CMDQUEUE;
-			vfecmd.length = sizeof(struct vfe_stats_ack);
-			vfecmd.value = &sack;
+			vfecmd->queue = QDSP_CMDQUEUE;
+			vfecmd->length = sizeof(struct vfe_stats_ack);
+			cmd_data = &sack;
 		}
 		break;
 
@@ -570,41 +573,41 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			CDBG("vfe_7x_config: CMD_STATS_AF_BUF_RELEASE\n");
 			if (!data) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_failure;
 			}
 
 			sack.header = STATS_AF_ACK;
 			sack.bufaddr = (void *)*(uint32_t *) data;
 
-			vfecmd.queue = QDSP_CMDQUEUE;
-			vfecmd.length = sizeof(struct vfe_stats_ack);
-			vfecmd.value = &sack;
+			vfecmd->queue = QDSP_CMDQUEUE;
+			vfecmd->length = sizeof(struct vfe_stats_ack);
+			cmd_data = &sack;
 		}
 		break;
 
 	case CMD_GENERAL:
 	case CMD_STATS_DISABLE:{
-			uint8_t buf[256];
-			void *tmp = buf;
-			if (vfecmd.length > sizeof(buf)) {
-				cmd_data_alloc = tmp =
-				    kmalloc(vfecmd.length, GFP_ATOMIC);
-				if (!cmd_data_alloc) {
+			if (vfecmd->length > sizeof(buf)) {
+				cmd_data_alloc =
+				    cmd_data =
+				    kmalloc(vfecmd->length, GFP_ATOMIC);
+				if (!cmd_data) {
 					rc = -ENOMEM;
-					goto config_error;
+					goto config_failure;
 				}
-			}
+			} else
+				cmd_data = buf;
 
-			if (copy_from_user(tmp,
-					   (void __user *)(vfecmd.value),
-					   vfecmd.length)) {
+			if (copy_from_user(cmd_data,
+					   (void __user *)(vfecmd->value),
+					   vfecmd->length)) {
+
 				rc = -EFAULT;
-				goto config_error;
+				goto config_done;
 			}
-			vfecmd.value = tmp;
 
-			if (vfecmd.queue == QDSP_CMDQUEUE) {
-				switch (*(uint32_t *) vfecmd.value) {
+			if (vfecmd->queue == QDSP_CMDQUEUE) {
+				switch (*(uint32_t *) cmd_data) {
 				case VFE_RESET_CMD:
 					msm_camio_vfe_blk_reset();
 					msm_camio_camif_pad_reg_reset_2();
@@ -631,18 +634,24 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			axid = data;
 			if (!axid) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_failure;
 			}
 
-			if (copy_from_user(&axio, (void *)(vfecmd.value),
-					   sizeof(axio))) {
+			axio = kmalloc(sizeof(struct axiout), GFP_ATOMIC);
+			if (!axio) {
+				rc = -ENOMEM;
+				goto config_failure;
+			}
+
+			if (copy_from_user(axio, (void *)(vfecmd->value),
+					   sizeof(struct axiout))) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_done;
 			}
 
-			vfe_7x_config_axi(OUTPUT_1, axid, &axio);
+			vfe_7x_config_axi(OUTPUT_1, axid, axio);
 
-			vfecmd.value = &axio;
+			cmd_data = axio;
 		}
 		break;
 
@@ -651,17 +660,23 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			axid = data;
 			if (!axid) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_failure;
 			}
 
-			if (copy_from_user(&axio, (void __user *)(vfecmd.value),
-					   sizeof(axio))) {
+			axio = kmalloc(sizeof(struct axiout), GFP_ATOMIC);
+			if (!axio) {
+				rc = -ENOMEM;
+				goto config_failure;
+			}
+
+			if (copy_from_user(axio, (void __user *)(vfecmd->value),
+					   sizeof(struct axiout))) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_done;
 			}
 
-			vfe_7x_config_axi(OUTPUT_2, axid, &axio);
-			vfecmd.value = &axio;
+			vfe_7x_config_axi(OUTPUT_2, axid, axio);
+			cmd_data = axio;
 		}
 		break;
 
@@ -669,18 +684,24 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			axid = data;
 			if (!axid) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_failure;
 			}
 
-			if (copy_from_user(&axio, (void __user *)(vfecmd.value),
-					   sizeof(axio))) {
+			axio = kmalloc(sizeof(struct axiout), GFP_ATOMIC);
+			if (!axio) {
+				rc = -ENOMEM;
+				goto config_failure;
+			}
+
+			if (copy_from_user(axio, (void __user *)(vfecmd->value),
+					   sizeof(struct axiout))) {
 				rc = -EFAULT;
-				goto config_error;
+				goto config_done;
 			}
 
-			vfe_7x_config_axi(OUTPUT_1_AND_2, axid, &axio);
+			vfe_7x_config_axi(OUTPUT_1_AND_2, axid, axio);
 
-			vfecmd.value = &axio;
+			cmd_data = axio;
 		}
 		break;
 
@@ -689,14 +710,20 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 	}			/* switch */
 
 	if (vfestopped)
-		goto config_error;
+		goto config_done;
 
 config_send:
-	CDBG("send adsp command = %d\n", *(uint32_t *)vfecmd.value);
-	rc = msm_adsp_write(vfe_mod, vfecmd.queue, vfecmd.value, vfecmd.length);
+	CDBG("send adsp command = %d\n", *(uint32_t *) cmd_data);
+	rc = msm_adsp_write(vfe_mod, vfecmd->queue, cmd_data, vfecmd->length);
 
-config_error:
-	kfree(cmd_data_alloc);
+config_done:
+	if (cmd_data_alloc != NULL)
+		kfree(cmd_data_alloc);
+
+config_failure:
+	kfree(scfg);
+	kfree(axio);
+	kfree(vfecmd);
 	return rc;
 }
 

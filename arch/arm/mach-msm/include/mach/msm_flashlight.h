@@ -50,6 +50,8 @@ struct flashlight_platform_data {
 };
 
 int flashlight_control(int mode);
+int aat1271_flashlight_control(int mode);
+int adp1650_flashlight_control(int mode);
 
 #undef __ASM_ARCH_MSM8X50_FLASHLIGHT_H
 #endif

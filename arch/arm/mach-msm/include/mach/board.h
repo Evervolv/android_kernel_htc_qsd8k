@@ -19,11 +19,10 @@
 
 #include <linux/types.h>
 #include <mach/mmc.h>
+#include <asm/setup.h>
 
 /* platform device data structures */
-
-struct msm_acpu_clock_platform_data
-{
+struct msm_acpu_clock_platform_data {
 	uint32_t acpu_switch_time_us;
 	uint32_t max_speed_delta_khz;
 	uint32_t vdd_switch_time_us;
@@ -37,14 +36,29 @@ struct msm_camera_io_ext {
 	uint32_t mdcsz;
 	uint32_t appphy;
 	uint32_t appsz;
-	unsigned long camifpadphy;
-	unsigned long camifpadsz;
+	uint32_t camifpadphy;
+	uint32_t camifpadsz;
+	uint32_t csiphy;
+	uint32_t csisz;
+	uint32_t csiirq;
 };
 
 struct msm_camera_device_platform_data {
 	void (*camera_gpio_on) (void);
 	void (*camera_gpio_off)(void);
 	struct msm_camera_io_ext ioext;
+};
+enum msm_camera_csi_data_format {
+	CSI_8BIT,
+	CSI_10BIT,
+	CSI_12BIT,
+};
+struct msm_camera_csi_params {
+	enum msm_camera_csi_data_format data_format;
+	uint8_t lane_cnt;
+	uint8_t lane_assign;
+	uint8_t settle_cnt;
+	uint8_t dpcm_scheme;
 };
 
 struct msm_camera_legacy_device_platform_data {
@@ -53,6 +67,52 @@ struct msm_camera_legacy_device_platform_data {
 	int vcm_pwd;
 	void (*config_gpio_on) (void);
 	void (*config_gpio_off)(void);
+	struct msm_camsensor_device_platform_data *sensor_info;
+};
+
+#define MSM_CAMERA_FLASH_NONE 0
+#define MSM_CAMERA_FLASH_LED  1
+#define MSM_CAMERA_FLASH_SRC_PMIC (0x00000001<<0)
+#define MSM_CAMERA_FLASH_SRC_PWM  (0x00000001<<1)
+
+struct msm_camera_sensor_flash_pmic {
+	uint32_t low_current;
+	uint32_t high_current;
+};
+
+struct msm_camera_sensor_flash_pwm {
+	uint32_t freq;
+	uint32_t max_load;
+	uint32_t low_load;
+	uint32_t high_load;
+	uint32_t channel;
+};
+
+struct msm_camera_sensor_flash_src {
+	int flash_sr_type;
+
+	union {
+		struct msm_camera_sensor_flash_pmic pmic_src;
+		struct msm_camera_sensor_flash_pwm pwm_src;
+	} _fsrc;
+};
+
+struct msm_camera_sensor_flash_data {
+	int flash_type;
+	struct msm_camera_sensor_flash_src *flash_src;
+};
+
+struct camera_flash_cfg {
+	int num_flash_levels;
+	int (*camera_flash)(int level);
+	uint16_t low_temp_limit;
+	uint16_t low_cap_limit;
+	uint8_t postpone_led_mode;
+};
+
+enum msm_camera_source{
+	MAIN_SOURCE,
+	SECOND_SOURCE,
 };
 
 struct msm_camera_sensor_info {
@@ -60,14 +120,37 @@ struct msm_camera_sensor_info {
 	int sensor_reset;
 	int sensor_pwd;
 	int vcm_pwd;
+	void(*camera_clk_switch)(void);
+	/*power*/
+	char *camera_analog_pwd;
+	char *camera_io_pwd;
+	char *camera_vcm_pwd;
+	char *camera_digital_pwd;
+	int analog_pwd1_gpio;
+	int (*camera_power_on)(void);
+	int (*camera_power_off)(void);
+	void(*camera_set_source)(enum msm_camera_source);
+	enum msm_camera_source(*camera_get_source)(void);
+	int (*camera_main_get_probe)(void);
+	void (*camera_main_set_probe)(int);
 	int mclk;
-	int num_flash_levels;
-	int (*camera_flash)(int level);
+	int flash_type; /* for back support */
+	uint8_t led_high_enabled;
 	int need_suspend;
 	struct msm_camera_device_platform_data *pdata;
 	struct resource *resource;
 	uint8_t num_resources;
+	uint32_t waked_up;
+	wait_queue_head_t event_wait;
+	uint32_t kpi_sensor_start;
+	uint32_t kpi_sensor_end;
+	struct camera_flash_cfg* flash_cfg;
+	int csi_if;
+	struct msm_camera_csi_params csi_params;
+	int sensor_lc_disable; /* for sensor lens correction support */
+	uint8_t (*preview_skip_frame)(void);
 };
+struct clk;
 
 struct snd_endpoint {
 	int id;
@@ -79,12 +162,9 @@ struct msm_snd_endpoints {
 	unsigned num;
 };
 
-struct clk;
-
 extern struct sys_timer msm_timer;
 
 /* common init routines for use by arch/arm/mach-msm/board-*.c */
-
 void __init msm_add_devices(void);
 void __init msm_map_common_io(void);
 void __init msm_init_irq(void);
