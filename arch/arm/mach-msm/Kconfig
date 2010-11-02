@@ -581,6 +581,12 @@ config WIFI_MEM_PREALLOC
 	help
 	  Preallocates memory buffers for WiFi driver
 
+config ARCH_MSM_FLASHLIGHT
+        bool "Flashlight Driver"
+        depends on ARCH_MSM
+        help
+          The flashlight driver is for MSM series.
+
 config VIRTUAL_KPANIC_PARTITION
 	bool "Create virtual kpanic partition"
 	default n

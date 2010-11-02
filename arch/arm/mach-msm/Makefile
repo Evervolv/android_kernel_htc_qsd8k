@@ -103,3 +103,6 @@ obj-$(CONFIG_HTC_35MM_JACK) += htc_35mm_jack.o
 
 obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-tpa2018d1.o
 obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-smb329.o
+
+obj-$(CONFIG_ARCH_MSM_FLASHLIGHT) += msm_flashlight.o
+
