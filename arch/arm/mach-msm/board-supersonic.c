@@ -319,7 +319,7 @@ extern void msm_hsusb_8x50_phy_reset(void);
 
 static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.phy_init_seq = supersonic_phy_init_seq,
-//	.phy_reset = msm_hsusb_8x50_phy_reset,
+	.phy_reset = msm_hsusb_8x50_phy_reset,
 	.usb_id_pin_gpio =  SUPERSONIC_GPIO_USB_ID_PIN,
 	.accessory_detect = 1, /* detect by ID pin gpio */
 	.usb_uart_switch = supersonic_uart_usb_switch,

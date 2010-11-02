@@ -48,6 +48,10 @@ enum {
 /* common init routines for use by arch/arm/mach-msm/board-*.c */
 
 void __init msm_add_usb_devices(void (*phy_reset) (void));
+void __init msm_add_usb_id_pin_function(void (*config_usb_id_gpios)(bool enable));
+void __init msm_add_usb_id_pin_gpio(int usb_id_pin_io);
+void __init msm_enable_car_kit_detect(bool enable);
+void __init msm_change_usb_id(__u16 vendor_id, __u16 product_id);
 void __init msm_add_mem_devices(struct msm_pmem_setting *setting);
 void __init msm_init_pmic_vibrator(void);
 
@@ -64,5 +68,16 @@ int parse_tag_engineerid(const struct tag * tags);
 void notify_usb_connected(int online);
 
 char *board_serialno(void);
+
+/*
+ * Obviously, we need these in all project.
+ * To export a function to get these is too lousy.
+ * Each BSP can include board.h to get these.
+ *
+ * Jay, 15/May/09'
+ * */
+extern int panel_type;
+extern unsigned engineer_id;
+extern int usb_phy_error;
 
 #endif

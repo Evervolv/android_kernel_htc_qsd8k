@@ -24,15 +24,25 @@
 struct msm_hsusb_platform_data {
 	/* hard reset the ULPI PHY */
 	void (*phy_reset)(void);
+	void (*phy_shutdown)(void);
 
 	/* (de)assert the reset to the usb core */
 	void (*hw_reset)(bool enable);
 
 	/* for notification when USB is connected or disconnected */
 	void (*usb_connected)(int);
-
+	/* 1 : uart, 0 : usb */
+	void (*usb_uart_switch)(int);
+	void (*config_usb_id_gpios)(bool enable);
 	/* val, reg pairs terminated by -1 */
 	int *phy_init_seq;
+
+	char *serial_number;
+	int usb_id_pin_gpio;
+	bool enable_car_kit_detect;
+	__u8 accessory_detect;
 };
+
+int usb_get_connect_type(void);
 
 #endif
