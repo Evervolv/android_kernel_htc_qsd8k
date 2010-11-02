@@ -49,11 +49,13 @@
 #include <mach/msm_serial_hs.h>
 #include <mach/bcm_bt_lpm.h>
 #include <mach/msm_smd.h>
-
+#include <mach/msm_flashlight.h>
+#ifdef CONFIG_PERFLOCK
+#include <mach/perflock.h>
+#endif
 #include "board-mahimahi.h"
 #include "devices.h"
 #include "proc_comm.h"
-#include "board-mahimahi-flashlight.h"
 #include "board-mahimahi-tpa2018d1.h"
 #include "board-mahimahi-smb329.h"
 
@@ -310,12 +312,12 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.cached		= 1,
 };
 
-static struct android_pmem_platform_data android_pmem_camera_pdata = {
-	.name		= "pmem_camera",
-	.start		= MSM_PMEM_CAMERA_BASE,
-	.size		= MSM_PMEM_CAMERA_SIZE,
-	.no_allocator	= 1,
-	.cached		= 1,
+static struct android_pmem_platform_data android_pmem_venc_pdata = {
+        .name           = "pmem_venc",
+        .start          = MSM_PMEM_VENC_BASE,
+        .size           = MSM_PMEM_VENC_SIZE,
+        .no_allocator   = 0,
+        .cached         = 1,
 };
 
 static struct platform_device android_pmem_mdp_device = {
@@ -334,12 +336,12 @@ static struct platform_device android_pmem_adsp_device = {
 	},
 };
 
-static struct platform_device android_pmem_camera_device = {
-	.name		= "android_pmem",
-	.id		= 2,
-	.dev		= {
-		.platform_data = &android_pmem_camera_pdata,
-	},
+static struct platform_device android_pmem_venc_device = {
+        .name           = "android_pmem",
+        .id             = 3,
+        .dev            = {
+                .platform_data = &android_pmem_venc_pdata,
+        },
 };
 
 static struct resource ram_console_resources[] = {
@@ -601,6 +603,14 @@ static struct msm_camera_device_platform_data msm_camera_device_data = {
 	.ioext.appsz  = MSM_CLK_CTL_SIZE,
 };
 
+static struct camera_flash_cfg msm_camera_sensor_flash_cfg = {
+        .camera_flash           = flashlight_control,
+        .num_flash_levels       = FLASHLIGHT_NUM,
+        .low_temp_limit         = 5,
+        .low_cap_limit          = 15,
+
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
 	.sensor_name = "s5k3e2fx",
 	.sensor_reset = 144, /* CAM1_RST */
@@ -609,8 +619,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
 	.pdata = &msm_camera_device_data,
 	.resource = msm_camera_resources,
 	.num_resources = ARRAY_SIZE(msm_camera_resources),
-	.camera_flash = flashlight_control,
-	.num_flash_levels = FLASHLIGHT_NUM,
+	.flash_cfg      = &msm_camera_sensor_flash_cfg,
 };
 
 static struct platform_device msm_camera_sensor_s5k3e2fx = {
@@ -686,6 +695,7 @@ static struct platform_device mahimahi_flashlight_device = {
 		.platform_data  = &mahimahi_flashlight_data,
 	},
 };
+
 static struct timed_gpio timed_gpios[] = {
 	{
 		.name = "vibrator",
@@ -819,7 +829,9 @@ static struct platform_device *devices[] __initdata = {
 	&android_usb_device,
 	&android_pmem_mdp_device,
 	&android_pmem_adsp_device,
-	&android_pmem_camera_device,
+#ifdef CONFIG_720P_CAMERA
+	&android_pmem_venc_device,
+#endif
 	&msm_kgsl_device,
 	&msm_device_i2c,
 	&capella_cm3602,
@@ -962,16 +974,29 @@ static struct msm_acpu_clock_platform_data mahimahi_cdma_clock_data = {
 	.mpll_khz		= 235930
 };
 
+#ifdef CONFIG_PERFLOCK
+static unsigned mahimahi_perf_acpu_table[] = {
+  245000000,
+  576000000,
+  998400000,
+};
+
+static struct perflock_platform_data mahimahi_perflock_data = {
+  .perf_acpu_table = mahimahi_perf_acpu_table,
+  .table_size = ARRAY_SIZE(mahimahi_perf_acpu_table),
+};
+#endif
+
 static ssize_t mahimahi_virtual_keys_show(struct kobject *kobj,
 			       struct kobj_attribute *attr, char *buf)
 {
 	if (system_rev > 2 && system_rev != 0xC0) {
-		/* center: x: back: 55, menu: 172, home: 298, search 412, y: 835 */
+		/* center: x: back: 60, menu: 172, home: 298, search 412, y: 840 */
 		return sprintf(buf,
-			__stringify(EV_KEY) ":" __stringify(KEY_BACK)  ":55:835:90:55"
-		   ":" __stringify(EV_KEY) ":" __stringify(KEY_MENU)   ":172:835:125:55"
-		   ":" __stringify(EV_KEY) ":" __stringify(KEY_HOME)   ":298:835:115:55"
-		   ":" __stringify(EV_KEY) ":" __stringify(KEY_SEARCH) ":412:835:95:55"
+			__stringify(EV_KEY) ":" __stringify(KEY_BACK)  ":55:840:90:60"
+		   ":" __stringify(EV_KEY) ":" __stringify(KEY_MENU)   ":172:840:125:60"
+		   ":" __stringify(EV_KEY) ":" __stringify(KEY_HOME)   ":298:840:115:60"
+		   ":" __stringify(EV_KEY) ":" __stringify(KEY_SEARCH) ":412:840:95:60"
 		   "\n");
 	} else {
 		/* center: x: home: 55, menu: 185, back: 305, search 425, y: 835 */
@@ -1031,6 +1056,10 @@ static void __init mahimahi_init(void)
 		msm_acpu_clock_init(&mahimahi_cdma_clock_data);
 	else
 		msm_acpu_clock_init(&mahimahi_clock_data);
+
+#ifdef CONFIG_PERFLOCK
+	perflock_init(&mahimahi_perflock_data);
+#endif
 
 	msm_serial_debug_init(MSM_UART1_PHYS, INT_UART1,
 			      &msm_device_uart1.dev, 1, MSM_GPIO_TO_INT(139));
@@ -1123,9 +1152,9 @@ static void __init mahimahi_fixup(struct machine_desc *desc, struct tag *tags,
 {
 	mi->nr_banks = 2;
 	mi->bank[0].start = PHYS_OFFSET;
-	mi->bank[0].size = (219*1024*1024);
-	mi->bank[1].start = MSM_HIGHMEM_BASE;
-	mi->bank[1].size = MSM_HIGHMEM_SIZE;
+	mi->bank[0].size = MSM_EBI1_BANK0_SIZE;
+	mi->bank[1].start = MSM_EBI1_BANK1_BASE;
+	mi->bank[1].size = MSM_EBI1_BANK1_SIZE;
 }
 
 static void __init mahimahi_map_io(void)
