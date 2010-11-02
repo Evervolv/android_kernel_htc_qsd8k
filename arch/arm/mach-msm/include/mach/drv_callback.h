@@ -1,4 +1,4 @@
-/* include/asm/mach-msm/htc_acoustic_qsd.h
+/* linux/arch/arm/mach-msm/drv_callback.h
  *
  * Copyright (C) 2009 HTC Corporation.
  *
@@ -10,22 +10,19 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
  */
-#ifndef _ARCH_ARM_MACH_MSM_HTC_ACOUSTIC_QSD_H_
-#define _ARCH_ARM_MACH_MSM_HTC_ACOUSTIC_QSD_H_
 
-struct qsd_acoustic_ops {
-	void (*enable_mic_bias)(int en);
+#include <linux/list.h>
+#include <linux/spinlock.h>
+
+struct cnf_driver {
+	const char		*name;
+	int (*func)		(void *);
+
+	/* configurable driver list lock */
+	rwlock_t		cnfdrv_list_lock;
+	struct list_head        next_drv;
 };
 
-void acoustic_register_ops(struct qsd_acoustic_ops *ops);
-
-int turn_mic_bias_on(int on);
-int force_headset_speaker_on(int enable);
-int enable_aux_loopback(uint32_t enable);
-int set_aux_gain(int level);
-int enable_mos_test(int enable);
-
-#endif
-
+int cnf_driver_register(struct cnf_driver *);
+int cnf_driver_event(const char *, void *argu);

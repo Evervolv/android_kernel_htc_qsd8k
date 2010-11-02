@@ -21,6 +21,7 @@
 #include <linux/msm_audio.h>
 
 #include <mach/msm_qdsp6_audio.h>
+#include <mach/htc_acoustic_qsd.h>
 
 #define BUFSZ (0)
 
@@ -77,7 +78,7 @@ static int q6_voice_stop(void)
 	return 0;
 }
 
-int q6_fm_start(void)
+static int q6_fm_start(void)
 {
 	int rc = 0;
 
@@ -102,7 +103,7 @@ done:
 	return rc;
 }
 
-int q6_fm_stop(void)
+static int q6_fm_stop(void)
 {
 	mutex_lock(&fm_lock);
 	if (fm_started) {
@@ -128,40 +129,28 @@ static long q6_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 	case AUDIO_SWITCH_DEVICE:
 		rc = copy_from_user(&id, (void *)arg, sizeof(id));
-		if (rc) {
-			pr_err("%s: bad user address\n", __func__);
-			rc = -EFAULT;
-		} else
+		if (!rc)
 			rc = q6audio_do_routing(id[0], id[1]);
 		break;
 	case AUDIO_SET_VOLUME:
 		rc = copy_from_user(&n, (void *)arg, sizeof(n));
-		if (rc) {
-			pr_err("%s: bad user address\n", __func__);
-			rc = -EFAULT;
-		} else
+		if (!rc)
 			rc = q6audio_set_rx_volume(n);
 		break;
 	case AUDIO_SET_MUTE:
 		rc = copy_from_user(&n, (void *)arg, sizeof(n));
-		if (rc) {
-			pr_err("%s: bad user address\n", __func__);
-			rc = -EFAULT;
-		} else
+		if (!rc)
 			rc = q6audio_set_tx_mute(n);
 		break;
 	case AUDIO_UPDATE_ACDB:
 		rc = copy_from_user(&id, (void *)arg, sizeof(id));
-		if (rc) {
-			pr_err("%s: bad user address\n", __func__);
-			rc = -EFAULT;
-		} else
+		if (!rc)
 			rc = q6audio_update_acdb(id[0], id[1]);
 		break;
 	case AUDIO_START_VOICE:
-		if (arg == 0)
+		if (arg == 0) {
 			id[0] = id[1] = 0;
-		else if (copy_from_user(&id, (void *)arg, sizeof(id))) {
+		} else if (copy_from_user(&id, (void*) arg, sizeof(id))) {
 			pr_info("voice: copy acdb_id from user failed\n");
 			rc = -EFAULT;
 			break;
@@ -179,14 +168,19 @@ static long q6_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	case AUDIO_REINIT_ACDB:
 		rc = copy_from_user(&filename, (void *)arg, sizeof(filename));
-		if (rc) {
-			pr_err("%s: bad user address\n", __func__);
-			rc = -EFAULT;
-		} else
+		if (!rc)
 			rc = q6audio_reinit_acdb(filename);
 		break;
+	case AUDIO_ENABLE_AUXPGA_LOOPBACK: {
+		uint32_t enable;
+		if (copy_from_user(&enable, (void*) arg, sizeof(enable))) {
+			rc = -EFAULT;
+			break;
+		}
+		rc = enable_aux_loopback(enable);
+		break;
+	}
 	default:
-		pr_info("%s: unknown %d\n", __func__, cmd);
 		rc = -EINVAL;
 	}
 

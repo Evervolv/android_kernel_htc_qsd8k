@@ -30,6 +30,7 @@
 #include <mach/msm_iomap.h>
 #include <mach/htc_acoustic_qsd.h>
 #include <mach/msm_qdsp6_audio.h>
+#include <mach/htc_headset_mgr.h>
 
 #include "smd_private.h"
 
@@ -43,6 +44,7 @@
 #define ONCRPC_UPDATE_ADIE_PROC			(2)
 #define ONCRPC_ENABLE_AUX_PGA_LOOPBACK_PROC	(3)
 #define ONCRPC_FORCE_HEADSET_SPEAKER_PROC	(4)
+#define ONCRPC_SET_AUX_PGA_GAIN_PROC		(5)
 
 #define HTC_ACOUSTIC_TABLE_SIZE        (0x20000)
 
@@ -54,6 +56,9 @@ static struct msm_rpc_endpoint *endpoint;
 static struct mutex api_lock;
 static struct mutex rpc_connect_lock;
 static struct qsd_acoustic_ops *the_ops;
+struct class *htc_class;
+static int hac_enable_flag;
+struct mutex acoustic_lock;
 
 void acoustic_register_ops(struct qsd_acoustic_ops *ops)
 {
@@ -77,7 +82,7 @@ static int is_rpc_connect(void)
 	return 0;
 }
 
-int turn_mic_bias_on(int on)
+int enable_mic_bias(int on)
 {
 	D("%s called %d\n", __func__, on);
 	if (the_ops->enable_mic_bias)
@@ -85,7 +90,28 @@ int turn_mic_bias_on(int on)
 
 	return 0;
 }
+
+int turn_mic_bias_on(int on)
+{
+  return enable_mic_bias(on);
+}
 EXPORT_SYMBOL(turn_mic_bias_on);
+
+int enable_mos_test(int enable)
+{
+	static int mos_test_enable;
+	int res = 0;
+	if (enable != mos_test_enable) {
+		D("%s called %d\n", __func__, enable);
+		if (enable)
+			res = q6audio_reinit_acdb("default_mos.acdb");
+		else
+			res = q6audio_reinit_acdb("default.acdb");
+		mos_test_enable = enable;
+	}
+	return res;
+}
+EXPORT_SYMBOL(enable_mos_test);
 
 int force_headset_speaker_on(int enable)
 {
@@ -124,6 +150,25 @@ int enable_aux_loopback(uint32_t enable)
 		&aux_req, sizeof(aux_req), 5 * HZ);
 }
 EXPORT_SYMBOL(enable_aux_loopback);
+
+int set_aux_gain(int level)
+{
+	struct aux_gain_req {
+		struct rpc_request_hdr hdr;
+		int level;
+	} aux_req;
+
+	D("%s called %d\n", __func__, level);
+
+	if (is_rpc_connect() == -1)
+		return -1;
+
+	aux_req.level = cpu_to_be32(level);
+	return  msm_rpc_call(endpoint,
+		ONCRPC_SET_AUX_PGA_GAIN_PROC,
+		&aux_req, sizeof(aux_req), 5 * HZ);
+}
+EXPORT_SYMBOL(set_aux_gain);
 
 static int acoustic_mmap(struct file *file, struct vm_area_struct *vma)
 {
@@ -299,15 +344,103 @@ static struct miscdevice acoustic_misc = {
 	.fops = &acoustic_fops,
 };
 
+static ssize_t htc_show(struct device *dev,
+				struct device_attribute *attr,  char *buf)
+{
+
+	char *s = buf;
+	mutex_lock(&acoustic_lock);
+	s += sprintf(s, "%d\n", hac_enable_flag);
+	mutex_unlock(&acoustic_lock);
+	return s - buf;
+
+}
+static ssize_t htc_store(struct device *dev, struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+
+	if (count == (strlen("enable") + 1) &&
+		strncmp(buf, "enable", strlen("enable")) == 0) {
+		mutex_lock(&acoustic_lock);
+
+		if (hac_enable_flag == 0)
+			pr_info("Enable HAC\n");
+		hac_enable_flag = 1;
+
+		mutex_unlock(&acoustic_lock);
+		return count;
+	}
+	if (count == (strlen("disable") + 1) &&
+		strncmp(buf, "disable", strlen("disable")) == 0) {
+		mutex_lock(&acoustic_lock);
+
+		if (hac_enable_flag == 1)
+			pr_info("Disable HAC\n");
+		hac_enable_flag = 0;
+
+		mutex_unlock(&acoustic_lock);
+		return count;
+	}
+	pr_err("hac_flag_store: invalid argument\n");
+	return -EINVAL;
+
+}
+
+static DEVICE_ATTR(flag, 0666, htc_show, htc_store);
+
 static int __init acoustic_init(void)
 {
+	int ret = 0;
 	mutex_init(&api_lock);
 	mutex_init(&rpc_connect_lock);
-	return misc_register(&acoustic_misc);
+	ret = misc_register(&acoustic_misc);
+	if (ret < 0) {
+		pr_err("failed to register misc device!\n");
+		return ret;
+	}
+
+	htc_class = class_create(THIS_MODULE, "htc_acoustic");
+	if (IS_ERR(htc_class)) {
+		ret = PTR_ERR(htc_class);
+		htc_class = NULL;
+		goto err_create_class;
+	}
+	acoustic_misc.this_device =
+			device_create(htc_class, NULL, 0 , NULL, "hac");
+	if (IS_ERR(acoustic_misc.this_device)) {
+		ret = PTR_ERR(acoustic_misc.this_device);
+		acoustic_misc.this_device = NULL;
+		goto err_create_class;
+	}
+
+	ret = device_create_file(acoustic_misc.this_device, &dev_attr_flag);
+	if (ret < 0)
+		goto err_create_class_device;
+
+	mutex_init(&acoustic_lock);
+
+#if defined(CONFIG_HTC_HEADSET_MGR)
+	struct headset_notifier notifier;
+	notifier.id = HEADSET_REG_MIC_BIAS;
+	notifier.func = enable_mic_bias;
+	headset_notifier_register(&notifier);
+#endif
+
+	return 0;
+
+err_create_class_device:
+	device_destroy(htc_class, 0);
+err_create_class:
+	return ret;
+
 }
 
 static void __exit acoustic_exit(void)
 {
+	device_remove_file(acoustic_misc.this_device, &dev_attr_flag);
+	device_destroy(htc_class, 0);
+	class_destroy(htc_class);
+
 	misc_deregister(&acoustic_misc);
 }
 

@@ -1,6 +1,10 @@
-/* include/asm/mach-msm/htc_acoustic_qsd.h
+/*
  *
- * Copyright (C) 2009 HTC Corporation.
+ * /arch/arm/mach-msm/include/mach/htc_headset_gpio.h
+ *
+ *  HTC GPIO headset detection driver.
+ *
+ *  Copyright (C) 2010 HTC, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -12,20 +16,14 @@
  * GNU General Public License for more details.
  *
  */
-#ifndef _ARCH_ARM_MACH_MSM_HTC_ACOUSTIC_QSD_H_
-#define _ARCH_ARM_MACH_MSM_HTC_ACOUSTIC_QSD_H_
 
-struct qsd_acoustic_ops {
-	void (*enable_mic_bias)(int en);
+#ifndef HTC_HEADSET_GPIO_H
+#define HTC_HEADSET_GPIO_H
+
+struct htc_headset_gpio_platform_data {
+	unsigned int hpin_gpio;
+	unsigned int key_enable_gpio;
+	unsigned int mic_select_gpio;
 };
 
-void acoustic_register_ops(struct qsd_acoustic_ops *ops);
-
-int turn_mic_bias_on(int on);
-int force_headset_speaker_on(int enable);
-int enable_aux_loopback(uint32_t enable);
-int set_aux_gain(int level);
-int enable_mos_test(int enable);
-
 #endif
-

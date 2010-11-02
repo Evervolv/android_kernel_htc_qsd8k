@@ -19,9 +19,9 @@
 #include <linux/miscdevice.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
-#include <linux/slab.h>
 #include <linux/wait.h>
 #include <linux/uaccess.h>
+#include <linux/slab.h>
 
 #include <linux/msm_audio.h>
 
@@ -56,12 +56,6 @@ static long pcm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 	case AUDIO_SET_VOLUME: {
 		int vol;
-		if (!pcm->ac) {
-			pr_err("%s: cannot set volume before AUDIO_START!\n",
-				__func__);
-			rc = -EINVAL;
-			break;
-		}
 		if (copy_from_user(&vol, (void*) arg, sizeof(vol))) {
 			rc = -EFAULT;
 			break;
@@ -183,14 +177,14 @@ static ssize_t pcm_write(struct file *file, const char __user *buf,
 			if (!wait_event_timeout(ac->wait, (ab->used == 0), 5*HZ)) {
 				audio_client_dump(ac);
 				pr_err("pcm_write: timeout. dsp dead?\n");
-				q6audio_dsp_not_responding();
+				BUG();
 			}
 
 		xfer = count;
 		if (xfer > ab->size)
 			xfer = ab->size;
 
-		if (copy_from_user(ab->data, buf, xfer)) 
+		if (copy_from_user(ab->data, buf, xfer))
 			return -EFAULT;
 
 		buf += xfer;
