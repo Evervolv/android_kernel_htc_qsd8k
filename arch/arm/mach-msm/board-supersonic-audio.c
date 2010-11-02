@@ -27,7 +27,7 @@
 #include "pmic.h"
 #include "board-supersonic-tpa2018d1.h"
 
-#if 0
+#if 1
 #define D(fmt, args...) printk(KERN_INFO "Audio: "fmt, ##args)
 #else
 #define D(fmt, args...) do {} while (0)
@@ -67,9 +67,20 @@ static struct q6_hw_info q6_audio_hw[Q6_HW_COUNT] = {
 void supersonic_headset_enable(int en)
 {
 	D("%s %d\n", __func__, en);
-	/* enable audio amp */
-	if (en) mdelay(15);
-	gpio_set_value(SUPERSONIC_AUD_JACKHP_EN, !!en);
+        /* enable audio amp */
+	if (en != headset_status) {
+		headset_status = en;
+		if(en) {
+			gpio_set_value(SUPERSONIC_AUD_JACKHP_EN, 1);
+			mdelay(10);
+			if (system_rev == 0)
+				set_headset_amp(1);
+		} else {
+			if (system_rev == 0)
+				set_headset_amp(0);
+			gpio_set_value(SUPERSONIC_AUD_JACKHP_EN, 0);
+		}
+	}
 }
 
 void supersonic_speaker_enable(int en)
@@ -219,8 +230,8 @@ void supersonic_analog_init(void)
 	pmic_spkr_set_mux_hpf_corner_freq(SPKR_FREQ_0_73KHZ);
 	pmic_mic_set_volt(MIC_VOLT_1_80V);
 	pmic_set_speaker_delay(SPKR_DLY_100MS);
-        
-        gpio_request(SUPERSONIC_AUD_JACKHP_EN, "aud_jackhp_en");
+
+	gpio_request(SUPERSONIC_AUD_JACKHP_EN, "aud_jackhp_en");
 	gpio_direction_output(SUPERSONIC_AUD_JACKHP_EN, 0);
 	gpio_set_value(SUPERSONIC_AUD_JACKHP_EN, 0);
 
