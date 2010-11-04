@@ -189,4 +189,20 @@ struct t_usb_status_notifier{
 static inline void msm_hsusb_set_vbus_state(int online) {}
 #endif
 
+char *board_serialno(void);
+int __init parse_tag_skuid(const struct tag *tags);
+int __init parse_tag_engineerid(const struct tag *tags);
+int __init parse_tag_memsize(const struct tag *tags);
+int board_mfg_mode(void);
+void __init msm_snddev_init(void);
+void msm_snddev_poweramp_on(void);
+void msm_snddev_poweramp_off(void);
+void msm_snddev_hsed_pamp_on(void);
+void msm_snddev_hsed_pamp_off(void);
+void msm_snddev_tx_route_config(void);
+void msm_snddev_tx_route_deconfig(void);
+
+extern int emmc_partition_read_proc(char *page, char **start, off_t off,
+			   int count, int *eof, void *data);
+
 #endif
