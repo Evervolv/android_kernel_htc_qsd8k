@@ -26,6 +26,8 @@ obj-$(CONFIG_FB_MSM_MDDI) += mddi.o
 #
 obj-$(CONFIG_FB_MSM_MDDI) += mddi_client_simple.o
 obj-$(CONFIG_FB_MSM_MDDI) += mddi_client_toshiba.o
+obj-$(CONFIG_FB_MSM_MDDI_NOVTEC) += mddi_client_novb9f6_5582.o
+obj-$(CONFIG_FB_MSM_MDDI_EPSON) += mddi_client_epson.o
 
 # MDP LCD controller driver
 obj-$(CONFIG_FB_MSM_LCDC) += mdp_lcdc.o
