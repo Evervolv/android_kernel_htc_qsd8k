@@ -683,8 +683,6 @@ static int supersonic_atmel_ts_power(int on)
 struct atmel_i2c_platform_data supersonic_atmel_ts_data[] = {
 	{
 		.version = 0x016,
-		.display_width = 480,
-		.display_height = 800,
 		.abs_x_min = 34,
 		.abs_x_max = 990,
 		.abs_y_min = 15,
