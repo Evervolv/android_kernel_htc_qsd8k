@@ -32,3 +32,5 @@ obj-$(CONFIG_FB_MSM_LCDC) += mdp_lcdc.o
 
 # Yamato GL driver
 obj-$(CONFIG_GPU_MSM_KGSL) += gpu/kgsl/
+
+obj-$(CONFIG_MSM_HDMI) += hdmi/
