@@ -182,7 +182,7 @@ static int mddi_simple_probe(struct platform_device *pdev)
 	panel->panel_data.resume = mddi_simple_resume;
 	panel->panel_data.blank = mddi_simple_blank;
 	panel->panel_data.unblank = mddi_simple_unblank;
-	panel->panel_data.caps = bridge_data->panel_caps;
+	panel->panel_data.caps = bridge_data->caps;
 	panel->panel_data.fb_data = &bridge_data->fb_data;
 
 	panel->pdev.name = "msm_panel";

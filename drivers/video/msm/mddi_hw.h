@@ -53,9 +53,9 @@
 #define MDDI_MF_CNT             0x0084
 #define MDDI_CURR_REV_PTR       0x0088
 #define MDDI_CORE_VER           0x008c
-#define MDDI_FIFO_ALLOC         0x0090
-#define MDDI_PAD_IO_CTL         0x00a0
-#define MDDI_PAD_CAL            0x00a4
+#define MDDI_SF_LEN_CTL_REG	0x0094
+#define MDDI_PAD_IO_CTL		0x00a0
+#define MDDI_PAD_CAL		0x00a4
 
 #define MDDI_INT_PRI_PTR_READ       0x0001
 #define MDDI_INT_SEC_PTR_READ       0x0002
@@ -115,9 +115,7 @@
 #define MDDI_CMD_LINK_ACTIVE         0x0900
 #define MDDI_CMD_PERIODIC_REV_ENCAP  0x0A00
 #define MDDI_CMD_FORCE_NEW_REV_PTR   0x0C00
-
-
-
+#define MDDI_CMD_SKEW_CALIBRATION    0x0D00
 #define MDDI_VIDEO_REV_PKT_SIZE              0x40
 #define MDDI_CLIENT_CAPABILITY_REV_PKT_SIZE  0x60
 #define MDDI_MAX_REV_PKT_SIZE                0x60
@@ -128,15 +126,19 @@
 /* MDP sends 256 pixel packets, so lower value hibernates more without
  * significantly increasing latency of waiting for next subframe */
 #define MDDI_HOST_BYTES_PER_SUBFRAME  0x3C00
-
-#if defined(CONFIG_MSM_MDP31) || defined(CONFIG_MSM_MDP40)
+#if defined (CONFIG_ARCH_QSD8X50) || defined (CONFIG_ARCH_MSM7X30)
 #define MDDI_HOST_TA2_LEN       0x001a
-#define MDDI_HOST_REV_RATE_DIV  0x0004
 #else
 #define MDDI_HOST_TA2_LEN       0x000c
-#define MDDI_HOST_REV_RATE_DIV  0x0002
 #endif
 
+#if defined (CONFIG_ARCH_QSD8X50)
+#define MDDI_HOST_REV_RATE_DIV  0x0004
+#elif defined (CONFIG_ARCH_MSM7X30)
+#define MDDI_HOST_REV_RATE_DIV  0x0010
+#else
+#define MDDI_HOST_REV_RATE_DIV  0x0002
+#endif
 
 struct __attribute__((packed)) mddi_rev_packet {
 	uint16_t length;
@@ -293,8 +295,12 @@ struct __attribute__((packed)) mddi_register_access {
 
 	uint16_t crc16;
 
-	uint32_t register_data_list;
-	/* list of 4-byte register data values for/from client registers */
+	union {
+		uint32_t reg_data;
+		uint32_t *reg_data_list;
+	} u;
+
+	uint16_t crc_data;
 };
 
 struct __attribute__((packed)) mddi_llentry {

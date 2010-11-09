@@ -40,34 +40,6 @@
 #define HDMI_DBG(s...) do {} while (0)
 #endif
 
-struct mdp_lcdc_info {
-	struct mdp_info	*mdp;
-	struct clk *mdp_clk;
-	struct clk *pclk;
-	struct clk *pad_pclk;
-	struct msm_panel_data fb_panel_data;
-	struct platform_device fb_pdev;
-	struct msm_lcdc_platform_data *pdata;
-	uint32_t fb_start;
-
-	struct msmfb_callback frame_start_cb;
-	wait_queue_head_t vsync_waitq;
-	int got_vsync;
-
-	struct {
-		uint32_t clk_rate;
-		uint32_t hsync_ctl;
-		uint32_t vsync_period;
-		uint32_t vsync_pulse_width;
-		uint32_t display_hctl;
-		uint32_t display_vstart;
-		uint32_t display_vend;
-		uint32_t hsync_skew;
-		uint32_t polarity;
-	} parms;
-	atomic_t	blank_count;
-	struct mutex	blank_lock;
-};
 struct mdp_lcdc_info *_lcdc;
 
 static struct mdp_device *mdp_dev;

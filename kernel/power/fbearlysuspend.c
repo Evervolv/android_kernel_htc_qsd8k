@@ -47,7 +47,7 @@ static void stop_drawing_early_suspend(struct early_suspend *h)
 }
 
 /* tell userspace to start drawing */
-static void start_drawing_late_resume(struct early_suspend *h)
+void start_drawing_late_resume(struct early_suspend *h)
 {
 	unsigned long irq_flags;
 
