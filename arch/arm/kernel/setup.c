@@ -85,6 +85,18 @@ unsigned int __atags_pointer __initdata;
 unsigned int system_rev;
 EXPORT_SYMBOL(system_rev);
 
+char microp_ver[4];
+EXPORT_SYMBOL(microp_ver);
+
+unsigned int als_kadc;
+EXPORT_SYMBOL(als_kadc);
+
+unsigned int ps_kparam1;
+EXPORT_SYMBOL(ps_kparam1);
+
+unsigned int ps_kparam2;
+EXPORT_SYMBOL(ps_kparam2);
+
 unsigned int system_serial_low;
 EXPORT_SYMBOL(system_serial_low);
 
@@ -646,13 +658,41 @@ static int __init parse_tag_revision(const struct tag *tag)
 
 __tagtable(ATAG_REVISION, parse_tag_revision);
 
+static int __init parse_tag_microp_version(const struct tag *tag)
+{
+	int i;
+
+	for (i = 0; i < 4; i++)
+		microp_ver[i] = tag->u.microp_version.ver[i];
+
+	return 0;
+}
+
+__tagtable(ATAG_MICROP_VERSION, parse_tag_microp_version);
+
+static int __init parse_tag_als_calibration(const struct tag *tag)
+{
+	als_kadc = tag->u.als_kadc.kadc;
+
+	return 0;
+}
+
+__tagtable(ATAG_ALS, parse_tag_als_calibration);
+
+static int __init parse_tag_ps_calibration(const struct tag *tag)
+{
+	ps_kparam1 = tag->u.ps_kparam.kparam1;
+	ps_kparam2 = tag->u.ps_kparam.kparam2;
+
+	return 0;
+}
+
+__tagtable(ATAG_PS, parse_tag_ps_calibration);
+
 static int __init parse_tag_cmdline(const struct tag *tag)
 {
-#ifndef CONFIG_CMDLINE_FORCE
 	strlcpy(default_command_line, tag->u.cmdline.cmdline, COMMAND_LINE_SIZE);
-#else
-	pr_warning("Ignoring tag cmdline (using the default kernel command line)\n");
-#endif /* CONFIG_CMDLINE_FORCE */
+
 	return 0;
 }
 

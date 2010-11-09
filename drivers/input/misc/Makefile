@@ -17,7 +17,6 @@ obj-$(CONFIG_INPUT_ATI_REMOTE)		+= ati_remote.o
 obj-$(CONFIG_INPUT_ATI_REMOTE2)		+= ati_remote2.o
 obj-$(CONFIG_INPUT_ATLAS_BTNS)		+= atlas_btns.o
 obj-$(CONFIG_INPUT_BFIN_ROTARY)		+= bfin_rotary.o
-obj-$(CONFIG_INPUT_CAPELLA_CM3602)	+= capella_cm3602.o
 obj-$(CONFIG_INPUT_CM109)		+= cm109.o
 obj-$(CONFIG_INPUT_CMA3000)		+= cma3000_d0x.o
 obj-$(CONFIG_INPUT_CMA3000_I2C)		+= cma3000_d0x_i2c.o
@@ -47,3 +46,8 @@ obj-$(CONFIG_INPUT_WISTRON_BTNS)	+= wistron_btns.o
 obj-$(CONFIG_INPUT_WM831X_ON)		+= wm831x-on.o
 obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
 
+ifeq ($(CONFIG_MICROP_COMMON),y)
+  obj-$(CONFIG_LIGHTSENSOR_MICROP)	+= cm3602_lightsensor_microp_htc.o
+else
+  obj-$(CONFIG_INPUT_CAPELLA_CM3602)	+= capella_cm3602.o
+endif
