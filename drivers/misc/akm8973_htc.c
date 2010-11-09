@@ -1,8 +1,6 @@
-/*
- * drivers/i2c/chips/akm8973.c - akm8973 compass driver
+/* drivers/i2c/chips/akm8973.c - akm8973 compass driver
  *
  * Copyright (C) 2008-2009 HTC Corporation.
- * Author: viral wang <viralwang@gmail.com>
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -12,7 +10,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
  */
 
 #include <linux/interrupt.h>
@@ -27,10 +24,7 @@
 #include <linux/workqueue.h>
 #include <linux/freezer.h>
 #include <linux/akm8973.h>
-<<<<<<< HEAD
-#include <linux/mutex.h>
-=======
->>>>>>> 8988ee2... sensors: akm8973: Add HTC-variant driver.
+#include<linux/earlysuspend.h>
 
 #define DEBUG 0
 #define MAX_FAILURE_COUNT 3
@@ -40,6 +34,7 @@ static struct i2c_client *this_client;
 struct akm8973_data {
 	struct input_dev *input_dev;
 	struct work_struct work;
+	struct early_suspend early_suspend_akm;
 };
 
 /* Addresses to scan -- protected by sense_data_mutex */
@@ -62,6 +57,8 @@ static atomic_t mv_flag;
 static int failure_count = 0;
 
 static short akmd_delay = 0;
+
+static atomic_t suspend_flag = ATOMIC_INIT(0);
 
 static struct akm8973_platform_data *pdata;
 
@@ -225,8 +222,7 @@ static int AKECS_TransRBuff(char *rbuf, int size)
 	wait_event_interruptible_timeout(data_ready_wq,
 					 atomic_read(&data_ready), 1000);
 	if (!atomic_read(&data_ready)) {
-		/* Ignore data errors if there are no open handles */
-		if (atomic_read(&open_count) > 0) {
+		if (!atomic_read(&suspend_flag)) {
 			printk(KERN_ERR
 				"AKM8973 AKECS_TransRBUFF: Data not ready\n");
 			failure_count++;
@@ -292,73 +288,51 @@ static void AKECS_Report_Value(short *rbuf)
 	input_sync(data->input_dev);
 }
 
-static DEFINE_MUTEX(akmd_lock);
-
 static int AKECS_GetOpenStatus(void)
 {
-	mutex_unlock(&akmd_lock);
 	wait_event_interruptible(open_wq, (atomic_read(&open_flag) != 0));
-	mutex_lock(&akmd_lock);
 	return atomic_read(&open_flag);
 }
 
 static int AKECS_GetCloseStatus(void)
 {
-	mutex_unlock(&akmd_lock);
 	wait_event_interruptible(open_wq, (atomic_read(&open_flag) <= 0));
-	mutex_lock(&akmd_lock);
 	return atomic_read(&open_flag);
 }
 
 static void AKECS_CloseDone(void)
 {
-<<<<<<< HEAD
-	mutex_lock(&akmd_lock);
-=======
->>>>>>> 8988ee2... sensors: akm8973: Add HTC-variant driver.
-	atomic_set(&m_flag, 1);
-	atomic_set(&a_flag, 1);
-	atomic_set(&t_flag, 1);
-	atomic_set(&mv_flag, 1);
-<<<<<<< HEAD
-	mutex_unlock(&akmd_lock);
-=======
->>>>>>> 8988ee2... sensors: akm8973: Add HTC-variant driver.
+	atomic_set(&m_flag, 0);
+	atomic_set(&a_flag, 0);
+	atomic_set(&t_flag, 0);
+	atomic_set(&mv_flag, 0);
 }
 
 static int akm_aot_open(struct inode *inode, struct file *file)
 {
 	int ret = -1;
-	mutex_lock(&akmd_lock);
 	if (atomic_cmpxchg(&open_count, 0, 1) == 0) {
 		if (atomic_cmpxchg(&open_flag, 0, 1) == 0) {
 			atomic_set(&reserve_open_flag, 1);
-			enable_irq(this_client->irq);
 			wake_up(&open_wq);
 			ret = 0;
 		}
 	}
-	mutex_unlock(&akmd_lock);
 	return ret;
 }
 
 static int akm_aot_release(struct inode *inode, struct file *file)
 {
-	mutex_lock(&akmd_lock);
 	atomic_set(&reserve_open_flag, 0);
 	atomic_set(&open_flag, 0);
 	atomic_set(&open_count, 0);
 	wake_up(&open_wq);
-	disable_irq(this_client->irq);
-<<<<<<< HEAD
-	mutex_unlock(&akmd_lock);
-=======
->>>>>>> 8988ee2... sensors: akm8973: Add HTC-variant driver.
 	return 0;
 }
 
-static long
-akm_aot_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static int
+akm_aot_ioctl(struct inode *inode, struct file *file,
+	      unsigned int cmd, unsigned long arg)
 {
 	void __user *argp = (void __user *)arg;
 	short flag;
@@ -381,7 +355,6 @@ akm_aot_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	}
 
-	mutex_lock(&akmd_lock);
 	switch (cmd) {
 	case ECS_IOCTL_APP_SET_MFLAG:
 		atomic_set(&m_flag, flag);
@@ -414,10 +387,8 @@ akm_aot_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		flag = akmd_delay;
 		break;
 	default:
-		mutex_unlock(&akmd_lock);
 		return -ENOTTY;
 	}
-	mutex_unlock(&akmd_lock);
 
 	switch (cmd) {
 	case ECS_IOCTL_APP_GET_MFLAG:
@@ -446,8 +417,9 @@ static int akmd_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static long
-akmd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static int
+akmd_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
+	   unsigned long arg)
 {
 
 	void __user *argp = (void __user *)arg;
@@ -458,6 +430,7 @@ akmd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	char project_name[64];
 	short layouts[4][3][3];
 	int i, j, k;
+
 
 	switch (cmd) {
 	case ECS_IOCTL_WRITE:
@@ -477,25 +450,20 @@ akmd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	}
 
-	mutex_lock(&akmd_lock);
 	switch (cmd) {
 	case ECS_IOCTL_WRITE:
-		if (rwbuf[0] < 2) {
-			ret = -EINVAL;
-			goto err;
-		}
+		if (rwbuf[0] < 2)
+			return -EINVAL;
 		ret = AKI2C_TxData(&rwbuf[1], rwbuf[0]);
 		if (ret < 0)
-			goto err;
+			return ret;
 		break;
 	case ECS_IOCTL_READ:
-		if (rwbuf[0] < 1) {
-			ret = -EINVAL;
-			goto err;
-		}
+		if (rwbuf[0] < 1)
+			return -EINVAL;
 		ret = AKI2C_RxData(&rwbuf[1], rwbuf[0]);
 		if (ret < 0)
-			goto err;
+			return ret;
 		break;
 	case ECS_IOCTL_RESET:
 		AKECS_Reset();
@@ -503,12 +471,12 @@ akmd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case ECS_IOCTL_SET_MODE:
 		ret = AKECS_SetMode((char)mode);
 		if (ret < 0)
-			goto err;
+			return ret;
 		break;
 	case ECS_IOCTL_GETDATA:
 		ret = AKECS_TransRBuff(msg, RBUFF_SIZE);
 		if (ret < 0)
-			goto err;
+			return ret;
 		break;
 	case ECS_IOCTL_SET_YPR:
 		AKECS_Report_Value(value);
@@ -528,15 +496,13 @@ akmd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case ECS_IOCTL_GET_MATRIX:
 		for (i = 0; i < 4; i++)
 			for (j = 0; j < 3; j++)
-				for (k = 0; k < 3; k++) {
-				layouts[i][j][k] = pdata->layouts[i][j][k];
-				}
+				for (k = 0; k < 3; k++)
+					layouts[i][j][k] =
+						pdata->layouts[i][j][k];
 		break;
 	default:
-		ret = -ENOTTY;
-		goto err;
+		return -ENOTTY;
 	}
-	mutex_unlock(&akmd_lock);
 
 	switch (cmd) {
 	case ECS_IOCTL_READ:
@@ -569,10 +535,6 @@ akmd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 
 	return 0;
-
-err:
-	mutex_unlock(&akmd_lock);
-	return ret;
 }
 
 static void akm_work_func(struct work_struct *work)
@@ -590,18 +552,35 @@ static irqreturn_t akm8973_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static void akm8973_early_suspend(struct early_suspend *handler)
+{
+	atomic_set(&suspend_flag, 1);
+	atomic_set(&reserve_open_flag, atomic_read(&open_flag));
+	atomic_set(&open_flag, 0);
+	wake_up(&open_wq);
+	disable_irq(this_client->irq);
+}
+
+static void akm8973_early_resume(struct early_suspend *handler)
+{
+	enable_irq(this_client->irq);
+	atomic_set(&suspend_flag, 0);
+	atomic_set(&open_flag, atomic_read(&reserve_open_flag));
+	wake_up(&open_wq);
+}
+
 static struct file_operations akmd_fops = {
 	.owner = THIS_MODULE,
 	.open = akmd_open,
 	.release = akmd_release,
-	.unlocked_ioctl = akmd_ioctl,
+	.ioctl = akmd_ioctl,
 };
 
 static struct file_operations akm_aot_fops = {
 	.owner = THIS_MODULE,
 	.open = akm_aot_open,
 	.release = akm_aot_release,
-	.unlocked_ioctl = akm_aot_ioctl,
+	.ioctl = akm_aot_ioctl,
 };
 
 
@@ -644,6 +623,25 @@ int akm8973_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	}
 	this_client = client;
 
+	if (pdata && pdata->reset) {
+		err = gpio_request(pdata->reset, "akm8973");
+		if (err < 0) {
+			printk(KERN_ERR "%s: request reset gpio failed\n",
+				__func__);
+			goto err_request_reset_gpio;
+		}
+		err = gpio_direction_output(pdata->reset, 1);
+		if (err < 0) {
+			printk(KERN_ERR
+				"%s: request reset gpio failed\n", __func__);
+			goto err_set_reset_gpio;
+		}
+	} else {
+		printk(KERN_ERR "%s: pdata or pdata->reset is NULL\n",
+			__func__);
+		goto err_request_reset_gpio;
+	}
+
 	err = AKECS_PowerDown();
 	if (err < 0) {
 		printk(KERN_ERR"AKM8973 akm8973_probe: set power down mode error\n");
@@ -652,7 +650,6 @@ int akm8973_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 	err = request_irq(client->irq, akm8973_interrupt, IRQF_TRIGGER_HIGH,
 			  "akm8973", akm);
-	disable_irq(this_client->irq);
 
 	if (err < 0) {
 		printk(KERN_ERR"AKM8973 akm8973_probe: request irq failed\n");
@@ -725,11 +722,15 @@ int akm8973_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	init_waitqueue_head(&data_ready_wq);
 	init_waitqueue_head(&open_wq);
 
-	/* As default, report all information */
-	atomic_set(&m_flag, 1);
-	atomic_set(&a_flag, 1);
-	atomic_set(&t_flag, 1);
-	atomic_set(&mv_flag, 1);
+	/* As default, do not report all information */
+	atomic_set(&m_flag, 0);
+	atomic_set(&a_flag, 0);
+	atomic_set(&t_flag, 0);
+	atomic_set(&mv_flag, 0);
+
+	akm->early_suspend_akm.suspend = akm8973_early_suspend;
+	akm->early_suspend_akm.resume = akm8973_early_resume;
+	register_early_suspend(&akm->early_suspend_akm);
 
 	return 0;
 
@@ -740,6 +741,9 @@ exit_input_dev_alloc_failed:
 	free_irq(client->irq, akm);
 exit_irq_request_failed:
 exit_set_mode_failed:
+err_set_reset_gpio:
+	gpio_free(pdata->reset);
+err_request_reset_gpio:
 exit_platform_data_null:
 	kfree(akm);
 exit_alloc_data_failed:
@@ -754,6 +758,8 @@ static int akm8973_remove(struct i2c_client *client)
 	free_irq(client->irq, akm);
 	input_unregister_device(akm->input_dev);
 	kfree(akm);
+	if (pdata && pdata->reset)
+		gpio_free(pdata->reset);
 	return 0;
 }
 static const struct i2c_device_id akm8973_id[] = {
