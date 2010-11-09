@@ -85,6 +85,7 @@ unsigned int __atags_pointer __initdata;
 unsigned int system_rev;
 EXPORT_SYMBOL(system_rev);
 
+#ifdef CONFIG_MICROP_COMMON
 char microp_ver[4];
 EXPORT_SYMBOL(microp_ver);
 
@@ -96,6 +97,7 @@ EXPORT_SYMBOL(ps_kparam1);
 
 unsigned int ps_kparam2;
 EXPORT_SYMBOL(ps_kparam2);
+#endif
 
 unsigned int system_serial_low;
 EXPORT_SYMBOL(system_serial_low);
@@ -658,6 +660,7 @@ static int __init parse_tag_revision(const struct tag *tag)
 
 __tagtable(ATAG_REVISION, parse_tag_revision);
 
+#ifdef CONFIG_MICROP_COMMON
 static int __init parse_tag_microp_version(const struct tag *tag)
 {
 	int i;
@@ -688,6 +691,7 @@ static int __init parse_tag_ps_calibration(const struct tag *tag)
 }
 
 __tagtable(ATAG_PS, parse_tag_ps_calibration);
+#endif
 
 static int __init parse_tag_cmdline(const struct tag *tag)
 {
