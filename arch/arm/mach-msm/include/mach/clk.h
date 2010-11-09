@@ -54,4 +54,5 @@ int clk_reset(struct clk *clk, enum clk_reset_action action);
 /* Set clock-specific configuration parameters */
 int clk_set_flags(struct clk *clk, unsigned long flags);
 
+unsigned long acpuclk_get_max_axi_rate(void);
 #endif

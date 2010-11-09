@@ -443,6 +443,17 @@ void android_enable_function(struct usb_function *f, int enable)
 	}
 }
 
+void android_set_serialno(char *serialno)
+{
+        strings_dev[STRING_SERIAL_IDX].s = serialno;
+}
+
+int android_get_model_id(void)
+{
+        struct android_dev *dev = _android_dev;
+        return dev->product_id;
+}
+
 static int android_probe(struct platform_device *pdev)
 {
 	struct android_usb_platform_data *pdata = pdev->dev.platform_data;

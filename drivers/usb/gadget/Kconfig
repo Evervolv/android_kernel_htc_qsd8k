@@ -581,6 +581,10 @@ config USB_MSM_72K
 	default USB_GADGET
 	select USB_GADGET_SELECTED
 
+config USB_MSM_72K_HTC
+	boolean "Use HTC driver variant"
+	depends on USB_MSM_72K
+
 config USB_GADGET_DUMMY_HCD
 	boolean "Dummy HCD (DEVELOPMENT)"
 	depends on USB=y || (USB=m && USB_GADGET=m)
@@ -1095,5 +1099,29 @@ config USB_G_WEBCAM
 	  dynamically linked module called "g_webcam".
 
 endchoice
+
+if USB_MSM_72K_HTC
+
+config USB_ACCESSORY_DETECT
+        boolean "USB ACCESSORY DETECT"
+        depends on USB_ANDROID
+        default n
+
+config USB_ACCESSORY_DETECT_BY_ADC
+        boolean "DETECT USB ACCESSORY BY PMIC ADC"
+        depends on USB_ANDROID && USB_ACCESSORY_DETECT
+        default n
+
+config DOCK_ACCESSORY_DETECT
+        boolean "DOCK ACCESSORY DETECT"
+        depends on USB_ANDROID
+        default n
+
+config USB_BYPASS_VBUS_NOTIFY
+        boolean "USB BYPASS VBUS NOTIFY"
+        depends on USB_ANDROID
+        default n
+
+endif # USB_MSM_72K_HTC
 
 endif # USB_GADGET

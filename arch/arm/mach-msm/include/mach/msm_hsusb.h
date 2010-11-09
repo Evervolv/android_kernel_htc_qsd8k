@@ -34,13 +34,20 @@ struct msm_hsusb_platform_data {
 	/* 1 : uart, 0 : usb */
 	void (*usb_uart_switch)(int);
 	void (*config_usb_id_gpios)(bool enable);
+	void (*usb_hub_enable)(bool);
+	void (*serial_debug_gpios)(int);
+	int (*china_ac_detect)(void);
+	void (*disable_usb_charger)(void);
 	/* val, reg pairs terminated by -1 */
 	int *phy_init_seq;
 
 	char *serial_number;
 	int usb_id_pin_gpio;
+	int dock_pin_gpio;
+	int id_pin_irq;
 	bool enable_car_kit_detect;
 	__u8 accessory_detect;
+	bool dock_detect;
 };
 
 int usb_get_connect_type(void);

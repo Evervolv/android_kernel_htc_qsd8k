@@ -58,6 +58,8 @@ struct clkctl_acpu_speed {
 	unsigned axiclk_khz;
 };
 
+static unsigned long max_axi_rate;
+
 /* clock sources */
 #define CLK_TCXO	0 /* 19.2 MHz */
 #define CLK_GLOBAL_PLL	1 /* 768 MHz */
@@ -409,7 +411,7 @@ static int pll_request(unsigned id, unsigned on)
 
 static void __init acpuclk_init(void)
 {
-	struct clkctl_acpu_speed *speed;
+	struct clkctl_acpu_speed *speed, *max_s;
 	unsigned init_khz;
 
 	init_khz = acpuclk_find_speed();
@@ -461,7 +463,19 @@ static void __init acpuclk_init(void)
 					   init_khz, speed->acpu_khz);
 
 	loops_per_jiffy = drv_state.current_speed->lpj;
+
+	for (speed = acpu_freq_tbl; speed->acpu_khz != 0; speed++)
+		;
+
+	max_s = speed - 1;
+	max_axi_rate = max_s->axiclk_khz * 1000;
 }
+
+unsigned long acpuclk_get_max_axi_rate(void)
+{
+	return max_axi_rate;
+}
+EXPORT_SYMBOL(acpuclk_get_max_axi_rate);
 
 unsigned long acpuclk_get_rate(void)
 {

@@ -95,6 +95,8 @@ struct clkctl_acpu_speed {
 	short		up;
 };
 
+static unsigned long max_axi_rate;
+
 /*
  * ACPU speed table. Complete table is shown but certain speeds are commented
  * out to optimized speed switching. Initialize loops_per_jiffy to 0.
@@ -436,7 +438,7 @@ out:
 
 static void __init acpuclk_init(void)
 {
-	struct clkctl_acpu_speed *speed;
+	struct clkctl_acpu_speed *speed, *max_s;
 	uint32_t div, sel;
 	int rc;
 
@@ -472,8 +474,20 @@ static void __init acpuclk_init(void)
 	if (rc < 0)
 		pr_err("Setting AXI min rate failed!\n");
 
+	for (speed = acpu_freq_tbl; speed->a11clk_khz != 0; speed++)
+		;
+	
+	max_s = speed - 1;
+	max_axi_rate = max_s->axiclk_khz * 1000;
+
 	printk(KERN_INFO "ACPU running at %d KHz\n", speed->a11clk_khz);
 }
+
+unsigned long acpuclk_get_max_axi_rate(void)
+{
+	return max_axi_rate;
+}
+EXPORT_SYMBOL(acpuclk_get_max_axi_rate);
 
 unsigned long acpuclk_get_rate(void)
 {
