@@ -262,8 +262,6 @@ struct usb_info {
 	void (*config_usb_id_gpios)(bool output_enable);
 	/* 0: none, 1: carkit, 2: usb headset */
 	u8 accessory_type;
-	struct timer_list	ac_detect_timer;
-	int			ac_detect_count;
 };
 
 static const struct usb_ep_ops msm72k_ep_ops;
@@ -800,7 +798,6 @@ static void handle_setup(struct usb_info *ui)
 			{
 				u16 temp = 0;
 
-				temp = 1 << USB_DEVICE_SELF_POWERED;
 				temp |= (ui->remote_wakeup <<
 						USB_DEVICE_REMOTE_WAKEUP);
 				memcpy(req->buf, &temp, 2);
@@ -1105,8 +1102,6 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 		if (ui->connect_type != CONNECT_TYPE_USB) {
 			ui->connect_type = CONNECT_TYPE_USB;
 			queue_work(ui->usb_wq, &ui->notifier_work);
-			ui->ac_detect_count = 0;
-			del_timer_sync(&ui->ac_detect_timer);
 		}
 	}
 
@@ -1493,7 +1488,6 @@ static void usb_prepare(struct usb_info *ui)
 	if (ret != 0)
 		printk(KERN_WARNING "dev_attr_usb_mfg_carkit_enable failed\n");
 #endif
-
 	ret = device_create_file(&ui->pdev->dev,
 		&dev_attr_usb_car_kit_enable);/*for kar kit AP check if car kit enable*/
 	if (ret != 0)
@@ -1765,7 +1759,7 @@ static void dock_detect_work(struct work_struct *w)
 
 	value = gpio_get_value(ui->dock_pin_gpio);
 
-	if (value == 0) {
+	if (value == 0 && vbus) {
 		set_irq_type(ui->dockpin_irq, IRQF_TRIGGER_HIGH);
 		switch_set_state(&dock_switch, DOCK_STATE_DESK);
 		ui->accessory_type = 3;
@@ -2027,7 +2021,6 @@ static void charger_detect(struct usb_info *ui)
 		ui->connect_type = CONNECT_TYPE_UNKNOWN;
 		queue_delayed_work(ui->usb_wq, &ui->chg_work,
 			DELAY_FOR_CHECK_CHG);
-		mod_timer(&ui->ac_detect_timer, jiffies + (3 * HZ));
 	} else {
 		printk(KERN_INFO "usb: AC charger\n");
 		ui->connect_type = CONNECT_TYPE_AC;
@@ -2128,8 +2121,6 @@ static void usb_do_work(struct work_struct *w)
 
 				/* power down phy, clock down usb */
 				usb_lpm_enter(ui);
-				ui->ac_detect_count = 0;
-				del_timer_sync(&ui->ac_detect_timer);
 
 				ui->state = USB_STATE_OFFLINE;
 				usb_do_work_check_vbus(ui);
@@ -2209,6 +2200,15 @@ void msm_hsusb_set_vbus_state(int online)
 				/*configure uart pin to alternate function*/
 				if (ui->serial_debug_gpios)
 					ui->serial_debug_gpios(1);
+#ifdef CONFIG_DOCK_ACCESSORY_DETECT
+				if (ui->accessory_type == 3) {
+					set_irq_type(ui->dockpin_irq, IRQF_TRIGGER_LOW);
+					switch_set_state(&dock_switch, DOCK_STATE_UNDOCKED);
+					ui->accessory_type = 0;
+					printk(KERN_INFO "usb:dock: vbus offline\n");
+					enable_irq(ui->dockpin_irq);
+				}
+#endif
 			}
 
 			queue_work(ui->usb_wq, &ui->work);
@@ -2610,37 +2610,6 @@ static ssize_t usb_remote_wakeup(struct device *dev,
 }
 static DEVICE_ATTR(wakeup, S_IWUSR, 0, usb_remote_wakeup);
 
-static void ac_detect_expired(unsigned long _data)
-{
-	struct usb_info *ui = (struct usb_info *) _data;
-	u32 delay = 0;
-
-	printk(KERN_INFO "%s: count = %d, connect_type = 0x%04x\n", __func__,
-			ui->ac_detect_count, ui->connect_type);
-
-	if (ui->connect_type == CONNECT_TYPE_USB || ui->ac_detect_count >= 3)
-		return;
-
-	/* detect shorted D+/D-, indicating AC power */
-	if ((readl(USB_PORTSC) & PORTSC_LS) != PORTSC_LS) {
-		ui->ac_detect_count++;
-		/* detect delay: 3 sec, 5 sec, 10 sec */
-		if (ui->ac_detect_count == 1)
-			delay = 5 * HZ;
-		else if (ui->ac_detect_count == 2)
-			delay = 10 * HZ;
-
-		mod_timer(&ui->ac_detect_timer, jiffies + delay);
-	} else {
-		printk(KERN_INFO "usb: AC charger\n");
-		ui->connect_type = CONNECT_TYPE_AC;
-		queue_work(ui->usb_wq, &ui->notifier_work);
-		writel(0x00080000, USB_USBCMD);
-		mdelay(10);
-		usb_lpm_enter(ui);
-	}
-}
-
 static int msm72k_probe(struct platform_device *pdev)
 {
 	struct resource *res;
@@ -2775,10 +2744,6 @@ static int msm72k_probe(struct platform_device *pdev)
 		use_mfg_serialno = 0;
 	strncpy(mfg_df_serialno, "000000000000", strlen("000000000000"));
 
-	ui->ac_detect_count = 0;
-	ui->ac_detect_timer.data = (unsigned long) ui;
-	ui->ac_detect_timer.function = ac_detect_expired;
-	init_timer(&ui->ac_detect_timer);
 	return 0;
 }
 

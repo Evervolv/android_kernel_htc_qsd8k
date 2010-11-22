@@ -143,6 +143,15 @@ config TPS6507X
 	  This driver can also be built as a module.  If so, the module
 	  will be called tps6507x.
 
+config TPS65200
+        tristate "tps65200 Driver"
+        depends on I2C
+        help
+         TPS65200 Switch charger implemented by HTC.
+         This could enable battery driver to set
+         Charging current 100mA~500mA or 500mA~1000mA
+         by GPIO or Register
+
 config MENELAUS
 	bool "Texas Instruments TWL92330/Menelaus PM chip"
 	depends on I2C=y && ARCH_OMAP2

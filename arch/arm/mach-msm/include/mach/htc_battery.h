@@ -22,7 +22,10 @@
 #define SET_ICL500		0X65
 #define SET_ICL100		0X66
 #define CHECK_INT2		0X67
-
+#define OVERTEMP_VREG_4060	0XC8
+#define NORMALTEMP_VREG_4200	0XC9
+#define CHECK_INT1		0XCA
+#define CHECK_CONTROL           0xCB
 /* information about the system we're running on */
 extern unsigned int system_rev;
 
@@ -67,6 +70,13 @@ struct battery_info_reply {
 	u32 over_vchg;		/* 0:normal, 1:over voltage charger */
 	s32 eval_current;	/* System loading current from ADC */
 };
+
+struct htc_battery_tps65200_int {
+	int chg_int;
+	int tps65200_reg;
+	struct delayed_work int_work;
+};
+
 struct htc_battery_platform_data {
 	int (*func_show_batt_attr)(struct device_attribute *attr,
 					 char *buf);
@@ -77,6 +87,7 @@ struct htc_battery_platform_data {
 	int guage_driver;
 	int m2a_cable_detect;
 	int charger;
+	struct htc_battery_tps65200_int int_data;
 };
 
 #if CONFIG_HTC_BATTCHG

@@ -1,6 +1,5 @@
-/* include/linux/smb329.h - smb329 switch charger driver
- *
- * Copyright (C) 2009 HTC Corporation.
+/*
+ * Copyright (C) 2007 HTC Incorporated
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -10,23 +9,15 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
  */
+#ifndef _TPS65200_H_
+#define _TPS65200_H_
+#include <linux/notifier.h>
+#include <mach/htc_battery.h>
 
-#ifndef _LINUX_SMB329_H
-#define _LINUX_SMB329_H
-
-#ifdef __KERNEL__
-
-enum {
-	SMB329_DISABLE_CHG,
-	SMB329_ENABLE_SLOW_CHG,
-	SMB329_ENABLE_FAST_CHG,
-};
-
-extern int smb329_set_charger_ctrl(uint32_t ctl);
-
-#endif /* __KERNEL__ */
-
-#endif /* _LINUX_SMB329_H */
-
+#ifdef CONFIG_TPS65200
+extern int tps_set_charger_ctrl(u32 ctl);
+#else
+static int tps_set_charger_ctrl(u32 ctl) {return 0 ; }
+#endif
+#endif
