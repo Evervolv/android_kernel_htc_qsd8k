@@ -931,6 +931,7 @@ int affs_file_fsync(struct file *filp, int datasync)
 	int ret, err;
 
 	ret = write_inode_now(inode, 0);
+	/* XXX: could just sync the buffer been dirtied by write_inode */
 	err = sync_blockdev(inode->i_sb->s_bdev);
 	if (!ret)
 		ret = err;

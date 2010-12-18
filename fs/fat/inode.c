@@ -652,7 +652,7 @@ retry:
 	spin_unlock(&sbi->inode_hash_lock);
 	mark_buffer_dirty(bh);
 	err = 0;
-	if (wait)
+	if (1 /* XXX: fix fsync and use wait */)
 		err = sync_dirty_buffer(bh);
 	brelse(bh);
 	return err;

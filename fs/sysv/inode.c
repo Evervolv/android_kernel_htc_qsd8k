@@ -286,7 +286,7 @@ static int __sysv_write_inode(struct inode *inode, int wait)
 		write3byte(sbi, (u8 *)&si->i_data[block],
 			&raw_inode->i_data[3*block]);
 	mark_buffer_dirty(bh);
-	if (wait) {
+	if (1 /* XXX: fix fsync and use wait */) {
                 sync_dirty_buffer(bh);
                 if (buffer_req(bh) && !buffer_uptodate(bh)) {
                         printk ("IO error syncing sysv inode [%s:%08x]\n",

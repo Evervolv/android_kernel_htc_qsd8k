@@ -1591,7 +1591,7 @@ out:
 
 	/* write the data blocks */
 	mark_buffer_dirty(bh);
-	if (do_sync) {
+	if (1 /* XXX fix fsync and use do_sync */) {
 		sync_dirty_buffer(bh);
 		if (buffer_write_io_error(bh)) {
 			printk(KERN_WARNING "IO error syncing udf inode "

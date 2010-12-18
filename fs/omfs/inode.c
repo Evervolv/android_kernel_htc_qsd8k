@@ -169,7 +169,7 @@ out:
 
 static int omfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
-	return __omfs_write_inode(inode, wbc->sync_mode == WB_SYNC_ALL);
+	return __omfs_write_inode(inode, 1 /* XXX: fix fsync and use wbc->sync_mode == WB_SYNC_ALL */);
 }
 
 int omfs_sync_inode(struct inode *inode)

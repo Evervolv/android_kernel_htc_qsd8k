@@ -1635,6 +1635,8 @@ int reiserfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	 ** these cases are just when the system needs ram, not when the
 	 ** inode needs to reach disk for safety, and they can safely be
 	 ** ignored because the altered inode has already been logged.
+	 ** XXX: is this really OK? The caller clears the inode dirty bit, so
+	 ** a subsequent sync for integrity might never reach here.
 	 */
 	if (wbc->sync_mode == WB_SYNC_ALL && !(current->flags & PF_MEMALLOC)) {
 		reiserfs_write_lock(inode->i_sb);
