@@ -1376,13 +1376,50 @@ EXPORT_SYMBOL(sync_inode);
  *
  * Note: only writes the actual inode, no associated data or other metadata.
  */
-int sync_inode_metadata(struct inode *inode, int wait)
+int sync_inode_metadata(struct inode *inode, int datasync, int wait)
 {
+	struct address_space *mapping = inode->i_mapping;
 	struct writeback_control wbc = {
 		.sync_mode = wait ? WB_SYNC_ALL : WB_SYNC_NONE,
 		.nr_to_write = 0, /* metadata-only */
 	};
+	unsigned dirty, mask;
+	int ret = 0;
 
-	return sync_inode(inode, &wbc);
+	/*
+	 * This is a similar implementation to writeback_single_inode.
+	 * Keep them in sync.
+	 */
+	spin_lock(&inode_lock);
+	if (!inode_writeback_begin(inode, wait))
+		goto out;
+
+	if (datasync)
+		mask = I_DIRTY_DATASYNC;
+	else
+		mask = I_DIRTY_SYNC | I_DIRTY_DATASYNC;
+	dirty = inode->i_state & mask;
+	if (!dirty)
+		goto out_wb_end;
+	/*
+	 * Generic write_inode doesn't distinguish between sync and datasync,
+	 * so even a datasync can clear the sync state. Filesystems which
+	 * distiguish these cases must only clear 'mask' in their metadata
+	 * sync code.
+	 */
+	inode->i_state &= ~(I_DIRTY_SYNC | I_DIRTY_DATASYNC);
+
+	spin_unlock(&inode_lock);
+	ret = write_inode(inode, &wbc);
+	spin_lock(&inode_lock);
+	if (ret)
+		inode->i_state |= dirty; /* couldn't write out inode */
+
+out_wb_end:
+	inode_writeback_end(inode);
+
+out:
+	spin_unlock(&inode_lock);
+	return ret;
 }
 EXPORT_SYMBOL(sync_inode_metadata);

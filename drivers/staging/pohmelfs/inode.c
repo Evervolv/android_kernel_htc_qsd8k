@@ -890,7 +890,7 @@ static int pohmelfs_fsync(struct file *file, int datasync)
 {
 	struct inode *inode = file->f_mapping->host;
 
-	return sync_inode_metadata(inode, 1);
+	return sync_inode_metadata(inode, datasync, 1);
 }
 
 ssize_t pohmelfs_write(struct file *file, const char __user *buf,

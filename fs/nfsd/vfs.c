@@ -294,7 +294,7 @@ commit_metadata(struct svc_fh *fhp)
 
 	if (export_ops->commit_metadata)
 		return export_ops->commit_metadata(inode);
-	return sync_inode_metadata(inode, 1);
+	return sync_inode_metadata(inode, 0, 1);
 }
 
 /*

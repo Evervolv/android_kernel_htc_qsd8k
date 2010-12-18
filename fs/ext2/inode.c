@@ -1203,7 +1203,7 @@ static int ext2_setsize(struct inode *inode, loff_t newsize)
 	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
 	if (inode_needs_sync(inode)) {
 		sync_mapping_buffers(inode->i_mapping);
-		sync_inode_metadata(inode, 1);
+		sync_inode_metadata(inode, 0, 1);
 	} else {
 		mark_inode_dirty(inode);
 	}
