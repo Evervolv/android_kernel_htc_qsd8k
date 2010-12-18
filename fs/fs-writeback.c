@@ -461,15 +461,25 @@ writeback_single_inode(struct inode *inode, struct writeback_control *wbc)
 	spin_lock(&inode_lock);
 	dirty = inode->i_state & I_DIRTY;
 	inode->i_state &= ~(I_DIRTY_SYNC | I_DIRTY_DATASYNC);
-	spin_unlock(&inode_lock);
 	/* Don't write the inode if only I_DIRTY_PAGES was set */
 	if (dirty & (I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
-		int err = write_inode(inode, wbc);
+		int err;
+
+		spin_unlock(&inode_lock);
+		err = write_inode(inode, wbc);
 		if (ret == 0)
 			ret = err;
+		spin_lock(&inode_lock);
+		if (err) {
+			/*
+			 * Inode writeout failed, restore inode metadata
+			 * dirty bits.
+			 */
+			inode->i_state |= dirty &
+					(I_DIRTY_SYNC | I_DIRTY_DATASYNC);
+		}
 	}
 
-	spin_lock(&inode_lock);
 	if (!inode_writeback_end(inode)) {
 		if (wbc->nr_to_write <= 0) {
 			/*
