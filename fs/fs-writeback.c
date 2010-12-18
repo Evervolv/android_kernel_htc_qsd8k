@@ -995,6 +995,15 @@ void __mark_inode_dirty(struct inode *inode, int flags)
 	bool wakeup_bdi = false;
 
 	/*
+	 * Make sure that changes are seen by all cpus before we test i_state
+	 * or mark anything as being dirty. Ie. all dirty state should be
+	 * written to the inode and visible. Like an "unlock" operation, the
+	 * mark_inode_dirty call must "release" our ordering window that is
+	 * opened when we started modifying the inode.
+	 */
+	smp_mb();
+
+	/*
 	 * Don't do this for I_DIRTY_PAGES - that doesn't actually
 	 * dirty the inode itself
 	 */
@@ -1002,12 +1011,6 @@ void __mark_inode_dirty(struct inode *inode, int flags)
 		if (sb->s_op->dirty_inode)
 			sb->s_op->dirty_inode(inode);
 	}
-
-	/*
-	 * make sure that changes are seen by all cpus before we test i_state
-	 * -- mikulas
-	 */
-	smp_mb();
 
 	/* avoid the locking if we can */
 	if ((inode->i_state & flags) == flags)
