@@ -12,6 +12,7 @@ obj-$(CONFIG_ARCH_MSM_SCORPION) += idle-v7.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += arch-init-scorpion.o
 
 obj-$(CONFIG_ARCH_QSD8X50) += acpuclock-qsd8x50.o
+obj-$(CONFIG_ARCH_MSM7X30) += acpuclock-7x30.o
 
 ifndef CONFIG_ARCH_MSM8X60
 obj-y += irq.o
