@@ -96,6 +96,8 @@ static struct htc_battery_platform_data htc_battery_pdev_data = {
 	.guage_driver = GUAGE_MODEM,
 	.m2a_cable_detect = 1,
 	.charger = SWITCH_CHARGER,
+	/* After the state of SUC XA, MCHG_EN is chanage to CHG_INT*/
+	.int_data.chg_int = MSM_GPIO_TO_INT(SUPERSONIC_GPIO_MCHG_EN_N),
 };
 
 static struct platform_device htc_battery_pdev = {

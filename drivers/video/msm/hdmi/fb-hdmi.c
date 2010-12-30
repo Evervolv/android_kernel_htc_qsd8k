@@ -88,6 +88,11 @@ static int hdmifb_release(struct fb_info *info, int user)
 	return 0;
 }
 
+static int hdmifb_read(struct fb_info *info, int user)
+{
+	pr_info("%s\n", __func__);
+	return 0;
+}
 static int hdmifb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
 	u32 size;
@@ -412,6 +417,7 @@ static struct fb_ops hdmi_fb_ops = {
 	.fb_copyarea = hdmifb_copyarea,
 	.fb_imageblit = hdmifb_imageblit,
 	.fb_ioctl = hdmifb_ioctl,
+	.fb_read = hdmifb_read,
 };
 
 #ifdef CONFIG_HAS_EARLYSUSPEND

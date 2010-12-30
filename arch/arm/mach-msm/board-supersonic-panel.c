@@ -35,13 +35,6 @@
 #include "devices.h"
 #include "proc_comm.h"
 
-/* 
-** Innitial T2 Settings
-** Novatek Panels are picky, most start 50fps @ 372, the minority starts @ 378
-** So defaulting at 380, should support all. keyword: *should*
-*/
-int savedT2 = 380; // 380 default, should support around 53+fps for all Novatek Panels
-
 #if 1
 #define B(s...) printk(s)
 #else
@@ -201,9 +194,6 @@ struct nov_regs {
 	{0x6A18, 0xff},
 	{0x6A17, 0x01},
 	{0xF402, 0x14},
-	
-	{0xb101, 0x01}, // T2 init - Put back in, just in case if T2 is defaulted,
-	{0xb102, 0x7c}, // it gets defaulted to 380, and not 340. For Novatek Panels.
 
 	{0x3500, 0x00},
 	{0x1100, 0x0},
@@ -215,8 +205,8 @@ struct s1d_regs {
 	unsigned val;
 } s1d13775_init_seq[] = {
 	{0x001C, 0x1500},
-	{0x0020, 0x3047},
-	{0x0024, 0x4014}, // original value 401A, last 5 bits set PLL clock div, 1A=27 div, 14 = ~53 fps, and is the sweet spot for a pure register epson fix - netarchy
+	{0x0020, 0x3043},
+	{0x0024, 0x401A},
 	{0x0028, 0x031A},
 	{0x002C, 0x0001},
 	{REG_WAIT, 0x0004}, /* increase delay 1ms -> 4ms */
@@ -226,7 +216,7 @@ struct s1d_regs {
 	{0x002C, 0x0002},
 	{REG_WAIT, 0x0004}, /* increase delay 1ms -> 4ms */
 	{0x002C, 0x0003},
-	{0x0100, 0x3703}, // last 5 bits change pixel clock divider, 00011 (3) sets divider to 4, we like 4 combined with modded PLL clock div - netarchy
+	{0x0100, 0x3702},
 	{0x0104, 0x0180},
 	{0x0140, 0x003F},
 	{0x0144, 0x00EF},
@@ -250,7 +240,7 @@ struct s1d_regs {
 	{0x028C, 0x0001},
 	{0x0294, 0x0000},
 	{0x0400, 0x8000},
-	{0x0404, 0x100F}, // original value 1001, Bits 0-9 set the Tearing Effect Delay (gets rid of tearing) - netarchy
+	{0x0404, 0x10C8},
 	{0x0480, 0x0001},
 	{0x0500, 0x0000},
 	{0x0504, 0x0011},
@@ -659,25 +649,6 @@ static int
 supersonic_panel_blank(struct msm_mddi_bridge_platform_data *bridge_data,
 			struct msm_mddi_client_data *client_data)
 {
-	/* For Novatek Panels Only */
-	if (panel_type == 1)
-	{
-		/*
-		** Get the T2 value into readT2
-		*/
-		unsigned readT2;
-		readT2 = 0;
-		readT2 |= client_data->remote_read(client_data, 0xb101) << 8;
-		readT2 |= client_data->remote_read(client_data, 0xb102);
-		/* readT2 value safety check */
-		if (readT2 < 245 || readT2 > 999)
-		{
-			readT2 = 380;
-		}
-		savedT2 = readT2;
-	}
-	/* Done */
-
 	B(KERN_DEBUG "%s\n", __func__);
 	suc_backlight_switch(LED_OFF);
 	backlight_control(0);
@@ -691,39 +662,26 @@ supersonic_panel_unblank(struct msm_mddi_bridge_platform_data *bridge_data,
 	B(KERN_DEBUG "%s\n", __func__);
 	if (panel_type == PANEL_AUO) {
 		suc_backlight_switch(LED_FULL);
+		client_data->remote_write(client_data, 0x01, 0xB101);
+		client_data->remote_write(client_data, 0x82, 0xB102);
+		client_data->remote_write(client_data, 0x5A, 0xB107);
+		client_data->remote_write(client_data, 0x00, 0x4400);
+		client_data->remote_write(client_data, 0xC8, 0x4401);
 		client_data->remote_write(client_data, 0x00, 0x2900);
 		msleep(100);
 		client_data->remote_write(client_data, 0x24, 0x5300);
 	} else {
 		suc_backlight_switch(LED_FULL);
+		client_data->remote_write(client_data, 0x3043, 0x0020);
+		client_data->remote_write(client_data, 0x10C8, 0x0404);
 		client_data->remote_write(client_data, 0x4000, 0x0600);
 		msleep(10);
 		qspi_send_9bit(0x0, 0x29);
 		client_data->remote_write(client_data, 0x7000, 0x0324);
 		client_data->remote_write(client_data, 0x4000, 0x0600);
-		client_data->remote_write(client_data, 0x100F, 0x0404); // Set anti-tearing on unblank for epson fix (including the intitial unblank at boot time) - netarchy
-		client_data->remote_write(client_data, 0x3703, 0x0100); // Set Pixel Clock Divider to 4 on unblank
-		client_data->remote_write(client_data, 0x4014, 0x0024); // Set PLL clock divider to 15 on unblank
 	}
 
 	backlight_control(1);
-	
-	/* For Novatek Panels Only */
-	if (panel_type == 1)
-	{
-		/*
-		** Check saved value just to be safe
-		*/
-		if (savedT2 < 245 || savedT2 > 999)
-		{
-			savedT2 = 380;
-		}
-		/* Write savedT2 to T2 */
-		client_data->remote_write(client_data, (0xff00 & savedT2) >> 8, 0xb101);
-		client_data->remote_write(client_data, (0x00ff & savedT2), 0xb102);
-	}
-	/* Done */
-
 	return 0;
 }
 

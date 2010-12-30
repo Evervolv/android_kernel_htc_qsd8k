@@ -22,7 +22,7 @@
 #include <asm/mach-types.h>
 
 static const unsigned short normal_i2c[] = { I2C_CLIENT_END };
-
+static int tps65200_initial = -1;
 /**
  * Insmod parameters
  */
@@ -177,19 +177,21 @@ int tps_set_charger_ctrl(u32 ctl)
 	u8 status;
 	u8 regh;
 
+	if (tps65200_initial < 0)
+		return 0;
+
 	switch (ctl) {
 	case DISABLE:
 		pr_info("Switch charger OFF\n");
 		tps65200_i2c_write_byte(0x29, 0x01);
 		tps65200_i2c_write_byte(0x28, 0x00);
-		tps65200_i2c_read_byte(&status, 0x09);
-		pr_info("TPS65200 INT2 %x\n", status);
 		break;
 	case ENABLE_SLOW_CHG:
 		pr_info("Switch charger ON (SLOW)\n");
 		tps65200_i2c_write_byte(0x29, 0x01);
 		tps65200_i2c_write_byte(0x2A, 0x00);
 		tps65200_i2c_write_byte(0x86, 0x03);
+		tps65200_i2c_write_byte(0x63, 0x02);
 		break;
 	case ENABLE_FAST_CHG:
 		pr_info("Switch charger ON (FAST)\n");
@@ -209,7 +211,8 @@ int tps_set_charger_ctrl(u32 ctl)
 	case CHECK_CHG:
 		pr_info("Switch charger CHECK \n");
 		tps65200_i2c_read_byte(&status, 0x06);
-		pr_info("TPS65200 STATUS_A%x\n", status);
+		tps65200_i2c_read_byte(&regh, 0x09);
+		pr_info("TPS65200 STATUS_A%x, INT2:%x\n", status, regh);
 		break;
 	case SET_ICL500:
 		pr_info("Switch charger SET_ICL500 \n");
@@ -219,10 +222,38 @@ int tps_set_charger_ctrl(u32 ctl)
 		pr_info("Switch charger SET_ICL100 \n");
 		tps65200_i2c_write_byte(0x23, 0x02);
 		break;
+	case CHECK_INT1:
+		pr_info("Switch charger CHECK_INT1 \n");
+		tps65200_i2c_read_byte(&status, 0x08);
+		pr_info("Switch charger CHECK_INT1: regh 0x08h=%x\n", status);
+		result = (int)status;
+		break;
 	case CHECK_INT2:
 		pr_info("Switch charger CHECK_INT2 \n");
 		tps65200_i2c_read_byte(&status, 0x09);
 		pr_info("TPS65200 INT2 %x\n", status);
+		result = (int)status;
+		break;
+	case CHECK_CONTROL:
+		pr_info("Switch charger CHECK_CONTROL \n");
+		tps65200_i2c_read_byte(&status, 0x00);
+		pr_info("TPS65200 regh 0x00=%x\n", regh);
+		break;
+	case OVERTEMP_VREG_4060:
+		pr_info("Switch charger OVERTEMP_VREG_4060 \n");
+		tps65200_i2c_read_byte(&regh, 0x02);
+		regh = (regh & 0xC0) | 0x1C;
+		tps65200_i2c_write_byte(regh, 0x02);
+		tps65200_i2c_read_byte(&regh, 0x02);
+		pr_info("Switch charger OVERTEMP_VREG_4060: regh 0x02=%x\n", regh);
+		break;
+	case NORMALTEMP_VREG_4200:
+		pr_info("Switch charger NORMALTEMP_VREG_4200 \n");
+		tps65200_i2c_read_byte(&regh, 0x02);
+		regh = (regh & 0xC0) | 0X23;
+		tps65200_i2c_write_byte(regh, 0x02);
+		tps65200_i2c_read_byte(&regh, 0x02);
+		pr_info("Switch charger NORMALTEMP_VREG_4200: regh 0x02=%x\n", regh);
 		break;
 	default:
 		pr_info("%s: Not supported battery ctr called.!", __func__);
@@ -275,6 +306,7 @@ static int tps65200_probe(struct i2c_client *client,
 	data->address = client->addr;
 	data->client = client;
 	mutex_init(&data->xfer_lock);
+	tps65200_initial = 1;
 	pr_info("[TPS65200]: Driver registration done\n");
 	return 0;
 }
