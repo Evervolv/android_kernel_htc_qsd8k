@@ -23,6 +23,7 @@
 #include <linux/uaccess.h>
 #include <linux/mutex.h>
 #include <linux/gpio.h>
+#include <linux/sched.h>
 
 #include <mach/msm_smd.h>
 #include <mach/msm_rpcrouter.h>
