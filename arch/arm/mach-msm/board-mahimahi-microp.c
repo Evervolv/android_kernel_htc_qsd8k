@@ -37,7 +37,7 @@
 #include <linux/earlysuspend.h>
 #include <linux/bma150.h>
 #include <linux/lightsensor.h>
-#include <asm/mach/mmc.h>
+#include <mach/mmc.h>
 #include <mach/htc_35mm_jack.h>
 #include <asm/setup.h>
 #include <linux/debugfs.h>
@@ -1560,6 +1560,8 @@ static int gsensor_write(uint8_t *data)
 	return ret;
 }
 
+static DEFINE_MUTEX(bma150_lock);
+
 static int bma150_open(struct inode *inode, struct file *file)
 {
 	pr_debug("%s\n", __func__);
@@ -1571,8 +1573,7 @@ static int bma150_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int bma150_ioctl(struct inode *inode, struct file *file,
-			unsigned int cmd, unsigned long arg)
+static long bma150_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	void __user *argp = (void __user *)arg;
 	char rwbuf[8];
@@ -1594,31 +1595,36 @@ static int bma150_ioctl(struct inode *inode, struct file *file,
 		break;
 	}
 
+	mutex_lock(&bma150_lock);
 	switch (cmd) {
 	case BMA_IOCTL_INIT:
 		ret = gsensor_init_hw();
 		if (ret < 0)
-			return ret;
+			goto err;
 		break;
 
 	case BMA_IOCTL_READ:
-		if (rwbuf[0] < 1)
-			return -EINVAL;
+		if (rwbuf[0] < 1) {
+			ret = -EINVAL;
+			goto err;
+		}
 		ret = gsensor_read(rwbuf);
 		if (ret < 0)
-			return ret;
+			goto err;
 		break;
 	case BMA_IOCTL_WRITE:
-		if (rwbuf[0] < 2)
-			return -EINVAL;
+		if (rwbuf[0] < 2) {
+			ret = -EINVAL;
+			goto err;
+		}
 		ret = gsensor_write(rwbuf);
 		if (ret < 0)
-			return ret;
+			goto err;
 		break;
 	case BMA_IOCTL_READ_ACCELERATION:
 		ret = gsensor_read_acceleration(&buf[0]);
 		if (ret < 0)
-			return ret;
+			goto err;
 		break;
 	case BMA_IOCTL_SET_MODE:
 		bma150_set_mode(rwbuf[0]);
@@ -1627,8 +1633,10 @@ static int bma150_ioctl(struct inode *inode, struct file *file,
 		temp = 0;
 		break;
 	default:
-		return -ENOTTY;
+		ret = -ENOTTY;
+		goto err;
 	}
+	mutex_unlock(&bma150_lock);
 
 	switch (cmd) {
 	case BMA_IOCTL_READ:
@@ -1648,13 +1656,17 @@ static int bma150_ioctl(struct inode *inode, struct file *file,
 	}
 
 	return 0;
+
+err:
+	mutex_unlock(&bma150_lock);
+	return ret;
 }
 
 static struct file_operations bma_fops = {
 	.owner = THIS_MODULE,
 	.open = bma150_open,
 	.release = bma150_release,
-	.ioctl = bma150_ioctl,
+	.unlocked_ioctl = bma150_ioctl,
 };
 
 static struct miscdevice spi_bma_device = {
