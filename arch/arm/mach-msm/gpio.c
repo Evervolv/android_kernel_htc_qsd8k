@@ -20,10 +20,9 @@
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/module.h>
+#include <mach/irqs.h>
 #include "gpio_hw.h"
 #include "gpiomux.h"
-
-#define FIRST_GPIO_IRQ MSM_GPIO_TO_INT(0)
 
 #include "proc_comm.h"
 #include "smd_private.h"
