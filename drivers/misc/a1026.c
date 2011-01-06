@@ -871,9 +871,8 @@ static int exe_cmd_in_file(unsigned char *incmd)
 }
 #endif /* ENABLE_DIAG_IOCTLS */
 
-static int
-a1026_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
-	   unsigned long arg)
+static long
+a1026_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	void __user *argp = (void __user *)arg;
 	struct a1026img img;
@@ -886,28 +885,37 @@ a1026_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	int pathid = 0;
 	unsigned int ns_state;
 
+	mutex_lock(&a1026_lock);
 	switch (cmd) {
 	case A1026_BOOTUP_INIT:
 		img.buf = 0;
 		img.img_size = 0;
-		if (copy_from_user(&img, argp, sizeof(img)))
-			return -EFAULT;
+		if (copy_from_user(&img, argp, sizeof(img))) {
+			rc = -EFAULT;
+			goto out;
+		}
 		rc = a1026_bootup_init(file, &img);
 		break;
 	case A1026_SET_CONFIG:
-		if (copy_from_user(&pathid, argp, sizeof(pathid)))
-			return -EFAULT;
+		if (copy_from_user(&pathid, argp, sizeof(pathid))) {
+			rc = -EFAULT;
+			goto out;
+		}
 		rc = a1026_set_config(pathid, A1026_CONFIG_FULL);
 		if (rc < 0)
 			pr_err("%s: A1026_SET_CONFIG (%d) error %d!\n",
 				__func__, pathid, rc);
 		break;
 	case A1026_SET_NS_STATE:
-		if (copy_from_user(&ns_state, argp, sizeof(ns_state)))
-			return -EFAULT;
+		if (copy_from_user(&ns_state, argp, sizeof(ns_state))) {
+			rc = -EFAULT;
+			goto out;
+		}
 		pr_info("%s: set noise suppression %d\n", __func__, ns_state);
-		if (ns_state < 0 || ns_state >= A1026_NS_NUM_STATES)
-			return -EINVAL;
+		if (ns_state < 0 || ns_state >= A1026_NS_NUM_STATES) {
+			rc = -EINVAL;
+			goto out;
+		}
 		a1026_NS_state = ns_state;
 		if (!a1026_suspended)
 			a1026_set_config(a1026_current_config,
@@ -917,9 +925,11 @@ a1026_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	case A1026_SET_MIC_ONOFF:
 		rc = chk_wakeup_a1026();
 		if (rc < 0)
-			return rc;
-		if (copy_from_user(&mic_cases, argp, sizeof(mic_cases)))
-			return -EFAULT;
+			goto out;
+		if (copy_from_user(&mic_cases, argp, sizeof(mic_cases))) {
+			rc = -EFAULT;
+			goto out;
+		}
 		rc = a1026_set_mic_state(mic_cases);
 		if (rc < 0)
 			pr_err("%s: A1026_SET_MIC_ONOFF %d error %d!\n",
@@ -928,32 +938,38 @@ a1026_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	case A1026_SET_MICSEL_ONOFF:
 		rc = chk_wakeup_a1026();
 		if (rc < 0)
-			return rc;
-		if (copy_from_user(&mic_sel, argp, sizeof(mic_sel)))
-			return -EFAULT;
+			goto out;
+		if (copy_from_user(&mic_sel, argp, sizeof(mic_sel))) {
+			rc = -EFAULT;
+			goto out;
+		}
 		gpio_set_value(pdata->gpio_a1026_micsel, !!mic_sel);
 		rc = 0;
 		break;
 	case A1026_READ_DATA:
 		rc = chk_wakeup_a1026();
 		if (rc < 0)
-			return rc;
+			goto out;
 		rc = a1026_i2c_read(msg, 4);
-		if (copy_to_user(argp, &msg, 4))
-			return -EFAULT;
+		if (copy_to_user(argp, &msg, 4)) {
+			rc = -EFAULT;
+			goto out;
+		}
 		break;
 	case A1026_WRITE_MSG:
 		rc = chk_wakeup_a1026();
 		if (rc < 0)
-			return rc;
-		if (copy_from_user(msg, argp, sizeof(msg)))
-			return -EFAULT;
+			goto out;
+		if (copy_from_user(msg, argp, sizeof(msg))) {
+			rc = -EFAULT;
+			goto out;
+		}
 		rc = a1026_i2c_write(msg, 4);
 		break;
 	case A1026_SYNC_CMD:
 		rc = chk_wakeup_a1026();
 		if (rc < 0)
-			return rc;
+			goto out;
 		msg[0] = 0x80;
 		msg[1] = 0x00;
 		msg[2] = 0x00;
@@ -963,9 +979,11 @@ a1026_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	case A1026_SET_CMD_FILE:
 		rc = chk_wakeup_a1026();
 		if (rc < 0)
-			return rc;
-		if (copy_from_user(msg, argp, sizeof(msg)))
-			return -EFAULT;
+			goto out;
+		if (copy_from_user(msg, argp, sizeof(msg))) {
+			rc = -EFAULT;
+			goto out;
+		}
 		rc = exe_cmd_in_file(msg);
 		break;
 #endif /* ENABLE_DIAG_IOCTLS */
@@ -975,6 +993,8 @@ a1026_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 		break;
 	}
 
+out:
+	mutex_unlock(&a1026_lock);
 	return rc;
 }
 
@@ -982,7 +1002,7 @@ static const struct file_operations a1026_fops = {
 	.owner = THIS_MODULE,
 	.open = a1026_open,
 	.release = a1026_release,
-	.ioctl = a1026_ioctl,
+	.unlocked_ioctl = a1026_ioctl,
 };
 
 static struct miscdevice a1026_device = {
