@@ -180,7 +180,7 @@ static struct device_attribute dev_attr_blink_all = {
 	.store = cpldled_blink_all_store,
 };
 
-static void led_brightness_set(struct led_classdev *led_cdev,
+static void cpld_led_brightness_set(struct led_classdev *led_cdev,
 			       enum led_brightness brightness)
 {
 	struct CPLD_LED_data *CPLD_LED;
@@ -285,16 +285,16 @@ static int CPLD_LED_probe(struct platform_device *pdev)
 	writeb(0x00, _g_cpld_led_addr);
 
 	CPLD_LED->leds[0].name = "red";
-	CPLD_LED->leds[0].brightness_set = led_brightness_set;
+	CPLD_LED->leds[0].brightness_set = cpld_led_brightness_set;
 
 	CPLD_LED->leds[1].name = "green";
-	CPLD_LED->leds[1].brightness_set = led_brightness_set;
+	CPLD_LED->leds[1].brightness_set = cpld_led_brightness_set;
 
 	CPLD_LED->leds[2].name = "blue";
-	CPLD_LED->leds[2].brightness_set = led_brightness_set;
+	CPLD_LED->leds[2].brightness_set = cpld_led_brightness_set;
 
 	CPLD_LED->leds[3].name = "jogball-backlight";
-	CPLD_LED->leds[3].brightness_set = led_brightness_set;
+	CPLD_LED->leds[3].brightness_set = cpld_led_brightness_set;
 
 	spin_lock_init(&CPLD_LED->data_lock);
 
