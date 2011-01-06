@@ -26,7 +26,7 @@
 #include <asm/gpio.h>
 #include <asm/io.h>
 #include <asm/mach-types.h>
-#include <asm/mach/mmc.h>
+#include <mach/mmc.h>
 
 #include <mach/vreg.h>
 
@@ -175,7 +175,7 @@ static unsigned int mahimahi_sdslot_status_rev0(struct device *dev)
 int mahimahi_microp_sdslot_status_register(void (*cb)(int, void *), void *);
 unsigned int mahimahi_microp_sdslot_status(struct device *);
 
-static struct mmc_platform_data mahimahi_sdslot_data = {
+static struct msm_mmc_platform_data mahimahi_sdslot_data = {
 	.ocr_mask		= MAHIMAHI_MMC_VDD,
 	.status			= mahimahi_microp_sdslot_status,
 	.register_status_notify	= mahimahi_microp_sdslot_status_register,
@@ -236,7 +236,7 @@ static unsigned int mahimahi_wifi_status(struct device *dev)
 	return mahimahi_wifi_cd;
 }
 
-static struct mmc_platform_data mahimahi_wifi_data = {
+static struct msm_mmc_platform_data mahimahi_wifi_data = {
 	.ocr_mask		= MMC_VDD_28_29,
 	.built_in		= 1,
 	.status			= mahimahi_wifi_status,
@@ -286,9 +286,6 @@ int mahimahi_wifi_reset(int on)
 	mahimahi_wifi_reset_state = on;
 	return 0;
 }
-
-int msm_add_sdcc(unsigned int controller, struct mmc_platform_data *plat,
-		 unsigned int stat_irq, unsigned long stat_irq_flags);
 
 int __init mahimahi_init_mmc(unsigned int sys_rev, unsigned debug_uart)
 {
