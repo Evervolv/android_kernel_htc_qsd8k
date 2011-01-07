@@ -237,7 +237,7 @@ struct early_suspend htc_pwrsink_early_suspend = {
 };
 #endif
 
-static int __init htc_pwrsink_probe(struct platform_device *pdev)
+static int __devinit htc_pwrsink_probe(struct platform_device *pdev)
 {
 	struct pwr_sink_platform_data *pdata = pdev->dev.platform_data;
 	int i;
