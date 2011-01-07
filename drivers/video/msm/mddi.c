@@ -243,6 +243,8 @@ static void mddi_handle_rev_data_avail(struct mddi_info *mddi)
 		return;
 
 	if (mddi_debug_flags & 1) {
+		int i;
+		union mddi_rev *rev = mddi->rev_data;
 		printk(KERN_INFO "INT %x, STAT %x, CURR_REV_PTR %x\n",
 		       mddi_readl(INT), mddi_readl(STAT),
 		       mddi_readl(CURR_REV_PTR));
