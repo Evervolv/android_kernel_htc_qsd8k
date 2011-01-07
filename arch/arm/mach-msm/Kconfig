@@ -6,7 +6,6 @@ choice
 
 config ARCH_MSM7X00A
 	bool "MSM7x00A / MSM7x01A"
-	select MACH_TROUT if !MACH_HALIBUT
 	select ARCH_MSM_ARM11
 	select MSM_SMD
 	select MSM_SMD_PKG3
