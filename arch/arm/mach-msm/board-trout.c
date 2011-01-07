@@ -49,7 +49,7 @@
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
 
-#include <asm/mach/mmc.h>
+#include <mach/mmc.h>
 #include <linux/mmc/sdio_ids.h>
 #include <linux/msm_audio.h>
 
@@ -841,7 +841,6 @@ static void __init trout_fixup(struct machine_desc *desc, struct tag *tags,
 {
 	mi->nr_banks=1;
 	mi->bank[0].start = PHYS_OFFSET;
-	mi->bank[0].node = PHYS_TO_NID(PHYS_OFFSET);
 	mi->bank[0].size = (101*1024*1024);
 }
 

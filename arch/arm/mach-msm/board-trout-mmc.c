@@ -27,9 +27,6 @@
 
 #define DEBUG_SDSLOT_VDD 1
 
-extern int msm_add_sdcc(unsigned int controller, struct mmc_platform_data *plat,
-			unsigned int stat_irq, unsigned long stat_irq_flags);
-
 /* ---- COMMON ---- */
 static void config_gpio_table(uint32_t *table, int len)
 {
@@ -164,7 +161,7 @@ static unsigned int trout_sdslot_status(struct device *dev)
 			| MMC_VDD_25_26 | MMC_VDD_26_27 | MMC_VDD_27_28 \
 			| MMC_VDD_28_29 | MMC_VDD_29_30
 
-static struct mmc_platform_data trout_sdslot_data = {
+static struct msm_mmc_platform_data trout_sdslot_data = {
 	.ocr_mask	= TROUT_MMC_VDD,
 	.status		= trout_sdslot_status,
 	.translate_vdd	= trout_sdslot_switchvdd,
@@ -297,7 +294,7 @@ int trout_wifi_reset(int on)
 EXPORT_SYMBOL(trout_wifi_reset);
 #endif
 
-static struct mmc_platform_data trout_wifi_data = {
+static struct msm_mmc_platform_data trout_wifi_data = {
 	.ocr_mask		= MMC_VDD_28_29,
 	.status			= trout_wifi_status,
 	.register_status_notify	= trout_wifi_status_register,
