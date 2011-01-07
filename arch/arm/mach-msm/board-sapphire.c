@@ -49,7 +49,7 @@
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
 
-#include <asm/mach/mmc.h>
+#include <mach/mmc.h>
 #include <linux/mmc/sdio_ids.h>
 
 #include "board-sapphire.h"
@@ -1261,15 +1261,12 @@ static void __init sapphire_fixup(struct machine_desc *desc, struct tag *tags,
 	if (smi_sz == 32) {
 		mi->nr_banks = 1;
 		mi->bank[0].start = PHYS_OFFSET;
-		mi->bank[0].node = PHYS_TO_NID(PHYS_OFFSET);
 		mi->bank[0].size = (84*1024*1024);
 	} else if (smi_sz == 64) {
 		mi->nr_banks = 2;
 		mi->bank[0].start = SMI64_MSM_LINUX_BASE_1;
-		mi->bank[0].node = PHYS_TO_NID(SMI64_MSM_LINUX_BASE_1);
 		mi->bank[0].size = (32*1024*1024);
 		mi->bank[1].start = SMI64_MSM_LINUX_BASE_2;
-		mi->bank[1].node = PHYS_TO_NID(SMI64_MSM_LINUX_BASE_2);
 		mi->bank[1].size = (84*1024*1024);
 	} else {
 		printk(KERN_ERR "can not get smi size\n");
@@ -1278,10 +1275,8 @@ static void __init sapphire_fixup(struct machine_desc *desc, struct tag *tags,
 		smi_sz = 64;
 		mi->nr_banks = 2;
 		mi->bank[0].start = SMI64_MSM_LINUX_BASE_1;
-		mi->bank[0].node = PHYS_TO_NID(SMI64_MSM_LINUX_BASE_1);
 		mi->bank[0].size = (32*1024*1024);
 		mi->bank[1].start = SMI64_MSM_LINUX_BASE_2;
-		mi->bank[1].node = PHYS_TO_NID(SMI64_MSM_LINUX_BASE_2);
 		mi->bank[1].size = (84*1024*1024);
 		printk(KERN_ERR "use default  :  smisize=%d\n", smi_sz);
 	}
