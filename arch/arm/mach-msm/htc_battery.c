@@ -501,7 +501,7 @@ static int htc_battery_get_property(struct power_supply *psy,
 
 #define HTC_BATTERY_ATTR(_name)							\
 {										\
-	.attr = { .name = #_name, .mode = S_IRUGO, .owner = THIS_MODULE },	\
+	.attr = { .name = #_name, .mode = S_IRUGO },	\
 	.show = htc_battery_show_property,					\
 	.store = NULL,								\
 }
