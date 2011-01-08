@@ -287,7 +287,7 @@ static struct sys_device sapphire_irq_device = {
 	.cls    = &sapphire_sysdev_class,
 };
 
-int sapphire_init_gpio(void)
+int __init sapphire_init_gpio(void)
 {
 	int i;
 	if (!machine_is_sapphire())
@@ -322,5 +322,3 @@ int sapphire_init_cpld(unsigned int sys_rev)
 		writeb(sapphire_cpld_initdata[i], SAPPHIRE_CPLD_BASE + i * 2);
 	return 0;
 }
-
-postcore_initcall(sapphire_init_gpio);

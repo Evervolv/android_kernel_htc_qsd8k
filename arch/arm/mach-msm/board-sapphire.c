@@ -1117,11 +1117,14 @@ static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
 };
 #endif
 
+extern int sapphire_init_gpio(void);
+
 static void __init sapphire_init(void)
 {
 	int rc;
 	printk("sapphire_init() revision = 0x%X\n", system_rev);
 
+	sapphire_init_gpio();
 	/*
 	 * Setup common MSM GPIOS
 	 */
