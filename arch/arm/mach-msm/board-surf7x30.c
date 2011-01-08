@@ -462,7 +462,6 @@ static void __init surf7x30_fixup(struct machine_desc *desc, struct tag *tags,
 {
 	mi->nr_banks = 1;
 	mi->bank[0].start = PHYS_OFFSET;
-	mi->bank[0].node = PHYS_TO_NID(PHYS_OFFSET);
 	mi->bank[0].size = (51*1024*1024);
 }
 
@@ -473,10 +472,6 @@ static void __init surf7x30_map_io(void)
 }
 
 MACHINE_START(MSM7X30_SURF, "QCT SURF7X30 Development Board")
-#ifdef CONFIG_MSM_DEBUG_UART
-	.phys_io	= MSM_DEBUG_UART_PHYS,
-	.io_pg_offst	= ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
-#endif
 	.boot_params	= 0x00200100,
 	.fixup		= surf7x30_fixup,
 	.map_io		= surf7x30_map_io,
