@@ -1,23 +1,57 @@
 /* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
- * Copyright (c) 2009-2010, Google Inc.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of Code Aurora Forum nor
+ *       the names of its contributors may be used to endorse or promote
+ *       products derived from this software without specific prior written
+ *       permission.
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Alternatively, provided that this notice is retained in full, this software
+ * may be relicensed by the recipient under the terms of the GNU General Public
+ * License version 2 ("GPL") and only version 2, in which case the provisions of
+ * the GPL apply INSTEAD OF those given above.  If the recipient relicenses the
+ * software under the GPL, then the identification text in the MODULE_LICENSE
+ * macro must be changed to reflect "GPLv2" instead of "Dual BSD/GPL".  Once a
+ * recipient changes the license terms to the GPL, subsequent recipients shall
+ * not relicense under alternate licensing terms, including the BSD or dual
+ * BSD/GPL terms.  In addition, the following license statement immediately
+ * below and between the words START and END shall also then apply when this
+ * software is relicensed under the GPL:
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301, USA.
+ * START
  *
- * Original driver and v2 protocol changes from Code Aurora.
- * Heavily modified by Dima Zavin <dima@android.com>
- * Further cleanup by Brian Swetland <swetland@google.com>
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License version 2 and only version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * END
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  *
  */
 
@@ -28,54 +62,30 @@
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/sched.h>
-#include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/uaccess.h>
+#include <linux/wakelock.h>
+#include <linux/slab.h>
 #include <linux/android_pmem.h>
 #include <linux/msm_q6venc.h>
-#include <linux/wakelock.h>
-
-//#include <asm/cacheflush.h>
 #include "../dal.h"
 
-#define DALDEVICEID_VENC_DEVICE		0x0200002D
-#define DALDEVICEID_VENC_PORTNAME	"DSP_DAL_AQ_VID"
+#define DALDEVICEID_VENC_DEVICE       0x0200002D
+/*#define DALDEVICEID_VENC_PORTNAME     "DAL_AQ_VID"*/
+#define DALDEVICEID_VENC_PORTNAME     "DSP_DAL_AQ_VID"
 
-#define VENC_NAME			"q6venc"
-#define VENC_MSG_MAX			128
+#define VENC_NAME		        "q6venc"
+#define VENC_MSG_MAX                    128
 
 #define VENC_INTERFACE_VERSION		0x00020000
 #define MAJOR_MASK			0xFFFF0000
 #define MINOR_MASK			0x0000FFFF
-#define VENC_GET_MAJOR_VERSION(version)	((version & MAJOR_MASK)>>16)
-#define VENC_GET_MINOR_VERSION(version)	(version & MINOR_MASK)
+#define VENC_GET_MAJOR_VERSION(version) ((version & MAJOR_MASK)>>16)
+#define VENC_GET_MINOR_VERSION(version) (version & MINOR_MASK)
 
-#define VERSION_CHECK 0
-
-static DEFINE_MUTEX(idlecount_lock);
-static int idlecount;
-static struct wake_lock wakelock;
-static struct wake_lock idlelock;
-
-static void prevent_sleep(void)
-{
-        mutex_lock(&idlecount_lock);
-        if (++idlecount == 1) {
-                wake_lock(&idlelock);
-                wake_lock(&wakelock);
-	}
-        mutex_unlock(&idlecount_lock);
-}
-
-static void allow_sleep(void)
-{
-        mutex_lock(&idlecount_lock);
-        if (--idlecount == 0) {
-                wake_unlock(&idlelock);
-                wake_unlock(&wakelock);
-	}
-        mutex_unlock(&idlecount_lock);
-}
+uint32_t kpi_start[5];
+uint32_t kpi_end;
+static uint32_t cnt = 0;
 
 enum {
 	VENC_BUFFER_TYPE_INPUT,
@@ -132,6 +142,11 @@ struct venc_output_buf {
 	struct venc_buf_type bit_stream_buf;
 	u32 client_data;
 };
+
+struct venc_msg_list {
+	struct list_head list;
+	struct venc_msg msg_data;
+};
 struct venc_buf {
 	int fd;
 	u32 offset;
@@ -144,18 +159,13 @@ struct venc_pmem_list {
 	struct list_head list;
 	struct venc_buf buf;
 };
-struct venc_qmsg {
-	struct list_head list;
-	struct venc_msg msg;
-};
 struct venc_dev {
-	bool stop_called;
+	bool is_active;
+	bool pmem_freed;
 	enum venc_state_type state;
-
-	struct list_head msg_pool;
-	struct list_head msg_queue;
-	spinlock_t msg_lock;
-
+	struct list_head venc_msg_list_head;
+	struct list_head venc_msg_list_free;
+	spinlock_t venc_msg_list_lock;
 	struct list_head venc_pmem_list_head;
 	spinlock_t venc_pmem_list_lock;
 	struct dal_client *q6_handle;
@@ -177,6 +187,31 @@ static struct class *venc_class;
 static struct venc_dev *venc_device_p;
 static int venc_ref;
 
+static DEFINE_MUTEX(idlecount_lock);
+static int idlecount;
+static struct wake_lock wakelock;
+static struct wake_lock idlelock;
+
+static void prevent_sleep(void)
+{
+	mutex_lock(&idlecount_lock);
+	if (++idlecount == 1) {
+		wake_lock(&idlelock);
+		wake_lock(&wakelock);
+	}
+	mutex_unlock(&idlecount_lock);
+}
+
+static void allow_sleep(void)
+{
+	mutex_lock(&idlecount_lock);
+	if (--idlecount == 0) {
+		wake_unlock(&idlelock);
+		wake_unlock(&wakelock);
+	}
+	mutex_unlock(&idlecount_lock);
+}
+
 static inline int venc_check_version(u32 client, u32 server)
 {
 	int ret = -EINVAL;
@@ -189,62 +224,49 @@ static inline int venc_check_version(u32 client, u32 server)
 	return ret;
 }
 
-static struct venc_qmsg *__dequeue(spinlock_t *lock, struct list_head *queue)
+static int venc_get_msg(struct venc_dev *dvenc, void *msg)
 {
+	struct venc_msg_list *l;
 	unsigned long flags;
-	struct venc_qmsg *msg;
-	spin_lock_irqsave(lock, flags);
-	if (list_empty(queue)) {
-		msg = NULL;
-	} else {
-		msg = list_first_entry(queue, struct venc_qmsg, list);
-		list_del(&msg->list);
+	int ret = 0;
+	struct venc_msg qdsp_msg;
+
+	if (!dvenc->is_active)
+		return -EPERM;
+	spin_lock_irqsave(&dvenc->venc_msg_list_lock, flags);
+	list_for_each_entry_reverse(l, &dvenc->venc_msg_list_head, list) {
+		memcpy(&qdsp_msg, &l->msg_data, sizeof(struct venc_msg));
+		list_del(&l->list);
+		list_add(&l->list, &dvenc->venc_msg_list_free);
+		ret = 1;
+		break;
 	}
-	spin_unlock_irqrestore(lock, flags);
-	return msg;
+	spin_unlock_irqrestore(&dvenc->venc_msg_list_lock, flags);
+	if (copy_to_user(msg, &qdsp_msg, sizeof(struct venc_msg)))
+		pr_err("%s failed to copy_to_user\n", __func__);
+	return ret;
 }
 
-static inline struct venc_qmsg *venc_alloc_msg(struct venc_dev *dvenc)
+static void venc_put_msg(struct venc_dev *dvenc, struct venc_msg *msg)
 {
-	return __dequeue(&dvenc->msg_lock, &dvenc->msg_pool);
-}
-static inline struct venc_qmsg *venc_recv_msg(struct venc_dev *dvenc)
-{
-	return __dequeue(&dvenc->msg_lock, &dvenc->msg_queue);
-}
-
-static void venc_free_msg(struct venc_dev *dvenc, struct venc_qmsg *msg)
-{
+	struct venc_msg_list *l;
 	unsigned long flags;
-	spin_lock_irqsave(&dvenc->msg_lock, flags);
-	list_add_tail(&msg->list, &dvenc->msg_pool);
-	spin_unlock_irqrestore(&dvenc->msg_lock, flags);
-}
+	int found = 0;
 
-static void venc_post(struct venc_dev *dvenc,
-		      unsigned code, unsigned status,
-		      union venc_msg_data *data)
-{
-	unsigned long flags;
-	struct venc_qmsg *msg;
-	msg = venc_alloc_msg(dvenc);
-	if (msg == NULL) {
-		pr_err("%s cannot alloc message\n", __func__);
-		return;
+	spin_lock_irqsave(&dvenc->venc_msg_list_lock, flags);
+	list_for_each_entry(l, &dvenc->venc_msg_list_free, list) {
+		memcpy(&l->msg_data, msg, sizeof(struct venc_msg));
+		list_del(&l->list);
+		list_add(&l->list, &dvenc->venc_msg_list_head);
+		found = 1;
+		break;
 	}
-	msg->msg.msg_code = code;
-	msg->msg.status_code = status;
-	if (data) {
-		msg->msg.msg_data_size = sizeof(union venc_msg_data);
-		memcpy(&msg->msg.msg_data, data, sizeof(union venc_msg_data));
-	} else {
-		msg->msg.msg_data_size = 0;
-	}
+	spin_unlock_irqrestore(&dvenc->venc_msg_list_lock, flags);
+	if (found)
+		wake_up(&dvenc->venc_msg_evt);
+	else
+		pr_err("%s: failed to find a free node\n", __func__);
 
-	spin_lock_irqsave(&dvenc->msg_lock, flags);
-	list_add_tail(&msg->list, &dvenc->msg_queue);
-	spin_unlock_irqrestore(&dvenc->msg_lock, flags);
-	wake_up(&dvenc->venc_msg_evt);
 }
 
 static struct venc_pmem_list *venc_add_pmem_to_list(struct venc_dev *dvenc,
@@ -265,8 +287,6 @@ static struct venc_pmem_list *venc_add_pmem_to_list(struct venc_dev *dvenc,
 
 	ret = get_pmem_file(mptr->fd, &(plist->buf.paddr),
 		&vaddr, &len, &(plist->buf.file));
-
-	/* xxx bounds checking insufficient here */
 	if (ret) {
 		pr_err("%s: get_pmem_file failed for fd=%d offset=%d\n",
 			__func__, mptr->fd, mptr->offset);
@@ -363,7 +383,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->recon_buf1.region = 0;
+	pcfg->recon_buf1.region = pbufs->recon_buf[0].src;
 	pcfg->recon_buf1.phys = plist->buf.paddr;
 	pcfg->recon_buf1.size = plist->buf.size;
 	pcfg->recon_buf1.offset = 0;
@@ -375,7 +395,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->recon_buf2.region = 0;
+	pcfg->recon_buf2.region = pbufs->recon_buf[1].src;
 	pcfg->recon_buf2.phys = plist->buf.paddr;
 	pcfg->recon_buf2.size = plist->buf.size;
 	pcfg->recon_buf2.offset = 0;
@@ -387,7 +407,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->wb_buf.region = 0;
+	pcfg->wb_buf.region = pbufs->wb_buf.src;
 	pcfg->wb_buf.phys = plist->buf.paddr;
 	pcfg->wb_buf.size = plist->buf.size;
 	pcfg->wb_buf.offset = 0;
@@ -399,7 +419,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->cmd_buf.region = 0;
+	pcfg->cmd_buf.region = pbufs->cmd_buf.src;
 	pcfg->cmd_buf.phys = plist->buf.paddr;
 	pcfg->cmd_buf.size = plist->buf.size;
 	pcfg->cmd_buf.offset = 0;
@@ -411,7 +431,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 		" failed\n", __func__);
 		return -EPERM;
 	}
-	pcfg->vlc_buf.region = 0;
+	pcfg->vlc_buf.region = pbufs->vlc_buf.src;
 	pcfg->vlc_buf.phys = plist->buf.paddr;
 	pcfg->vlc_buf.size = plist->buf.size;
 	pcfg->vlc_buf.offset = 0;
@@ -505,6 +525,11 @@ static int venc_encode_frame(struct venc_dev *dvenc, void *argp)
 	q6_input.dvs_offsetx = 0;
 	q6_input.dvs_offsety = 0;
 
+
+kpi_start[cnt] = ktime_to_ns(ktime_get());
+TRACE("kpi_start %d, %u \n", cnt, kpi_start[cnt]);
+cnt++;
+
 	TRACE("Pushing down input phys=0x%x fd= %d, client_data: 0x%x,"
 		" time_stamp:%lld \n", q6_input.yuv_buf.phys, plist->buf.fd,
 		input.client_data, input.time_stamp);
@@ -564,12 +589,15 @@ static int venc_fill_output(struct venc_dev *dvenc, void *argp)
 static int venc_stop(struct venc_dev *dvenc)
 {
 	int ret = 0;
+	struct venc_msg msg;
 
-	dvenc->stop_called = 1;
 	ret = dal_call_f0(dvenc->q6_handle, VENC_DALRPC_STOP, 1);
 	if (ret) {
 		pr_err("%s: remote runction failed (%d)\n", __func__, ret);
-		venc_post(dvenc, VENC_MSG_STOP, VENC_S_EFAIL, NULL);
+		msg.msg_code = VENC_MSG_STOP;
+		msg.msg_data_size = 0;
+		msg.status_code = VENC_S_EFAIL;
+		venc_put_msg(dvenc, &msg);
 	}
 	return ret;
 }
@@ -577,11 +605,15 @@ static int venc_stop(struct venc_dev *dvenc)
 static int venc_pause(struct venc_dev *dvenc)
 {
 	int ret = 0;
+	struct venc_msg msg;
 
 	ret = dal_call_f0(dvenc->q6_handle, VENC_DALRPC_SUSPEND, 1);
 	if (ret) {
 		pr_err("%s: remote function failed (%d)\n", __func__, ret);
-		venc_post(dvenc, VENC_MSG_PAUSE, VENC_S_EFAIL, NULL);
+		msg.msg_code = VENC_MSG_PAUSE;
+		msg.status_code = VENC_S_EFAIL;
+		msg.msg_data_size = 0;
+		venc_put_msg(dvenc, &msg);
 	}
 	return ret;
 }
@@ -589,11 +621,15 @@ static int venc_pause(struct venc_dev *dvenc)
 static int venc_resume(struct venc_dev *dvenc)
 {
 	int ret = 0;
+	struct venc_msg msg;
 
 	ret = dal_call_f0(dvenc->q6_handle, VENC_DALRPC_RESUME, 1);
 	if (ret) {
 		pr_err("%s: remote function failed (%d)\n", __func__, ret);
-		venc_post(dvenc, VENC_MSG_RESUME, VENC_S_EFAIL, NULL);
+		msg.msg_code = VENC_MSG_RESUME;
+		msg.msg_data_size = 0;
+		msg.status_code = VENC_S_EFAIL;
+		venc_put_msg(dvenc, &msg);
 	}
 	return ret;
 }
@@ -601,24 +637,42 @@ static int venc_resume(struct venc_dev *dvenc)
 static int venc_flush(struct venc_dev *dvenc, void *argp)
 {
 	int ret = 0;
+	struct venc_msg msg;
+	union venc_msg_data smsg;
 	int status = VENC_S_SUCCESS;
-	union venc_msg_data data;
+	struct venc_buffer_flush flush;
 
-	if (copy_from_user(&data.flush_ret, argp, sizeof(struct venc_buffer_flush)))
+	if (copy_from_user(&flush, argp, sizeof(struct venc_buffer_flush)))
 		return -EFAULT;
-
-	if (data.flush_ret.flush_mode == VENC_FLUSH_ALL) {
+	if (flush.flush_mode == VENC_FLUSH_ALL) {
 		ret = dal_call_f0(dvenc->q6_handle, VENC_DALRPC_FLUSH, 1);
 		if (ret)
 			status = VENC_S_EFAIL;
 	} else
 		status = VENC_S_ENOTSUPP;
 
-	if (status == VENC_S_SUCCESS)
-		return ret;
-
-	venc_post(dvenc, VENC_MSG_FLUSH, status, &data);
-	return -EIO;
+	if (status != VENC_S_SUCCESS) {
+		if ((flush.flush_mode == VENC_FLUSH_INPUT) ||
+		     (flush.flush_mode == VENC_FLUSH_ALL)) {
+			smsg.flush_ret.flush_mode = VENC_FLUSH_INPUT;
+			msg.msg_data = smsg;
+			msg.status_code = status;
+			msg.msg_code = VENC_MSG_FLUSH;
+			msg.msg_data_size = sizeof(union venc_msg_data);
+			venc_put_msg(dvenc, &msg);
+		}
+		if (flush.flush_mode == VENC_FLUSH_OUTPUT ||
+		     (flush.flush_mode == VENC_FLUSH_ALL)) {
+			smsg.flush_ret.flush_mode = VENC_FLUSH_OUTPUT;
+			msg.msg_data = smsg;
+			msg.status_code = status;
+			msg.msg_code = VENC_MSG_FLUSH;
+			msg.msg_data_size = sizeof(union venc_msg_data);
+			venc_put_msg(dvenc, &msg);
+		}
+		return -EIO;
+	}
+	return ret;
 }
 
 static int venc_get_sequence_hdr(struct venc_dev *dvenc, void *argp)
@@ -752,46 +806,84 @@ static int venc_request_iframe(struct venc_dev *dvenc)
 
 static int venc_stop_read_msg(struct venc_dev *dvenc)
 {
-	venc_post(dvenc, VENC_MSG_STOP_READING_MSG, 0, NULL);
-	return 0;
+	struct venc_msg msg;
+	int ret = 0;
+
+	msg.status_code = 0;
+	msg.msg_code = VENC_MSG_STOP_READING_MSG;
+	msg.msg_data_size = 0;
+	venc_put_msg(dvenc, &msg);
+	return ret;
+}
+
+static int venc_q6_stop(struct venc_dev *dvenc)
+{
+	int ret = 0;
+	struct venc_pmem_list *plist;
+	unsigned long flags;
+
+	wake_up(&dvenc->venc_msg_evt);
+	spin_lock_irqsave(&dvenc->venc_pmem_list_lock, flags);
+	if (!dvenc->pmem_freed) {
+		list_for_each_entry(plist, &dvenc->venc_pmem_list_head, list)
+			put_pmem_file(plist->buf.file);
+		dvenc->pmem_freed = 1;
+	}
+	spin_unlock_irqrestore(&dvenc->venc_pmem_list_lock, flags);
+
+	dvenc->state = VENC_STATE_STOP;
+	return ret;
 }
 
 static int venc_translate_error(enum venc_status_code q6_status)
 {
+	int ret = 0;
+
 	switch (q6_status) {
 	case VENC_STATUS_SUCCESS:
-		return VENC_S_SUCCESS;
+		ret = VENC_S_SUCCESS;
+		break;
 	case VENC_STATUS_ERROR:
-		return VENC_S_EFAIL;
+		ret = VENC_S_EFAIL;
+		break;
 	case VENC_STATUS_INVALID_STATE:
-		return VENC_S_EINVALSTATE;
+		ret = VENC_S_EINVALSTATE;
+		break;
 	case VENC_STATUS_FLUSHING:
-		return VENC_S_EFLUSHED;
+		ret = VENC_S_EFLUSHED;
+		break;
 	case VENC_STATUS_INVALID_PARAM:
-		return VENC_S_EBADPARAM;
+		ret = VENC_S_EBADPARAM;
+		break;
 	case VENC_STATUS_CMD_QUEUE_FULL:
-		return VENC_S_ECMDQFULL;
+		ret = VENC_S_ECMDQFULL;
+		break;
 	case VENC_STATUS_CRITICAL:
-		return VENC_S_EFATAL;
+		ret = VENC_S_EFATAL;
+		break;
 	case VENC_STATUS_INSUFFICIENT_RESOURCES:
-		return VENC_S_ENOHWRES;
+		ret = VENC_S_ENOHWRES;
+		break;
 	case VENC_STATUS_TIMEOUT:
-		return VENC_S_ETIMEOUT;
-	default:
-		/* xxx probably shouldn't assume success */
-		return 0;
+		ret = VENC_S_ETIMEOUT;
+		break;
 	}
+	if (q6_status != VENC_STATUS_SUCCESS)
+		pr_err("%s: Q6 failed (%d)", __func__, (int)q6_status);
+	return ret;
 }
 
-static void venc_q6_callback(void *_data, int len, void *cookie)
+static void venc_q6_callback(void *data, int len, void *cookie)
 {
 	int status = 0;
 	struct venc_dev *dvenc = (struct venc_dev *)cookie;
 	struct venc_msg_type *q6_msg = NULL;
+	struct venc_msg msg, msg1;
+	union venc_msg_data smsg1, smsg2;
+	unsigned long msg_code;
 	struct venc_input_payload *pload1;
 	struct venc_output_payload *pload2;
-	union venc_msg_data data;
-	uint32_t *tmp = (uint32_t *) _data;
+	uint32_t *tmp = (uint32_t *) data;
 
 	if (dvenc == NULL) {
 		pr_err("%s: empty driver parameter\n", __func__);
@@ -804,135 +896,178 @@ static void venc_q6_callback(void *_data, int len, void *cookie)
 			__func__, tmp[2], sizeof(struct venc_msg_type));
 		return;
 	}
-
+	msg.msg_data_size = 0;
 	status = venc_translate_error(q6_msg->status);
-	if (status != VENC_STATUS_SUCCESS)
-		pr_err("%s: Q6 failed (%d)", __func__, (int)status);
-
 	switch ((enum venc_event_type_enum)q6_msg->event) {
 	case VENC_EVENT_START_STATUS:
 		dvenc->state = VENC_STATE_START;
-		venc_post(dvenc, VENC_MSG_START, status, NULL);
+		msg_code = VENC_MSG_START;
 		break;
 	case VENC_EVENT_STOP_STATUS:
-		dvenc->state = VENC_STATE_STOP;
-		venc_post(dvenc, VENC_MSG_STOP, status, NULL);
+		venc_q6_stop(dvenc);
+		msg_code = VENC_MSG_STOP;
 		break;
 	case VENC_EVENT_SUSPEND_STATUS:
 		dvenc->state = VENC_STATE_PAUSE;
-		venc_post(dvenc, VENC_MSG_PAUSE, status, NULL);
+		msg_code = VENC_MSG_PAUSE;
 		break;
 	case VENC_EVENT_RESUME_STATUS:
 		dvenc->state = VENC_STATE_START;
-		venc_post(dvenc, VENC_MSG_RESUME, status, NULL);
+		msg_code = VENC_MSG_RESUME;
 		break;
 	case VENC_EVENT_FLUSH_STATUS:
-		data.flush_ret.flush_mode = VENC_FLUSH_INPUT;
-		venc_post(dvenc, VENC_MSG_FLUSH, status, &data);
-		data.flush_ret.flush_mode = VENC_FLUSH_OUTPUT;
-		venc_post(dvenc, VENC_MSG_FLUSH, status, &data);		
+		smsg1.flush_ret.flush_mode = VENC_FLUSH_INPUT;
+		msg1.status_code = status;
+		msg1.msg_code = VENC_MSG_FLUSH;
+		msg1.msg_data = smsg1;
+		msg1.msg_data_size = sizeof(union venc_msg_data);
+		venc_put_msg(dvenc, &msg1);
+		smsg2.flush_ret.flush_mode = VENC_FLUSH_OUTPUT;
+		msg_code = VENC_MSG_FLUSH;
+		msg.msg_data = smsg2;
+		msg.msg_data_size = sizeof(union venc_msg_data);
 		break;
 	case VENC_EVENT_RELEASE_INPUT:
+
+kpi_end = ktime_to_ns(ktime_get());
+TRACE("KPI : encode a frame, %u ms\n", (kpi_end - kpi_start[0])/(1000*1000));
+if (cnt > 0) {
+	int i = 0;
+	for (i = 0; i < cnt; i++)
+	kpi_start[i] = kpi_start[i+1];
+}
+cnt--;
 		pload1 = &((q6_msg->payload).input_payload);
 		TRACE("Release_input: data: 0x%x \n", pload1->data);
 		if (pload1 != NULL) {
-			/* xxx should we zero? */
-			data.buf.client_data = pload1->data;
-			venc_post(dvenc, VENC_MSG_INPUT_BUFFER_DONE, status, &data);
-		} else {
-			pr_err("%s no payload on buffer done?\n", __func__);
+			msg.msg_data.buf.client_data = pload1->data;
+			msg_code = VENC_MSG_INPUT_BUFFER_DONE;
+			msg.msg_data_size = sizeof(union venc_msg_data);
 		}
 		break;
 	case VENC_EVENT_DELIVER_OUTPUT:
 		pload2 = &((q6_msg->payload).output_payload);
-		data.buf.flags = 0;
+		smsg1.buf.flags = 0;
 		if (pload2->flags & VENC_FLAG_SYNC_FRAME)
-			data.buf.flags |= VENC_FLAG_SYNC_FRAME;
+			smsg1.buf.flags |= VENC_FLAG_SYNC_FRAME;
 		if (pload2->flags & VENC_FLAG_CODEC_CONFIG)
-			data.buf.flags |= VENC_FLAG_CODEC_CONFIG;
+			smsg1.buf.flags |= VENC_FLAG_CODEC_CONFIG;
 		if (pload2->flags & VENC_FLAG_END_OF_FRAME)
-			data.buf.flags |= VENC_FLAG_END_OF_FRAME;
+			smsg1.buf.flags |= VENC_FLAG_END_OF_FRAME;
 		if (pload2->flags & VENC_FLAG_EOS)
-			data.buf.flags |= VENC_FLAG_EOS;
-		data.buf.len = pload2->size;
-		data.buf.offset = 0;
-		data.buf.time_stamp = pload2->time_stamp;
-		data.buf.client_data = pload2->data;
-		venc_post(dvenc, VENC_MSG_OUTPUT_BUFFER_DONE, status, &data);
+			smsg1.buf.flags |= VENC_FLAG_EOS;
+		smsg1.buf.len = pload2->size;
+		smsg1.buf.offset = 0;
+		smsg1.buf.time_stamp = pload2->time_stamp;
+		smsg1.buf.client_data = pload2->data;
+		msg_code = VENC_MSG_OUTPUT_BUFFER_DONE;
+		msg.msg_data = smsg1;
+		msg.msg_data_size = sizeof(union venc_msg_data);
 		break;
 	default:
 		pr_err("%s: invalid response from Q6 (%d)\n", __func__,
 			(int)q6_msg->event);
-		break;
+		return;
 	}
+	msg.status_code = status;
+	msg.msg_code = msg_code;
+	venc_put_msg(dvenc, &msg);
+	return;
 }
 
-static int venc_read_next_msg(struct venc_dev *dvenc, void __user *argp)
+static int venc_get_version(struct venc_dev *dvenc, void *argp)
 {
-	int res;
-	struct venc_qmsg *msg;
+	struct venc_version ver_info;
+	int ret = 0;
 
-	res = wait_event_interruptible(dvenc->venc_msg_evt,
-				       (msg = venc_recv_msg(dvenc)) != NULL);
-	if (res < 0)
-		return res;
-	res = copy_to_user(argp, &msg->msg, sizeof(struct venc_msg));
-	venc_free_msg(dvenc, msg);
-	if (res)
-		return -EFAULT;
-	return 0;
+	ver_info.major = VENC_GET_MAJOR_VERSION(VENC_INTERFACE_VERSION);
+	ver_info.minor = VENC_GET_MINOR_VERSION(VENC_INTERFACE_VERSION);
+
+	ret = copy_to_user(((struct venc_version *)argp),
+				&ver_info, sizeof(ver_info));
+	if (ret)
+		pr_err("%s failed to copy_to_user\n", __func__);
+
+	return ret;
+
 }
 
 static long q6venc_ioctl(struct file *file, u32 cmd,
 			   unsigned long arg)
 {
+	long ret = 0;
 	void __user *argp = (void __user *)arg;
 	struct venc_dev *dvenc = file->private_data;
 
+	if (!dvenc || !dvenc->is_active)
+		return -EPERM;
+
 	switch (cmd) {
 	case VENC_IOCTL_SET_INPUT_BUFFER:
-		return venc_set_buffer(dvenc, argp, VENC_BUFFER_TYPE_INPUT);
+		ret = venc_set_buffer(dvenc, argp, VENC_BUFFER_TYPE_INPUT);
+		break;
 	case VENC_IOCTL_SET_OUTPUT_BUFFER:
-		return venc_set_buffer(dvenc, argp, VENC_BUFFER_TYPE_OUTPUT);
+		ret = venc_set_buffer(dvenc, argp, VENC_BUFFER_TYPE_OUTPUT);
+		break;
 	case VENC_IOCTL_GET_SEQUENCE_HDR:
-		return venc_get_sequence_hdr(dvenc, argp);
+		ret = venc_get_sequence_hdr(dvenc, argp);
+		break;
 	case VENC_IOCTL_SET_QP_RANGE:
-		return venc_set_qp_range(dvenc, argp);
+		ret = venc_set_qp_range(dvenc, argp);
+		break;
 	case VENC_IOCTL_SET_INTRA_PERIOD:
-		return venc_set_intra_period(dvenc, argp);
+		ret = venc_set_intra_period(dvenc, argp);
+		break;
 	case VENC_IOCTL_SET_INTRA_REFRESH:
-		return venc_set_intra_refresh(dvenc, argp);
+		ret = venc_set_intra_refresh(dvenc, argp);
+		break;
 	case VENC_IOCTL_SET_FRAME_RATE:
-		return venc_set_frame_rate(dvenc, argp);
+		ret = venc_set_frame_rate(dvenc, argp);
+		break;
 	case VENC_IOCTL_SET_TARGET_BITRATE:
-		return venc_set_target_bitrate(dvenc, argp);
+		ret = venc_set_target_bitrate(dvenc, argp);
+		break;
 	case VENC_IOCTL_CMD_REQUEST_IFRAME:
 		if (dvenc->state == VENC_STATE_START)
-			return venc_request_iframe(dvenc);
-		else
-			return 0;
+			ret = venc_request_iframe(dvenc);
+		break;
 	case VENC_IOCTL_CMD_START:
-		return venc_start(dvenc, argp);
+		ret = venc_start(dvenc, argp);
+		break;
 	case VENC_IOCTL_CMD_STOP:
-		return venc_stop(dvenc);
+		ret = venc_stop(dvenc);
+		break;
 	case VENC_IOCTL_CMD_PAUSE:
-		return venc_pause(dvenc);
+		ret = venc_pause(dvenc);
+		break;
 	case VENC_IOCTL_CMD_RESUME:
-		return venc_resume(dvenc);
+		ret = venc_resume(dvenc);
+		break;
 	case VENC_IOCTL_CMD_ENCODE_FRAME:
-		return venc_encode_frame(dvenc, argp);
+		ret = venc_encode_frame(dvenc, argp);
+		break;
 	case VENC_IOCTL_CMD_FILL_OUTPUT_BUFFER:
-		return venc_fill_output(dvenc, argp);
+		ret = venc_fill_output(dvenc, argp);
+		break;
 	case VENC_IOCTL_CMD_FLUSH:
-		return venc_flush(dvenc, argp);
+		ret = venc_flush(dvenc, argp);
+		break;
 	case VENC_IOCTL_CMD_READ_NEXT_MSG:
-		return venc_read_next_msg(dvenc, argp);
+		wait_event_interruptible(dvenc->venc_msg_evt,
+					  venc_get_msg(dvenc, argp));
+		break;
 	case VENC_IOCTL_CMD_STOP_READ_MSG:
-		return venc_stop_read_msg(dvenc);
+		ret = venc_stop_read_msg(dvenc);
+		break;
+	case VENC_IOCTL_GET_VERSION:
+		ret = venc_get_version(dvenc, argp);
+		break;
 	default:
 		pr_err("%s: invalid ioctl code (%d)\n", __func__, cmd);
-		return -EINVAL;
+		ret = -ENOTTY;
+		break;
 	}
+	return ret;
 }
 
 static int q6venc_open(struct inode *inode, struct file *file)
@@ -940,72 +1075,71 @@ static int q6venc_open(struct inode *inode, struct file *file)
 	int i;
 	int ret = 0;
 	struct venc_dev *dvenc;
-	struct venc_qmsg *msg;
-#if VERSION_CHECK
+	struct venc_msg_list *plist;
 	struct dal_info version_info;
-#endif
 
 	dvenc = kzalloc(sizeof(struct venc_dev), GFP_KERNEL);
-	if (!dvenc)
+	if (!dvenc) {
+		pr_err("%s: unable to allocate memory for struct venc_dev\n",
+			__func__);
 		return -ENOMEM;
-
+	}
 	file->private_data = dvenc;
-	INIT_LIST_HEAD(&dvenc->msg_pool);
-	INIT_LIST_HEAD(&dvenc->msg_queue);
+	INIT_LIST_HEAD(&dvenc->venc_msg_list_head);
+	INIT_LIST_HEAD(&dvenc->venc_msg_list_free);
 	INIT_LIST_HEAD(&dvenc->venc_pmem_list_head);
 	init_waitqueue_head(&dvenc->venc_msg_evt);
-	spin_lock_init(&dvenc->msg_lock);
+	spin_lock_init(&dvenc->venc_msg_list_lock);
 	spin_lock_init(&dvenc->venc_pmem_list_lock);
 	venc_ref++;
-
 	for (i = 0; i < VENC_MSG_MAX; i++) {
-		msg = kzalloc(sizeof(struct venc_qmsg), GFP_KERNEL);
-		if (msg == NULL) {
+		plist = kzalloc(sizeof(struct venc_msg_list), GFP_KERNEL);
+		if (!plist) {
+			pr_err("%s: kzalloc failed\n", __func__);
 			ret = -ENOMEM;
-			goto fail_list_alloc;
+			goto err_venc_create_msg_list;
 		}
-		venc_free_msg(dvenc, msg);
+		list_add(&plist->list, &dvenc->venc_msg_list_free);
 	}
-
-	dvenc->q6_handle = dal_attach(DALDEVICEID_VENC_DEVICE,
-				      DALDEVICEID_VENC_PORTNAME,
-				      venc_q6_callback, (void *)dvenc);
-
+	dvenc->q6_handle =
+	    dal_attach(DALDEVICEID_VENC_DEVICE, DALDEVICEID_VENC_PORTNAME,
+		       venc_q6_callback, (void *)dvenc);
 	if (!(dvenc->q6_handle)) {
 		pr_err("%s: daldevice_attach failed (%d)\n", __func__, ret);
-		goto fail_list_alloc;
+		goto err_venc_dal_attach;
 	}
-
-#if VERSION_CHECK
 	ret = dal_call_f9(dvenc->q6_handle, DAL_OP_INFO, &version_info,
 		sizeof(struct dal_info));
 	if (ret) {
 		pr_err("%s: failed to get version\n", __func__);
-		ret = -EINVAL;
-		goto fail_open;
+		goto err_venc_dal_open;
 	}
+
+	pr_info("VENC_INTERFACE_VERSION %X, version_info.version %X\n",
+		VENC_INTERFACE_VERSION, version_info.version);
+#if 0
 	if (venc_check_version(VENC_INTERFACE_VERSION, version_info.version)) {
 		pr_err("%s: driver version mismatch\n", __func__);
-		ret = -EINVAL;
-		goto fail_open;
+		goto err_venc_dal_open;
 	}
 #endif
 	ret = dal_call_f0(dvenc->q6_handle, DAL_OP_OPEN, 1);
 	if (ret) {
 		pr_err("%s: dal_call_open failed (%d)\n", __func__, ret);
-		goto fail_open;
+		goto err_venc_dal_open;
 	}
 	dvenc->state = VENC_STATE_STOP;
+	dvenc->is_active = 1;
 	prevent_sleep();
 	return ret;
-
-fail_open:
+err_venc_dal_open:
 	dal_detach(dvenc->q6_handle);
-
-fail_list_alloc:
-	while ((msg = venc_alloc_msg(dvenc)))
-		kfree(msg);
-
+err_venc_dal_attach:
+	list_for_each_entry(plist, &dvenc->venc_msg_list_free, list) {
+		list_del(&plist->list);
+		kfree(plist);
+	}
+err_venc_create_msg_list:
 	kfree(dvenc);
 	venc_ref--;
 	return ret;
@@ -1014,30 +1148,35 @@ fail_list_alloc:
 static int q6venc_release(struct inode *inode, struct file *file)
 {
 	int ret = 0;
+	struct venc_msg_list *l, *n;
 	struct venc_pmem_list *plist, *m;
 	struct venc_dev *dvenc;
-	struct venc_qmsg *msg;
+	unsigned long flags;
 
 	venc_ref--;
-
 	dvenc = file->private_data;
+	dvenc->is_active = 0;
 	wake_up_all(&dvenc->venc_msg_evt);
-	if (!dvenc->stop_called)
-		dal_call_f0(dvenc->q6_handle, VENC_DALRPC_STOP, 1);
+	dal_call_f0(dvenc->q6_handle, VENC_DALRPC_STOP, 1);
 	dal_call_f0(dvenc->q6_handle, DAL_OP_CLOSE, 1);
 	dal_detach(dvenc->q6_handle);
-
-
-	/* free all messages in the pool */
-	while ((msg = venc_alloc_msg(dvenc)))
-		kfree(msg);
-
-	/* free all messages sitting in the queue */
-	while ((msg = venc_recv_msg(dvenc)))
-		kfree(msg);
+	list_for_each_entry_safe(l, n, &dvenc->venc_msg_list_free, list) {
+		list_del(&l->list);
+		kfree(l);
+	}
+	list_for_each_entry_safe(l, n, &dvenc->venc_msg_list_head, list) {
+		list_del(&l->list);
+		kfree(l);
+	}
+	spin_lock_irqsave(&dvenc->venc_pmem_list_lock, flags);
+	if (!dvenc->pmem_freed) {
+		list_for_each_entry(plist, &dvenc->venc_pmem_list_head, list)
+			put_pmem_file(plist->buf.file);
+		dvenc->pmem_freed = 1;
+	}
+	spin_unlock_irqrestore(&dvenc->venc_pmem_list_lock, flags);
 
 	list_for_each_entry_safe(plist, m, &dvenc->venc_pmem_list_head, list) {
-		put_pmem_file(plist->buf.file);
 		list_del(&plist->list);
 		kfree(plist);
 	}
@@ -1057,15 +1196,15 @@ static int __init q6venc_init(void)
 {
 	int ret = 0;
 
+	wake_lock_init(&idlelock, WAKE_LOCK_IDLE, "venc_idle");
+	wake_lock_init(&wakelock, WAKE_LOCK_SUSPEND, "venc_suspend");
+
 	venc_device_p = kzalloc(sizeof(struct venc_dev), GFP_KERNEL);
 	if (!venc_device_p) {
 		pr_err("%s: unable to allocate memory for venc_device_p\n",
 			__func__);
 		return -ENOMEM;
 	}
-	wake_lock_init(&idlelock, WAKE_LOCK_IDLE, "venc_idle");
-	wake_lock_init(&wakelock, WAKE_LOCK_SUSPEND, "venc_suspend");
-
 	ret = alloc_chrdev_region(&venc_dev_num, 0, 1, VENC_NAME);
 	if (ret < 0) {
 		pr_err("%s: alloc_chrdev_region failed (%d)\n", __func__,
@@ -1115,6 +1254,7 @@ static void __exit q6venc_exit(void)
 	unregister_chrdev_region(venc_dev_num, 1);
 }
 
+MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("Video encoder driver for QDSP6");
 MODULE_VERSION("2.0");
 module_init(q6venc_init);

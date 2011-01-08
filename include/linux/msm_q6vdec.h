@@ -45,6 +45,7 @@
 #define VDEC_IOCTL_FREEBUFFERS  _IOW(VDEC_IOCTL_MAGIC, 9, struct vdec_buf_info)
 #define VDEC_IOCTL_GETDECATTRIBUTES   _IOR(VDEC_IOCTL_MAGIC, 10, \
 						struct vdec_dec_attributes)
+#define VDEC_IOCTL_GETVERSION   _IOR(VDEC_IOCTL_MAGIC, 11, struct vdec_version)
 
 enum {
 	VDEC_FRAME_DECODE_OK,
@@ -76,6 +77,11 @@ enum {
 	VDEC_QUEUE_FAILED,
 	VDEC_QUEUE_BADSTATE,
 };
+
+enum {
+	VDEC_COLOR_FORMAT_NV21 = 0x01,
+	VDEC_COLOR_FORMAT_NV21_YAMOTO = 0x02
+   };
 
 struct vdec_input_buf_info {
 	u32 offset;
@@ -118,7 +124,7 @@ struct vdec_config {
 	u32 h264_nal_len_size;
 	u32 postproc_flag;
 	u32 fruc_enable;
-	u32 reserved;
+	u32 color_format;           /* used to set YUV color format */
 };
 
 struct vdec_vc1_panscan_regions {
@@ -161,7 +167,7 @@ struct vdec_frame_info {
 	u32 concealed_macblk_num;	/* number of concealed macro blk */
 	u32 flags;		/* input flags */
 	u32 performance_stats;	/* performance statistics returned by decoder */
-	u32 data3;		/* user data field 3 */
+	u32 data3;              /* user data field 3 */
 };
 
 struct vdec_buf_info {
@@ -225,6 +231,11 @@ struct vdec_dec_attributes {
 	struct vdec_buf_desc output;
 	struct vdec_buf_desc dec_req1;
 	struct vdec_buf_desc dec_req2;
+};
+
+struct vdec_version {
+	u32 major;
+	u32 minor;
 };
 
 #endif /* _MSM_VDEC_H_ */

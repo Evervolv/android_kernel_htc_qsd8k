@@ -214,6 +214,7 @@ struct venc_buffer {
 	long long time_stamp;
 	unsigned int flags;
 	unsigned int client_data;
+
 };
 
 struct venc_buffers {
@@ -230,6 +231,7 @@ struct venc_buffer_flush {
 union venc_msg_data {
 	struct venc_buffer buf;
 	struct venc_buffer_flush flush_ret;
+
 };
 
 struct venc_msg {
@@ -266,6 +268,11 @@ struct venc_seq_config {
 	int size;
 	struct venc_pmem buf;
 	struct venc_q6_config q6_config;
+};
+
+struct venc_version {
+	u32 major;
+	u32 minor;
 };
 
 #define VENC_IOCTL_MAGIC 'V'
@@ -317,5 +324,8 @@ struct venc_seq_config {
 
 #define VENC_IOCTL_SET_QP_RANGE \
 	_IOW(VENC_IOCTL_MAGIC, 18, struct venc_qp_range)
+
+#define VENC_IOCTL_GET_VERSION \
+	 _IOR(VENC_IOCTL_MAGIC, 19, struct venc_version)
 
 #endif
