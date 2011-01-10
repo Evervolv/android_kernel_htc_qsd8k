@@ -21,6 +21,7 @@
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/io.h>
+#include <linux/i2c.h>
 #include <linux/smsc911x.h>
 #include <linux/mfd/pm8058.h>
 
@@ -69,6 +70,7 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&msm_device_smd,
 	&msm_device_nand,
+	&msm_device_i2c2,
 };
 
 static void __init msm7x30_init_irq(void)
@@ -107,6 +109,13 @@ static int __init msm7x30_ssbi_pmic_init(void)
 	return platform_device_register(&msm_device_ssbi_pmic);
 }
 
+static struct i2c_board_info surf_i2c_devices[] = {
+	/* marimba master is implied at 0x0c */
+	{
+		I2C_BOARD_INFO("marimba-codec",	0x77),
+	},
+};
+
 extern void msm_serial_debug_init(unsigned int base, int irq,
 				  struct device *clk_device, int signal_irq);
 
@@ -119,6 +128,9 @@ static void __init msm7x30_init(void)
 
 	msm7x30_ssbi_pmic_init();
 	platform_add_devices(devices, ARRAY_SIZE(devices));
+
+	i2c_register_board_info(1, surf_i2c_devices,
+				ARRAY_SIZE(surf_i2c_devices));
 }
 
 static void __init msm7x30_map_io(void)
