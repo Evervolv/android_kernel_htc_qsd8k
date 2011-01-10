@@ -24,6 +24,7 @@
 #include <linux/i2c.h>
 #include <linux/smsc911x.h>
 #include <linux/mfd/pm8058.h>
+#include <linux/usb/android_composite.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -35,10 +36,12 @@
 #include <mach/msm_iomap.h>
 #include <mach/dma.h>
 #include <mach/msm_ssbi.h>
+#include <mach/msm_hsusb.h>
 
 #include <mach/vreg.h>
 #include "devices.h"
 #include "proc_comm.h"
+#include "clock-pcom.h"
 #include "gpiomux.h"
 
 #define MSM7X30_PM8058_GPIO_BASE	FIRST_BOARD_GPIO
@@ -49,16 +52,119 @@
 
 extern struct sys_timer msm_timer;
 
-static int hsusb_phy_init_seq[] = {
-	0x30, 0x32,	/* Enable and set Pre-Emphasis Depth to 20% */
-	0x02, 0x36,	/* Disable CDR Auto Reset feature */
+static int msm7x30_phy_init_seq[] = {
+	0x0C, 0x31,
+	0x31, 0x32,
+	0x1D, 0x0D,
+	0x1D, 0x10,
 	-1
 };
 
-static struct msm_otg_platform_data msm_otg_pdata = {
-	.phy_init_seq		= hsusb_phy_init_seq,
-	.mode                   = USB_PERIPHERAL,
-	.otg_control		= OTG_PHY_CONTROL,
+static void msm7x30_usb_phy_reset(void)
+{
+	u32 id;
+	int ret;
+
+	id = P_USB_PHY_CLK;
+	ret = msm_proc_comm(PCOM_CLKCTL_RPC_RESET_ASSERT, &id, NULL);
+	if (ret) {
+		pr_err("%s: Cannot assert (%d)\n", __func__, ret);
+		return;
+	}
+
+	msleep(1);
+
+	id = P_USB_PHY_CLK;
+	ret = msm_proc_comm(PCOM_CLKCTL_RPC_RESET_DEASSERT, &id, NULL);
+	if (ret) {
+		pr_err("%s: Cannot assert (%d)\n", __func__, ret);
+		return;
+	}
+}
+
+static void msm7x30_usb_hw_reset(bool enable)
+{
+	u32 id;
+	int ret;
+	u32 func;
+
+	id = P_USB_HS_CLK;
+	if (enable)
+		func = PCOM_CLKCTL_RPC_RESET_ASSERT;
+	else
+		func = PCOM_CLKCTL_RPC_RESET_DEASSERT;
+	ret = msm_proc_comm(func, &id, NULL);
+	if (ret)
+		pr_err("%s: Cannot set reset to %d (%d)\n", __func__, enable,
+		       ret);
+}
+
+static struct msm_hsusb_platform_data msm_hsusb_pdata = {
+	.phy_init_seq	= msm7x30_phy_init_seq,
+	.phy_reset	= msm7x30_usb_phy_reset,
+	.hw_reset	= msm7x30_usb_hw_reset,
+};
+
+static char *usb_functions[] = {
+	"usb_mass_storage",
+};
+
+static char *usb_functions_adb[] = {
+	"usb_mass_storage",
+	"adb",
+};
+
+static char *usb_functions_all[] = {
+	"usb_mass_storage",
+	"adb",
+};
+
+static struct android_usb_product usb_products[] = {
+	{
+		.product_id	= 0x4e11,
+		.num_functions	= ARRAY_SIZE(usb_functions),
+		.functions	= usb_functions,
+	},
+	{
+		.product_id	= 0x4e12,
+		.num_functions	= ARRAY_SIZE(usb_functions_adb),
+		.functions	= usb_functions_adb,
+	},
+};
+
+static struct android_usb_platform_data android_usb_pdata = {
+	.vendor_id	= 0x18d1,
+	.product_id	= 0x4e11,
+	.version	= 0x0100,
+	.product_name		= "Surf7x30",
+	.manufacturer_name	= "Qualcomm, Inc.",
+	.num_products = ARRAY_SIZE(usb_products),
+	.products = usb_products,
+	.num_functions = ARRAY_SIZE(usb_functions_all),
+	.functions = usb_functions_all,
+};
+
+static struct platform_device android_usb_device = {
+	.name	= "android_usb",
+	.id		= -1,
+	.dev		= {
+		.platform_data = &android_usb_pdata,
+	},
+};
+
+static struct usb_mass_storage_platform_data mass_storage_pdata = {
+	.nluns		= 1,
+	.vendor		= "Qualcomm, Inc.",
+	.product	= "Surf7x30",
+	.release	= 0x0100,
+};
+
+static struct platform_device usb_mass_storage_device = {
+	.name	= "usb_mass_storage",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &mass_storage_pdata,
+	},
 };
 
 static struct platform_device *devices[] __initdata = {
@@ -71,6 +177,9 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_nand,
 	&msm_device_i2c2,
+	&msm_device_hsusb,
+	&usb_mass_storage_device,
+	&android_usb_device,
 };
 
 static void __init msm7x30_init_irq(void)
@@ -127,10 +236,15 @@ static void __init msm7x30_init(void)
 #endif
 
 	msm7x30_ssbi_pmic_init();
+	msm_device_hsusb.dev.platform_data = &msm_hsusb_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 
 	i2c_register_board_info(1, surf_i2c_devices,
 				ARRAY_SIZE(surf_i2c_devices));
+
+	msm_hsusb_set_vbus_state(1);
+	msm_hsusb_set_vbus_state(0);
+	msm_hsusb_set_vbus_state(1);
 }
 
 static void __init msm7x30_map_io(void)
