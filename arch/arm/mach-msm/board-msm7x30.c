@@ -61,6 +61,9 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 };
 
 static struct platform_device *devices[] __initdata = {
+#if defined(CONFIG_SERIAL_MSM) && !defined(CONFIG_MSM_SERIAL_DEBUGGER)
+	&msm_device_uart1,
+#endif
 #if defined(CONFIG_SERIAL_MSM) || defined(CONFIG_MSM_SERIAL_DEBUGGER)
         &msm_device_uart2,
 #endif
@@ -106,8 +109,16 @@ static int __init msm7x30_ssbi_pmic_init(void)
 	return platform_device_register(&msm_device_ssbi_pmic);
 }
 
+extern void msm_serial_debug_init(unsigned int base, int irq,
+				  struct device *clk_device, int signal_irq);
+
 static void __init msm7x30_init(void)
 {
+#if defined(CONFIG_MSM_SERIAL_DEBUGGER)
+	msm_serial_debug_init(MSM_UART1_PHYS, INT_UART1,
+			      &msm_device_uart1.dev, 1);
+#endif
+
 	msm7x30_ssbi_pmic_init();
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 }
