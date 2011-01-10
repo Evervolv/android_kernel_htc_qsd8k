@@ -64,4 +64,8 @@ enum {
 	GPIOMUX_PULL_UP     = 3UL << 15,
 };
 
+enum {
+	GPIOMUX_DIR_INPUT  = 0UL << 14,
+	GPIOMUX_DIR_OUTPUT = 1UL << 14,
+};
 #endif
