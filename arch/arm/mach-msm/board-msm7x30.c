@@ -22,7 +22,7 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/smsc911x.h>
-#include <linux/usb/msm_hsusb.h>
+#include <linux/mfd/pm8058.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -33,10 +33,18 @@
 #include <mach/memory.h>
 #include <mach/msm_iomap.h>
 #include <mach/dma.h>
+#include <mach/msm_ssbi.h>
 
 #include <mach/vreg.h>
 #include "devices.h"
 #include "proc_comm.h"
+#include "gpiomux.h"
+
+#define MSM7X30_PM8058_GPIO_BASE	FIRST_BOARD_GPIO
+#define MSM7X30_PM8058_GPIO(x)		(MSM7X30_PM8058_GPIO_BASE + (x))
+#define MSM7X30_PM8058_IRQ_BASE		FIRST_BOARD_IRQ
+
+#define MSM7X30_GPIO_PMIC_INT_N		27
 
 extern struct sys_timer msm_timer;
 
@@ -67,12 +75,40 @@ static void __init msm7x30_init_irq(void)
 	msm_init_irq();
 }
 
+static struct pm8058_platform_data msm7x30_pm8058_pdata = {
+	.irq_base	= MSM7X30_PM8058_IRQ_BASE,
+	.gpio_base	= MSM7X30_PM8058_GPIO_BASE,
+};
+
+static struct msm_ssbi_platform_data msm7x30_ssbi_pmic_pdata = {
+	.slave		= {
+		.name		= "pm8058-core",
+		.irq		= MSM_GPIO_TO_INT(MSM7X30_GPIO_PMIC_INT_N),
+		.platform_data	= &msm7x30_pm8058_pdata,
+	},
+	.rspinlock_name	= "D:PMIC_SSBI",
+};
+
+static int __init msm7x30_ssbi_pmic_init(void)
+{
+	int ret;
+
+	pr_info("%s()\n", __func__);
+	msm_gpiomux_write(MSM7X30_GPIO_PMIC_INT_N, 0,
+			  GPIOMUX_FUNC_GPIO |
+			  GPIOMUX_PULL_NONE |
+			  GPIOMUX_DIR_INPUT |
+			  GPIOMUX_DRV_2MA | GPIOMUX_VALID);
+	ret = gpiochip_reserve(msm7x30_pm8058_pdata.gpio_base,
+			       PM8058_NUM_GPIOS);
+	WARN(ret, "can't reserve pm8058 gpios. badness will ensue...\n");
+	msm_device_ssbi_pmic.dev.platform_data = &msm7x30_ssbi_pmic_pdata;
+	return platform_device_register(&msm_device_ssbi_pmic);
+}
+
 static void __init msm7x30_init(void)
 {
-	msm_device_otg.dev.platform_data = &msm_otg_pdata;
-	msm_device_hsusb.dev.parent = &msm_device_otg.dev;
-	msm_device_hsusb_host.dev.parent = &msm_device_otg.dev;
-
+	msm7x30_ssbi_pmic_init();
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 }
 
