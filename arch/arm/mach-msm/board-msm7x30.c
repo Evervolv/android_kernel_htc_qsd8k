@@ -44,12 +44,7 @@
 #include "proc_comm.h"
 #include "clock-pcom.h"
 #include "gpiomux.h"
-
-#define MSM7X30_PM8058_GPIO_BASE	FIRST_BOARD_GPIO
-#define MSM7X30_PM8058_GPIO(x)		(MSM7X30_PM8058_GPIO_BASE + (x))
-#define MSM7X30_PM8058_IRQ_BASE		FIRST_BOARD_IRQ
-
-#define MSM7X30_GPIO_PMIC_INT_N		27
+#include "board-msm7x30.h"
 
 extern struct sys_timer msm_timer;
 
