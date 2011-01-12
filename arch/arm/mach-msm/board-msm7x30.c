@@ -327,14 +327,6 @@ static void __init msm7x30_map_io(void)
 	msm_clock_init(msm_clocks_7x30, msm_num_clocks_7x30);
 }
 
-static void __init msm7x30_fixup(struct machine_desc *desc, struct tag *tags,
-				 char **cmdline, struct meminfo *mi)
-{
-	mi->nr_banks = 1;
-	mi->bank[0].start = PHYS_OFFSET;
-	mi->bank[0].size = (51*1024*1024);
-}
-
 
 extern void __init msm7x30_allocate_fbmem(void);
 
@@ -347,7 +339,6 @@ MACHINE_START(MSM7X30_SURF, "QCT MSM7X30 SURF")
 #ifdef CONFIG_MSM_DEBUG_UART
 #endif
 	.boot_params = PHYS_OFFSET + 0x100,
-	.fixup = msm7x30_fixup,
 	.map_io = msm7x30_map_io,
 	.init_irq = msm7x30_init_irq,
 	.init_machine = msm7x30_init,
