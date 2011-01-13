@@ -196,6 +196,31 @@ static struct platform_device android_pmem_adsp_device = {
 	},
 };
 
+static struct resource msm_kgsl_resources[] = {
+	{
+		.name	= "kgsl_phys_memory",
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.name	= "kgsl_reg_memory",
+		.start	= MSM_GPU_REG_PHYS,
+		.end	= MSM_GPU_REG_PHYS + MSM_GPU_REG_SIZE - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= INT_GRAPHICS,
+		.end	= INT_GRAPHICS,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device msm_kgsl_device = {
+	.name		= "kgsl",
+	.id		= -1,
+	.resource	= msm_kgsl_resources,
+	.num_resources	= ARRAY_SIZE(msm_kgsl_resources),
+};
+
 static struct platform_device *devices[] __initdata = {
 #if defined(CONFIG_SERIAL_MSM) && !defined(CONFIG_MSM_SERIAL_DEBUGGER)
         &msm_device_uart2,
@@ -208,6 +233,7 @@ static struct platform_device *devices[] __initdata = {
 	&android_usb_device,
 	&android_pmem_device,
 	&android_pmem_adsp_device,
+	&msm_kgsl_device,
 };
 
 static void __init msm7x30_init_irq(void)
@@ -379,11 +405,20 @@ static phys_addr_t _reserve_mem(const char *name, unsigned long size,
 
 static void __init msm7x30_reserve(void)
 {
+	struct resource *mem_res;
+
 	msm7x30_allocate_fbmem();
 
 	pmem_pdata.start = _reserve_mem("pmem", pmem_pdata.size, SZ_1M);
 	pmem_adsp_pdata.start = _reserve_mem("pmem_adsp", pmem_adsp_pdata.size,
 					     SZ_1M);
+
+	mem_res = platform_get_resource_byname(&msm_kgsl_device, IORESOURCE_MEM,
+					       "kgsl_phys_memory");
+	BUG_ON(!mem_res);
+	mem_res->start = _reserve_mem("gpu_mem", MSM7X30_SURF_GPU_MEM_SIZE,
+				      SZ_1M);
+	mem_res->end = mem_res->start + MSM7X30_SURF_GPU_MEM_SIZE - 1;
 }
 
 MACHINE_START(MSM7X30_SURF, "QCT MSM7X30 SURF")
