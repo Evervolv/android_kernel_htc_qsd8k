@@ -27,6 +27,8 @@
 #include <linux/mfd/pm8058.h>
 #include <linux/usb/android_composite.h>
 #include <linux/clk.h>
+#include <linux/android_pmem.h>
+#include <linux/memblock.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -164,6 +166,36 @@ static struct platform_device usb_mass_storage_device = {
 	},
 };
 
+static struct android_pmem_platform_data pmem_pdata = {
+	.name		= "pmem",
+	.size		= MSM7X30_SURF_PMEM_SIZE,
+	.no_allocator	= 0,
+	.cached		= 1,
+};
+
+static struct android_pmem_platform_data pmem_adsp_pdata = {
+	.name		= "pmem_adsp",
+	.size		= MSM7X30_SURF_PMEM_ADSP_SIZE,
+	.no_allocator	= 0,
+	.cached		= 0,
+};
+
+static struct platform_device android_pmem_device = {
+	.name		= "android_pmem",
+	.id		= 0,
+	.dev		= {
+		.platform_data = &pmem_pdata
+	},
+};
+
+static struct platform_device android_pmem_adsp_device = {
+	.name		= "android_pmem",
+	.id		= 1,
+	.dev		= {
+		.platform_data = &pmem_adsp_pdata,
+	},
+};
+
 static struct platform_device *devices[] __initdata = {
 #if defined(CONFIG_SERIAL_MSM) && !defined(CONFIG_MSM_SERIAL_DEBUGGER)
         &msm_device_uart2,
@@ -174,6 +206,8 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_hsusb,
 	&usb_mass_storage_device,
 	&android_usb_device,
+	&android_pmem_device,
+	&android_pmem_adsp_device,
 };
 
 static void __init msm7x30_init_irq(void)
@@ -327,12 +361,29 @@ static void __init msm7x30_map_io(void)
 	msm_clock_init(msm_clocks_7x30, msm_num_clocks_7x30);
 }
 
-
 extern void __init msm7x30_allocate_fbmem(void);
+
+static phys_addr_t _reserve_mem(const char *name, unsigned long size,
+				unsigned long align)
+{
+	unsigned long base;
+
+	size = ALIGN(size, align);
+	base = memblock_alloc(size, align);
+	memblock_free(base, size);
+	memblock_remove(base, size);
+	pr_info("msm7x30_surf: reserved memory for %s @ 0x%08lx (%lu bytes)\n",
+		name, base, size);
+	return base;
+}
 
 static void __init msm7x30_reserve(void)
 {
 	msm7x30_allocate_fbmem();
+
+	pmem_pdata.start = _reserve_mem("pmem", pmem_pdata.size, SZ_1M);
+	pmem_adsp_pdata.start = _reserve_mem("pmem_adsp", pmem_adsp_pdata.size,
+					     SZ_1M);
 }
 
 MACHINE_START(MSM7X30_SURF, "QCT MSM7X30 SURF")
