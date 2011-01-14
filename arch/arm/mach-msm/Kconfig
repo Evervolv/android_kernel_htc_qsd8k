@@ -150,6 +150,13 @@ config MACH_MSM7X30_SURF
 	help
 	  Support for the Qualcomm MSM7x30 SURF eval board.
 
+config MACH_MSM7X30_FLUID
+	depends on ARCH_MSM7X30
+	select MACH_MSM7X30_SURF
+	bool "MSM7x30 FLUID"
+	help
+	  Support for the Qualcomm MSM7x30 FLUID eval board.
+
 config MACH_SWORDFISH
 	depends on ARCH_QSD8X50
 	default y
