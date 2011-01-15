@@ -953,18 +953,9 @@ static int msm_spi_setup(struct spi_device *spi)
 	u32              spi_config;
 	u32              mask;
 
-	if (!spi->bits_per_word)
-		spi->bits_per_word = 8;
 	if (spi->bits_per_word < 4 || spi->bits_per_word > 32) {
 		dev_err(&spi->dev, "%s: invalid bits_per_word %d\n",
 			__func__, spi->bits_per_word);
-		rc = -EINVAL;
-	}
-	if (spi->mode & ~(SPI_CPOL | SPI_CPHA | SPI_CS_HIGH | SPI_LOOP)) {
-		dev_err(&spi->dev, "%s, unsupported mode bits %x\n",
-			__func__,
-			spi->mode & ~(SPI_CPOL | SPI_CPHA | SPI_CS_HIGH
-							  | SPI_LOOP));
 		rc = -EINVAL;
 	}
 	if (spi->chip_select > SPI_NUM_CHIPSELECTS-1) {
@@ -1302,6 +1293,8 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 		goto err_probe_exit;
 	}
 
+	/* the spi->mode bits understood by this driver: */
+	master->mode_bits = SPI_CPOL | SPI_CPHA | SPI_CS_HIGH | SPI_LOOP;
 	master->bus_num        = pdev->id;
 	master->num_chipselect = SPI_NUM_CHIPSELECTS;
 	master->setup          = msm_spi_setup;
