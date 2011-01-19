@@ -35,6 +35,7 @@
 struct mdp_lcdc_info {
 	struct mdp_info			*mdp;
 	struct clk			*mdp_clk;
+	struct clk			*mdp_pclk;
 	struct clk			*pclk;
 	struct clk			*pad_pclk;
 	struct msm_panel_data		fb_panel_data;
@@ -94,6 +95,8 @@ static int lcdc_suspend(struct msm_panel_data *fb_panel)
 	mdp_writel(lcdc->mdp, 0, MDP_LCDC_EN);
 	clk_disable(lcdc->pad_pclk);
 	clk_disable(lcdc->pclk);
+	if (lcdc->mdp_pclk)
+		clk_disable(lcdc->mdp_pclk);
 	clk_disable(lcdc->mdp_clk);
 
 	return 0;
@@ -106,6 +109,8 @@ static int lcdc_resume(struct msm_panel_data *fb_panel)
 	pr_info("%s: resuming\n", __func__);
 
 	clk_enable(lcdc->mdp_clk);
+	if (lcdc->mdp_pclk)
+		clk_enable(lcdc->mdp_pclk);
 	clk_enable(lcdc->pclk);
 	clk_enable(lcdc->pad_pclk);
 	mdp_writel(lcdc->mdp, 1, MDP_LCDC_EN);
@@ -119,6 +124,8 @@ static int lcdc_hw_init(struct mdp_lcdc_info *lcdc)
 	uint32_t dma_cfg;
 
 	clk_enable(lcdc->mdp_clk);
+	if (lcdc->mdp_pclk)
+		clk_enable(lcdc->mdp_pclk);
 	clk_enable(lcdc->pclk);
 	clk_enable(lcdc->pad_pclk);
 
@@ -308,6 +315,10 @@ static int mdp_lcdc_probe(struct platform_device *pdev)
 		goto err_get_mdp_clk;
 	}
 
+	lcdc->mdp_pclk = clk_get(mdp_dev->dev.parent, "mdp_pclk");
+	if (IS_ERR(lcdc->mdp_pclk))
+		lcdc->mdp_pclk = NULL;
+
 	lcdc->pclk = clk_get(mdp_dev->dev.parent, "lcdc_pclk_clk");
 	if (IS_ERR(lcdc->pclk)) {
 		pr_err("%s: failed to get lcdc_pclk\n", __func__);
@@ -378,6 +389,8 @@ err_hw_init:
 err_get_pad_pclk:
 	clk_put(lcdc->pclk);
 err_get_pclk:
+	if (lcdc->mdp_pclk)
+		clk_put(lcdc->mdp_pclk);
 	clk_put(lcdc->mdp_clk);
 err_get_mdp_clk:
 	kfree(lcdc);
