@@ -29,6 +29,9 @@ static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 	uint16_t ld_param = 0; /* 0=PRIM, 1=SECD, 2=EXT */
 	uint32_t fmt, pattern;
 
+	/* XXX: HACK! hardcode to do mddi on primary */
+	mdp_writel(mdp, 0x2, MDP_DISP_INTF_SEL);
+
 	/* configure source, base layer */
 	mdp_writel(mdp, ((height << 16) | (width)), MDP_PIPE_RGB_SRC_SIZE(0));
 	mdp_writel(mdp, 0, MDP_PIPE_RGB_SRC_XY(0));
@@ -54,14 +57,12 @@ static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 
 	/* configure destination */
 	/* setup size, address, and stride in the overlay engine */
-	mdp_writel(mdp, 1, MDP_OVERLAYPROC_CFG(0));
 	mdp_writel(mdp, (height << 16) | (width), MDP_OVERLAYPROC_OUT_SIZE(0));
 	mdp_writel(mdp, addr, MDP_OVERLAYPROC_FB_ADDR(0));
 	mdp_writel(mdp, stride, MDP_OVERLAYPROC_FB_Y_STRIDE(0));
 
 	/* output i/f config is in dma_p */
-	dma2_cfg = DMA_PACK_TIGHT |
-		DMA_PACK_ALIGN_LSB;
+	dma2_cfg = DMA_PACK_ALIGN_LSB;
 
 	dma2_cfg |= mdp->dma_format;
 	dma2_cfg |= mdp->dma_pack_pattern;
@@ -94,6 +95,8 @@ int mdp_hw_init(struct mdp_info *mdp)
 
 	mdp_writel(mdp, 0, MDP_INTR_ENABLE);
 	mdp_writel(mdp, 0, MDP_DMA_P_HIST_INTR_ENABLE);
+	mdp_writel(mdp, 0, MDP_LCDC_EN);
+	mdp_writel(mdp, 0xffffffff, MDP_CGC_EN);
 
 	/* XXX: why set this? QCT says it should be > mdp_pclk,
 	 * but they never set the clkrate of pclk */
@@ -114,14 +117,13 @@ int mdp_hw_init(struct mdp_info *mdp)
 	/* 3 pending requests */
 	mdp_writel(mdp, 0x02222, MDP_MAX_RD_PENDING_CMD_CONFIG);
 
-	/* XXX: HACK! hardcode to do mddi on primary */
-	mdp_writel(mdp, 0x2, MDP_DISP_INTF_SEL);
-
 	/* RGB1 -> Layer 0 base */
 	mdp_writel(mdp, 1 << 8, MDP_LAYERMIXER_IN_CFG);
 
 	mdp_writel(mdp, 1, MDP_OVERLAYPROC_CFG(0));
 	mdp_writel(mdp, 0, MDP_OVERLAYPROC_CFG(1));
+
+	mdp_writel(mdp, 0, MDP_OVERLAYPROC_OPMODE(0));
 
 	return 0;
 }

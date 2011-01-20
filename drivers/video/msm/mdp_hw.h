@@ -140,6 +140,7 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 
 #if defined(CONFIG_MSM_MDP40)
 #define MDP_LAYERMIXER_IN_CFG              (0x10100)
+#define MDP_OVERLAY_REG_FLUSH              (0x18000)
 #define MDP_OVERLAYPROC_START(x)           (0x00004 + ((x) * 0x4))
 #define MDP_OVERLAYPROC_CFG(x)             (0x10004 + ((x) * 0x8000))
 #define MDP_OVERLAYPROC_OUT_SIZE(x)        (0x10008 + ((x) * 0x8000))
@@ -163,7 +164,12 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 #define MDP_PIPE_RGB_FETCH_CFG(x)          (0x41004 + ((x) * 0x10000))
 #endif
 
+#if defined(CONFIG_MSM_MDP40)
+#define MDP_CGC_EN                       (0x00040)
+#else
 #define MDP_CGC_EN                       (0x00100)
+#endif
+
 #define MDP_CMD_STATUS                   (0x10008)
 #define MDP_PROFILE_EN                   (0x10010)
 #define MDP_PROFILE_COUNT                (0x10014)
@@ -331,7 +337,10 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 #define TV_ENC_UNDERRUN			(1<<7)
 
 #if defined(CONFIG_MSM_MDP40)
+#define MDP_OVERLAYPROC0_DONE		(1 << 0)
+#define MDP_OVERLAYPROC1_DONE		(1 << 1)
 #define MDP_DMA_P_DONE			(1 << 4)
+#define MDP_LCDC_FRAME_START		(1 << 7)
 #elif defined(CONFIG_MSM_MDP22)
 #define MDP_DMA_P_DONE			(1 << 2)
 #elif defined(CONFIG_MSM_MDP31)
@@ -790,6 +799,7 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 #define DMA_PACK_LOOSE 0
 #define DMA_PACK_ALIGN_LSB 0
 #define DMA_PACK_ALIGN_MSB (1<<7)
+#define DMA_PACK_ALIGN_MASK (1<<7)
 #define DMA_PACK_PATTERN_MASK (0x3f<<8)
 #define DMA_PACK_PATTERN_RGB \
 	(MDP_GET_PACK_PATTERN(0, CLR_R, CLR_G, CLR_B, 2)<<8)
@@ -813,12 +823,20 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 #define DMA_IBUF_FORMAT_MASK (1 << 20)
 #define DMA_IBUF_NONCONTIGUOUS (1<<21)
 
-#else /* CONFIG_MSM_MDP31 */
+#else /* CONFIG_MSM_MDP31 || CONFIG_MSM_MDP40 */
 
+#ifdef CONFIG_MSM_MDP40
+#define DMA_OUT_SEL_AHB				(0)
+#define DMA_OUT_SEL_MDDI			(0)
+#define DMA_OUT_SEL_LCDC			(0)
+#define DMA_OUT_SEL_LCDC_MDDI			(0)
+#else
 #define DMA_OUT_SEL_AHB				(0 << 19)
 #define DMA_OUT_SEL_MDDI			(1 << 19)
 #define DMA_OUT_SEL_LCDC			(2 << 19)
 #define DMA_OUT_SEL_LCDC_MDDI			(3 << 19)
+#endif
+
 #define DMA_DITHER_EN				(1 << 24)
 #define DMA_IBUF_FORMAT_RGB888			(0 << 25)
 #define DMA_IBUF_FORMAT_RGB565			(1 << 25)
