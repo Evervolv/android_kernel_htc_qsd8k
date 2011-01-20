@@ -24,6 +24,7 @@
 #include <linux/err.h>
 #include <linux/memblock.h>
 #include <linux/mfd/pm8058.h>
+#include <linux/spi/spi.h>
 
 #include <linux/io.h>
 #include <linux/gpio.h>
@@ -320,9 +321,13 @@ static DEFINE_MUTEX(msm7x30_backlight_lock);
 
 static void msm7x30_set_backlight_level(uint8_t level)
 {
-	pmic_set_led_intensity(LED_LCD,
-			       MSM7X30_SURF_DEFAULT_BACKLIGHT_BRIGHTNESS *
-			       level / LED_FULL);
+	if (machine_is_msm7x30_fluid()) {
+		gpio_set_value(MSM7X30_PM8058_GPIO(25), !!level);
+	} else {
+		pmic_set_led_intensity(LED_LCD,
+				       MSM7X30_SURF_DEFAULT_BACKLIGHT_BRIGHTNESS *
+				       level / LED_FULL);
+	}
 }
 
 static void msm7x30_process_mddi_table(struct msm_mddi_client_data *client_data,
@@ -362,17 +367,19 @@ static struct pm8058_pin_config msm7x30_mddi_sleep_clk_cfg_off = {
 	.func		= PM8058_GPIO_FUNC_NORMAL,
 };
 
-static void msm7x30_mddi_power_client(struct msm_mddi_client_data *mddi, int on)
+static struct pm8058_pin_config msm7x30_fluid_backlight = {
+	.vin_src	= PM8058_GPIO_VIN_SRC_VREG_S3,
+	.dir		= PM8058_GPIO_OUTPUT,
+	.pull_up	= PM8058_GPIO_PULL_NONE,
+	.strength	= PM8058_GPIO_STRENGTH_HIGH,
+	.func		= PM8058_GPIO_FUNC_NORMAL,
+};
+
+static void msm7x30_power_panel(int on)
 {
-	int rc = 0, flag_on = !!on;
-	static int display_common_power_save_on;
+	int rc = 0;
 	struct vreg *vreg_ldo12, *vreg_ldo15 = NULL;
 	struct vreg *vreg_ldo20, *vreg_ldo16, *vreg_ldo8 = NULL;
-
-	if (display_common_power_save_on == flag_on)
-		return;
-
-	display_common_power_save_on = flag_on;
 
 	if (on) {
 		// XXX enable wega reset gpio
@@ -555,6 +562,11 @@ static void msm7x30_mddi_power_client(struct msm_mddi_client_data *mddi, int on)
 	}
 }
 
+static void msm7x30_mddi_power_client(struct msm_mddi_client_data *mddi, int on)
+{
+	msm7x30_power_panel(on);
+}
+
 static int msm7x30_mddi_toshiba_client_init(
 			struct msm_mddi_bridge_platform_data *bridge_data,
 			struct msm_mddi_client_data *client_data)
@@ -695,6 +707,209 @@ static struct msm_mddi_platform_data mddi_pdata = {
 	},
 };
 
+/********************** FLUID LCDC PANEL CODE */
+struct {
+	u8 addr;
+	u8 data;
+} fluid_sharp_init_tbl[] = {
+	{  15, 0x01 },
+	{   5, 0x01 },
+	{   7, 0x10 },
+	{   9, 0x1E },
+	{  10, 0x04 },
+	{  17, 0xFF },
+	{  21, 0x8A },
+	{  22, 0x00 },
+	{  23, 0x82 },
+	{  24, 0x24 },
+	{  25, 0x22 },
+	{  26, 0x6D },
+	{  27, 0xEB },
+	{  28, 0xB9 },
+	{  29, 0x3A },
+	{  49, 0x1A },
+	{  50, 0x16 },
+	{  51, 0x05 },
+	{  55, 0x7F },
+	{  56, 0x15 },
+	{  57, 0x7B },
+	{  60, 0x05 },
+	{  61, 0x0C },
+	{  62, 0x80 },
+	{  63, 0x00 },
+	{  92, 0x90 },
+	{  97, 0x01 },
+	{  98, 0xFF },
+	{ 113, 0x11 },
+	{ 114, 0x02 },
+	{ 115, 0x08 },
+	{ 123, 0xAB },
+	{ 124, 0x04 },
+	{   6, 0x02 },
+	{ 133, 0x00 },
+	{ 134, 0xFE },
+	{ 135, 0x22 },
+	{ 136, 0x0B },
+	{ 137, 0xFF },
+	{ 138, 0x0F },
+	{ 139, 0x00 },
+	{ 140, 0xFE },
+	{ 141, 0x22 },
+	{ 142, 0x0B },
+	{ 143, 0xFF },
+	{ 144, 0x0F },
+	{ 145, 0x00 },
+	{ 146, 0xFE },
+	{ 147, 0x22 },
+	{ 148, 0x0B },
+	{ 149, 0xFF },
+	{ 150, 0x0F },
+	{ 202, 0x30 },
+	{  30, 0x01 },
+	{   4, 0x01 },
+	{  31, 0x41 },
+};
+
+static struct spi_device *lcdc_spi_client;
+
+static int fluid_spi_write(u8 reg, u8 data)
+{
+	u8 tx_buf[2];
+	int rc;
+	struct spi_message m;
+	struct spi_transfer t = {
+		.tx_buf = tx_buf,
+	};
+
+	if (!lcdc_spi_client) {
+		pr_err("%s: lcdc_spi_client is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	spi_setup(lcdc_spi_client);
+	spi_message_init(&m);
+	spi_message_add_tail(&t, &m);
+
+	tx_buf[0] = reg;
+	tx_buf[1] = data;
+	t.rx_buf = NULL;
+	t.len = 2;
+	rc = spi_sync(lcdc_spi_client, &m);
+	return rc;
+}
+
+int fluid_panel_blank(struct msm_lcdc_panel_ops *ops)
+{
+	/* TODO: Turn backlight off? */
+	return 0;
+}
+
+int fluid_panel_unblank(struct msm_lcdc_panel_ops *ops)
+{
+	/* TODO: Turn backlight on? */
+	return 0;
+}
+
+int fluid_panel_init(struct msm_lcdc_panel_ops *ops)
+{
+	int i;
+
+	msm7x30_power_panel(true);
+
+	for (i = 0; i < ARRAY_SIZE(fluid_sharp_init_tbl); i++)
+		fluid_spi_write(fluid_sharp_init_tbl[i].addr,
+				fluid_sharp_init_tbl[i].data);
+	mdelay(10);
+	fluid_spi_write(31, 0xC1);
+	mdelay(10);
+	fluid_spi_write(31, 0xD9);
+	fluid_spi_write(31, 0xDF);
+
+	return 0;
+}
+
+static struct msm_lcdc_timing fluid_lcdc_timing = {
+	.clk_rate		= 24576000,
+	.hsync_pulse_width	= 10,
+	.hsync_back_porch	= 20,
+	.hsync_front_porch	= 10,
+	.hsync_skew		= 0,
+	.vsync_pulse_width	= 2,
+	.vsync_back_porch	= 2,
+	.vsync_front_porch	= 2,
+	.vsync_act_low		= 1,
+	.hsync_act_low		= 1,
+	.den_act_low		= 0,
+};
+
+static struct msm_fb_data fluid_lcdc_fb_data = {
+	.xres		= 480,
+	.yres		= 800,
+	.width		= 57,
+	.height		= 94,
+	.output_format	= MSM_MDP_OUT_IF_FMT_RGB666,
+};
+
+static struct msm_lcdc_panel_ops fluid_lcdc_panel_ops = {
+	.init		= fluid_panel_init,
+	.blank		= fluid_panel_blank,
+	.unblank	= fluid_panel_unblank,
+};
+
+static struct msm_lcdc_platform_data fluid_lcdc_platform_data = {
+	.panel_ops	= &fluid_lcdc_panel_ops,
+	.timing		= &fluid_lcdc_timing,
+	.fb_id		= 0,
+	.fb_data	= &fluid_lcdc_fb_data,
+	.fb_resource	= resources_msm_fb,
+};
+
+static struct platform_device fluid_lcdc_device = {
+	.name	= "msm_mdp_lcdc",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &fluid_lcdc_platform_data,
+	},
+};
+
+static int __devinit fluid_lcdc_sharp_spi_probe(struct spi_device *spi)
+{
+	int rc;
+
+	lcdc_spi_client = spi;
+	lcdc_spi_client->bits_per_word = 32;
+
+	rc = platform_device_register(&fluid_lcdc_device);
+	if (rc)
+		return rc;
+	return 0;
+}
+
+static int __devexit fluid_lcdc_sharp_spi_remove(struct spi_device *spi)
+{
+	lcdc_spi_client = NULL;
+	return 0;
+}
+
+static struct spi_driver fluid_lcdc_sharp_spi_driver = {
+	.driver = {
+		.name  = "fluid_lcdc_sharp",
+		.owner = THIS_MODULE,
+	},
+	.probe		= fluid_lcdc_sharp_spi_probe,
+	.remove		= __devexit_p(fluid_lcdc_sharp_spi_remove),
+};
+
+static struct spi_board_info fluid_lcdc_sharp_spi_board_info[] __initdata = {
+	{
+		.modalias	= "fluid_lcdc_sharp",
+		.mode		= SPI_MODE_1,
+		.bus_num	= 0,
+		.chip_select	= 0,
+		.max_speed_hz	= 26331429,
+	}
+};
+
 static struct platform_device msm7x30_backlight = {
 	.name = "msm7x30-backlight",
 };
@@ -714,14 +929,38 @@ int __init msm7x30_init_panel(void)
 			  GPIOMUX_DIR_OUTPUT |
 			  GPIOMUX_DRV_2MA | GPIOMUX_VALID);
 
+	if (machine_is_msm7x30_fluid()) {
+		int i;
+		int mux_val = GPIOMUX_FUNC_1 | GPIOMUX_PULL_NONE |
+			GPIOMUX_DIR_OUTPUT |
+			GPIOMUX_DRV_2MA | GPIOMUX_VALID;
+
+		msm_gpiomux_write(22, 0, mux_val);
+		msm_gpiomux_write(25, 0, mux_val);
+
+		for (i = 90; i <= 109; i++)
+			msm_gpiomux_write(i, 0, mux_val);
+	}
+
 	rc = platform_device_register(&msm_device_mdp);
 	if (rc)
 		return rc;
 
-	msm_device_mddi0.dev.platform_data = &mddi_pdata;
-	rc = platform_device_register(&msm_device_mddi0);
-	if (rc)
-		return rc;
+	if (machine_is_msm7x30_fluid()) {
+		rc = spi_register_driver(&fluid_lcdc_sharp_spi_driver);
+		if (rc)
+			return rc;
+		spi_register_board_info(fluid_lcdc_sharp_spi_board_info,
+			ARRAY_SIZE(fluid_lcdc_sharp_spi_board_info));
+		pm8058_gpio_mux(MSM7X30_PM8058_GPIO(25),
+				&msm7x30_fluid_backlight);
+		gpio_request(MSM7X30_PM8058_GPIO(25), "lcd_backlight");
+	} else {
+		msm_device_mddi0.dev.platform_data = &mddi_pdata;
+		rc = platform_device_register(&msm_device_mddi0);
+		if (rc)
+			return rc;
+	}
 
 	platform_device_register(&msm7x30_backlight);
 	return platform_driver_register(&msm7x30_backlight_driver);
