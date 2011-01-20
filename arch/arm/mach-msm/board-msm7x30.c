@@ -41,6 +41,7 @@
 #include <mach/dma.h>
 #include <mach/msm_ssbi.h>
 #include <mach/msm_hsusb.h>
+#include <mach/msm_spi.h>
 
 #include <mach/vreg.h>
 #include "devices.h"
@@ -234,6 +235,7 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_device,
 	&android_pmem_adsp_device,
 	&msm_kgsl_device,
+	&msm_device_spi,
 };
 
 static void __init msm7x30_init_irq(void)
@@ -453,6 +455,34 @@ static struct i2c_board_info surf_i2c_devices[] = {
 	},
 };
 
+static int msm7x30_spi_init(void)
+{
+	msm_gpiomux_write(45, 0,
+			  GPIOMUX_FUNC_1 |
+			  GPIOMUX_PULL_NONE |
+			  GPIOMUX_DIR_INPUT |
+			  GPIOMUX_DRV_2MA | GPIOMUX_VALID);
+	msm_gpiomux_write(46, 0,
+			  GPIOMUX_FUNC_1 |
+			  GPIOMUX_PULL_NONE |
+			  GPIOMUX_DIR_INPUT |
+			  GPIOMUX_DRV_2MA | GPIOMUX_VALID);
+	msm_gpiomux_write(47, 0,
+			  GPIOMUX_FUNC_1 |
+			  GPIOMUX_PULL_NONE |
+			  GPIOMUX_DIR_INPUT |
+			  GPIOMUX_DRV_2MA | GPIOMUX_VALID);
+	msm_gpiomux_write(48, 0,
+			  GPIOMUX_FUNC_1 |
+			  GPIOMUX_PULL_NONE |
+			  GPIOMUX_DIR_INPUT |
+			  GPIOMUX_DRV_2MA | GPIOMUX_VALID);
+}
+
+static struct msm_spi_platform_data msm7x30_spi_pdata = {
+	.max_clock_speed = 26331429,
+};
+
 extern void msm_serial_debug_init(unsigned int base, int irq,
 				  struct device *clk_device, int signal_irq);
 
@@ -476,7 +506,11 @@ static void __init msm7x30_init(void)
 #endif
 
 	msm7x30_ssbi_pmic_init();
+	msm7x30_spi_init();
+
 	msm_device_hsusb.dev.platform_data = &msm_hsusb_pdata;
+	msm_device_spi.dev.platform_data = &msm7x30_spi_pdata;
+
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 
 	i2c_register_board_info(1, surf_i2c_devices,
