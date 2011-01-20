@@ -424,7 +424,11 @@ static void __init free_unused_memmap(struct meminfo *mi)
 	for_each_bank(i, mi) {
 		struct membank *bank = &mi->bank[i];
 
-		bank_start = bank_pfn_start(bank);
+		/* Round bank_start down to the start of a pageblock so that
+		 * all pages in a pageblock always have a mapping.
+		 */
+		bank_start = round_down(bank_pfn_start(bank),
+					MAX_ORDER_NR_PAGES);
 
 		/*
 		 * If we had a previous bank, and there is a space
