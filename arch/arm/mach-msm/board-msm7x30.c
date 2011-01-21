@@ -29,6 +29,7 @@
 #include <linux/clk.h>
 #include <linux/android_pmem.h>
 #include <linux/memblock.h>
+#include <linux/wakelock.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -103,6 +104,72 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.phy_init_seq	= msm7x30_phy_init_seq,
 	.phy_reset	= msm7x30_usb_phy_reset,
 	.hw_reset	= msm7x30_usb_hw_reset,
+	.usb_connected	= pm8058_notify_charger_connected,
+};
+
+static struct wake_lock vbus_wake_lock;
+
+static void msm7x30_vbus_present(bool present)
+{
+	pr_info("usb_cable_status: %s\n", present ? "inserted" : "removed");
+	if (present)
+		wake_lock(&vbus_wake_lock);
+	msm_hsusb_set_vbus_state(present);
+	if (!present)
+		wake_unlock(&vbus_wake_lock);
+}
+
+static int msm7x30_pcom_charge(u32 max_current, bool is_ac)
+{
+	u32 status = 0;
+	u32 pc_ids[] = {
+		PCOM_CHG_USB_IS_PC_CONNECTED,
+		PCOM_CHG_USB_IS_CHARGER_CONNECTED,
+	};
+	int ret = 0;
+
+	pr_info("%s(%u,%d)\n", __func__, max_current, is_ac);
+
+	if (max_current) {
+		/* enable charging */
+		status = 0;
+		msm_proc_comm(pc_ids[!!is_ac], &status, 0);
+		if (!status) {
+			pr_err("%s: can't set chg type (ac=%d)\n", __func__,
+			       is_ac);
+			ret = -EINVAL;
+			goto err;
+		}
+		msm_proc_comm(PCOM_CHG_USB_IS_AVAILABLE, &max_current, &status);
+		if (!status) {
+			pr_err("%s: set_i failed %u\n", __func__, max_current);
+			ret = -EINVAL;
+			goto err;
+		}
+	} else {
+		msm_proc_comm(PCOM_CHG_USB_IS_AVAILABLE, &max_current, &status);
+		if (!status) {
+			pr_err("%s: set_i failed %u\n", __func__, max_current);
+			ret = -EINVAL;
+			goto err;
+		}
+		msm_proc_comm(PCOM_CHG_USB_IS_DISCONNECTED, &status, 0);
+		if (!status) {
+			pr_err("%s: can't set disconnect\n", __func__);
+			ret = -EINVAL;
+			goto err;
+		}
+	}
+
+err:
+	return ret;
+}
+
+static struct pm8058_charger_platform_data msm7x30_pmic_charger_pdata = {
+	.vbus_present           = msm7x30_vbus_present,
+	.charge                 = msm7x30_pcom_charge,
+	.supplied_to            = NULL,
+	.num_supplicants        = 0,
 };
 
 static char *usb_functions[] = {
@@ -420,6 +487,7 @@ static struct pm8058_platform_data msm7x30_pm8058_pdata = {
 	.irq_base	= MSM7X30_PM8058_IRQ_BASE,
 	.gpio_base	= MSM7X30_PM8058_GPIO_BASE,
 	.keypad_pdata	= &msm7x30_pmic_keypad_pdata,
+	.charger_pdata	= &msm7x30_pmic_charger_pdata,
 };
 
 static struct msm_ssbi_platform_data msm7x30_ssbi_pmic_pdata = {
@@ -488,6 +556,7 @@ extern void msm_serial_debug_init(unsigned int base, int irq,
 
 static void __init msm7x30_init(void)
 {
+	wake_lock_init(&vbus_wake_lock, WAKE_LOCK_SUSPEND, "board-vbus");
 #ifdef CONFIG_DEBUG_LL
 	{
 		/* HACK: get a fake clock request for uart2 for debug_ll */
