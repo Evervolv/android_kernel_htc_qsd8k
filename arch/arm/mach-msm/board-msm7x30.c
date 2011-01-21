@@ -362,7 +362,20 @@ static int msm7x30_pmic_keypad_init(struct device *dev)
 	return 0;
 }
 
-static const unsigned short msm7x30_pmic_keymap[KEYMAP_SIZE] = {
+static const unsigned short msm7x30_fluid_pmic_keymap[KEYMAP_SIZE] = {
+	[KEYMAP_INDEX(0, 0)] = KEY_7,
+	[KEYMAP_INDEX(0, 1)] = KEY_ENTER,
+	[KEYMAP_INDEX(0, 2)] = KEY_UP,
+	[KEYMAP_INDEX(0, 4)] = KEY_DOWN,
+
+	[KEYMAP_INDEX(1, 0)] = KEY_POWER,
+	[KEYMAP_INDEX(1, 1)] = KEY_SELECT,
+	[KEYMAP_INDEX(1, 2)] = KEY_1,
+	[KEYMAP_INDEX(1, 3)] = KEY_VOLUMEUP,
+	[KEYMAP_INDEX(1, 4)] = KEY_VOLUMEDOWN,
+};
+
+static const unsigned short msm7x30_surf_pmic_keymap[KEYMAP_SIZE] = {
 	[KEYMAP_INDEX(0, 0)] = KEY_7,
 	[KEYMAP_INDEX(0, 1)] = KEY_DOWN,
 	[KEYMAP_INDEX(0, 2)] = KEY_UP,
@@ -479,7 +492,6 @@ static struct pm8058_keypad_platform_data msm7x30_pmic_keypad_pdata = {
 	.scan_delay_shift	= 5,
 	.drv_hold_clks		= 4,
 	.debounce_ms		= 10,
-	.keymap			= msm7x30_pmic_keymap,
 	.init			= msm7x30_pmic_keypad_init,
 };
 
@@ -573,6 +585,11 @@ static void __init msm7x30_init(void)
 	msm_serial_debug_init(MSM_UART2_PHYS, INT_UART2,
 			      &msm_device_uart2.dev, 1);
 #endif
+
+	if (machine_is_msm7x30_fluid())
+		msm7x30_pmic_keypad_pdata.keymap = msm7x30_fluid_pmic_keymap;
+	else
+		msm7x30_pmic_keypad_pdata.keymap = msm7x30_surf_pmic_keymap;
 
 	msm7x30_ssbi_pmic_init();
 	msm7x30_spi_init();
