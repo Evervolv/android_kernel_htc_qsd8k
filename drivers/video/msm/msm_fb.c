@@ -305,9 +305,6 @@ static void msmfb_pan_update(struct fb_info *info, uint32_t left, uint32_t top,
 	DLOG(SHOW_UPDATES, "update %d %d %d %d %d %d\n",
 		left, top, eright, ebottom, yoffset, pan_display);
 
-        if (msmfb->sleeping != AWAKE)
-                DLOG(SUSPEND_RESUME, "pan_update in state(%d)\n", msmfb->sleeping);
-
 #ifdef CONFIG_PANEL_SELF_REFRESH
 	if (lcdc->mdp->mdp_dev.overrides & MSM_MDP_RGB_PANEL_SELE_REFRESH) {
 		spin_lock_irqsave(&panel_icm->lock, irq_flags);
@@ -322,8 +319,6 @@ static void msmfb_pan_update(struct fb_info *info, uint32_t left, uint32_t top,
 	msmfb_set_var(msmfb->fb->screen_base, yoffset);
 #endif
 
->>>>>>> 2eaad42... video: msm: Updated MDDI from HTC
-restart:
 	spin_lock_irqsave(&msmfb->update_lock, irq_flags);
 
 	/* if we are sleeping, on a pan_display wait 10ms (to throttle back
@@ -459,13 +454,13 @@ error:
 	mutex_unlock(&msmfb->panel_init_lock);
 }
 
-<<<<<<< HEAD
-=======
+
 static BLOCKING_NOTIFIER_HEAD(display_chain_head);                               
 int register_display_notifier(struct notifier_block *nb)                  
 {                                                                                
 	return blocking_notifier_chain_register(&display_chain_head, nb);        
-}                                                                                
+} 
+                                                                               
 static int display_notifier_callback(struct notifier_block *nfb,                 
 		unsigned long action,                       
 		void *ignored)                              
@@ -489,7 +484,7 @@ static int display_notifier_callback(struct notifier_block *nfb,
 }                                                                                
 
 /* -------------------------------------------------------------------------- */ 
->>>>>>> 2eaad42... video: msm: Updated MDDI from HTC
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 /* turn off the panel */
 static void msmfb_earlier_suspend(struct early_suspend *h)
@@ -536,12 +531,6 @@ static void msmfb_suspend(struct early_suspend *h)
 	mutex_unlock(&msmfb->panel_init_lock);
 }
 
-<<<<<<< HEAD
-static void msmfb_resume(struct early_suspend *h)
-{
-	struct msmfb_info *msmfb = container_of(h, struct msmfb_info,
-						early_suspend);
-=======
 static void msmfb_resume_handler(struct early_suspend *h)
 {
 	struct msmfb_info *msmfb = container_of(h, struct msmfb_info,
@@ -561,7 +550,7 @@ static void msmfb_onchg_earlier_suspend(struct early_suspend *h)
 {
 	struct msmfb_info *msmfb = container_of(h, struct msmfb_info,
 						onchg_earlier_suspend);
->>>>>>> 2eaad42... video: msm: Updated MDDI from HTC
+
 	struct msm_panel_data *panel = msmfb->panel;
 	unsigned long irq_flags;
 
@@ -575,8 +564,7 @@ static void msmfb_onchg_earlier_suspend(struct early_suspend *h)
 	msmfb->sleeping = WAKING;
 	DLOG(SUSPEND_RESUME, "ready, waiting for full update\n");
 	spin_unlock_irqrestore(&msmfb->update_lock, irq_flags);
-<<<<<<< HEAD
-=======
+
 	wait_event_timeout(msmfb->frame_wq,
 			   msmfb->frame_requested == msmfb->frame_done, HZ/10);
 #ifndef CONFIG_MSM_MDP40
@@ -640,7 +628,6 @@ static void msmfb_resume(struct work_struct *work)
 	wake_up(&msmfb->frame_wq);
 
 	atomic_set(&mdpclk_on, 1);
->>>>>>> 2eaad42... video: msm: Updated MDDI from HTC
 }
 #endif
 
@@ -1190,8 +1177,6 @@ error_setup_fbmem:
 	return ret;
 }
 
-<<<<<<< HEAD
-=======
 static void msmfb_shutdown(struct platform_device *pdev)
 {
 	struct msm_panel_data *panel = pdev->dev.platform_data;
@@ -1217,7 +1202,6 @@ static void msmfb_shutdown(struct platform_device *pdev)
 		panel->shutdown(panel);
 }
 
->>>>>>> 2eaad42... video: msm: Updated MDDI from HTC
 static struct platform_driver msm_panel_driver = {
 	/* need to write remove */
 	.probe = msmfb_probe,
