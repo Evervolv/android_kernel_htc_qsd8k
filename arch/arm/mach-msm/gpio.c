@@ -467,6 +467,17 @@ void msm_gpio_exit_sleep(void)
 	}
 }
 
+void config_gpio_table(uint32_t *table, int len)
+{
+	int n;
+	unsigned id;
+	for (n = 0; n < len; n++) {
+		id = table[n];
+		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &id, 0);
+	}
+}
+EXPORT_SYMBOL(config_gpio_table);
+
 static int __init msm_init_gpio(void)
 {
 	int i, j = 0;
