@@ -174,8 +174,17 @@ int __init msm_add_sdcc(unsigned int controller,
 			struct msm_mmc_platform_data *plat,
 			unsigned int stat_irq, unsigned long stat_irq_flags);
 
-#ifdef CONFIG_USB_MSM_72K
+#if defined(CONFIG_USB_FUNCTION_MSM_HSUSB) || defined(CONFIG_USB_MSM_72K)
 void msm_hsusb_set_vbus_state(int online);
+/* START: add USB connected notify function */
+struct t_usb_status_notifier{
+	struct list_head notifier_link;
+	const char *name;
+	void (*func)(int online);
+};
+	int usb_register_notifier(struct t_usb_status_notifier *);
+	static LIST_HEAD(g_lh_usb_notifier_list);
+/* END: add USB connected notify function */
 #else
 static inline void msm_hsusb_set_vbus_state(int online) {}
 #endif
