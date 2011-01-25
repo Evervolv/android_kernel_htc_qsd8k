@@ -1801,7 +1801,7 @@ static int cyttsp_initialize(struct i2c_client *client, struct cyttsp *ts)
 		retval = cyttsp_power_on(ts);
 
 	if (retval < 0)
-		goto error_free_device;
+		goto error_unreg_device;
 
 	/* Timer or Interrupt setup */
 	if (ts->client->irq == 0) {
@@ -1858,7 +1858,8 @@ error_rm_dev_file_irq_en:
 error_free_irq:
 	cyttsp_alert("Error: Failed to register IRQ handler\n");
 	free_irq(client->irq, ts);
-
+error_unreg_device:
+	input_unregister_device(input_device);
 error_free_device:
 	if (input_device)
 		input_free_device(input_device);
