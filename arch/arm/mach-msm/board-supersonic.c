@@ -1602,13 +1602,13 @@ static void __init supersonic_fixup(struct machine_desc *desc, struct tag *tags,
 	/* First Bank 256MB */
 	mi->nr_banks = 1;
 	mi->bank[0].start = PHYS_OFFSET;
-	mi->bank[0].node = PHYS_TO_NID(PHYS_OFFSET);
+//	mi->bank[0].node = PHYS_TO_NID(PHYS_OFFSET);
 	mi->bank[0].size = MSM_EBI1_BANK0_SIZE;	/*(219*1024*1024);*/
 
 	/* Second Bank 128MB */
 	mi->nr_banks++;
 	mi->bank[1].start = MSM_EBI1_BANK1_BASE;
-	mi->bank[1].node = PHYS_TO_NID(MSM_EBI1_BANK1_BASE);
+//	mi->bank[1].node = PHYS_TO_NID(MSM_EBI1_BANK1_BASE);
 	mi->bank[1].size = MSM_EBI1_BANK1_SIZE;
 }
 

@@ -21,11 +21,11 @@
 #include <linux/mmc/host.h>
 #include <linux/mmc/sdio_ids.h>
 #include <linux/platform_device.h>
-#include <linux/gpio.h>
+#include <asm/gpio.h>
 
 #include <asm/io.h>
 #include <asm/mach-types.h>
-#include <asm/mach/mmc.h>
+#include <mach/mmc.h>
 
 #include <mach/vreg.h>
 
@@ -133,17 +133,12 @@ static unsigned int supersonic_sdslot_status(struct device *dev)
 
 static unsigned int supersonic_sdslot_type = MMC_TYPE_SD;
 
-static struct mmc_platform_data supersonic_sdslot_data = {
+static struct msm_mmc_platform_data supersonic_sdslot_data = {
 	.ocr_mask	= SUPERSONIC_MMC_VDD,
 	.status		= supersonic_sdslot_status,
 	.translate_vdd	= supersonic_sdslot_switchvdd,
 //	.slot_type	= &supersonic_sdslot_type,
 };
-
-int msm_add_sdcc(unsigned int controller, struct mmc_platform_data *plat,
-		 unsigned int stat_irq, unsigned long stat_irq_flags);
-
-
 
 /* ---- WIFI ---- */
 
@@ -202,7 +197,7 @@ static unsigned int supersonic_wifi_status(struct device *dev)
 	return supersonic_wifi_cd;
 }
 
-static struct mmc_platform_data supersonic_wifi_data = {
+static struct msm_mmc_platform_data supersonic_wifi_data = {
 	.ocr_mask		= MMC_VDD_28_29,
         .built_in               = 1,
 	.status			= supersonic_wifi_status,
@@ -317,7 +312,7 @@ void supersonic_wimax_set_carddetect(int val)
 }
 EXPORT_SYMBOL(supersonic_wimax_set_carddetect);
 
-static struct mmc_platform_data supersonic_wimax_data = {
+static struct msm_mmc_platform_data supersonic_wimax_data = {
 	.ocr_mask		= MMC_VDD_27_28 | MMC_VDD_28_29 | MMC_VDD_29_30,
         .built_in               = 1,
 	.status			= supersonic_wimax_status,

@@ -247,7 +247,7 @@ static struct file_operations tpa2018d1_fops = {
 	.owner = THIS_MODULE,
 	.open = tpa2018d1_open,
 	.release = tpa2018d1_release,
-	.ioctl = tpa2018d1_ioctl,
+	.unlocked_ioctl = tpa2018d1_ioctl,
 };
 
 static struct miscdevice tpa2018d1_device = {
