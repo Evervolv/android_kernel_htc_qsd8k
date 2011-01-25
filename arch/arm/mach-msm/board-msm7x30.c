@@ -666,6 +666,59 @@ static struct msm_spi_platform_data msm7x30_spi_pdata = {
 	.max_clock_speed = 26331429,
 };
 
+static ssize_t fluid_virtual_keys_show(struct kobject *kobj,
+				       struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf,
+		       __stringify(EV_KEY) ":" __stringify(KEY_BACK) ":50:842:80:100"
+		       ":" __stringify(EV_KEY) ":" __stringify(KEY_MENU) ":170:842:80:100"
+		       ":" __stringify(EV_KEY) ":" __stringify(KEY_HOME) ":290:842:80:100"
+		       ":" __stringify(EV_KEY) ":" __stringify(KEY_SEARCH) ":410:842:80:100"
+	"\n");
+}
+
+static struct kobj_attribute fluid_virtual_keys_attr = {
+	.attr = {
+		.name = "virtualkeys.cyttsp-i2c",
+		.mode = S_IRUGO,
+	},
+	.show = &fluid_virtual_keys_show,
+};
+
+static struct attribute *fluid_properties_attrs[] = {
+	&fluid_virtual_keys_attr.attr,
+	NULL
+};
+
+static struct attribute_group fluid_properties_attr_group = {
+	.attrs = fluid_properties_attrs,
+};
+
+static int fluid_board_props_init(void)
+{
+	int rc;
+	struct kobject *properties_kobj;
+
+	properties_kobj = kobject_create_and_add("board_properties", NULL);
+	if (!properties_kobj) {
+		rc = -ENOMEM;
+		goto err_kobj_create;
+	}
+
+	rc = sysfs_create_group(properties_kobj, &fluid_properties_attr_group);
+	if (rc)
+		goto err_sysfs_create;
+
+	return 0;
+
+err_sysfs_create:
+	kobject_put(properties_kobj);
+err_kobj_create:
+	pr_err("failed to create board_properties\n");
+	return rc;
+}
+
+
 extern void msm_serial_debug_init(unsigned int base, int irq,
 				  struct device *clk_device, int signal_irq);
 
@@ -710,6 +763,9 @@ static void __init msm7x30_init(void)
 	}
 	i2c_register_board_info(1, surf_i2c_devices,
 				ARRAY_SIZE(surf_i2c_devices));
+
+	if (machine_is_msm7x30_fluid())
+		fluid_board_props_init();
 
 	msm_hsusb_set_vbus_state(1);
 	msm_hsusb_set_vbus_state(0);
