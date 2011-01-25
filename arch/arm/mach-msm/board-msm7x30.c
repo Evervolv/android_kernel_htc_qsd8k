@@ -295,6 +295,7 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&msm_device_smd,
 	&msm_device_nand,
+	&msm_device_i2c,
 	&msm_device_i2c2,
 	&msm_device_hsusb,
 	&usb_mass_storage_device,
@@ -535,6 +536,20 @@ static struct i2c_board_info surf_i2c_devices[] = {
 	},
 };
 
+static int msm7x30_i2c_0_init(void)
+{
+	msm_gpiomux_write(70, 0,
+			  GPIOMUX_FUNC_1 |
+			  GPIOMUX_PULL_NONE |
+			  GPIOMUX_DIR_INPUT |
+			  GPIOMUX_DRV_16MA | GPIOMUX_VALID);
+	msm_gpiomux_write(71, 0,
+			  GPIOMUX_FUNC_1 |
+			  GPIOMUX_PULL_NONE |
+			  GPIOMUX_DIR_INPUT |
+			  GPIOMUX_DRV_16MA | GPIOMUX_VALID);
+}
+
 static int msm7x30_spi_init(void)
 {
 	msm_gpiomux_write(45, 0,
@@ -592,6 +607,7 @@ static void __init msm7x30_init(void)
 		msm7x30_pmic_keypad_pdata.keymap = msm7x30_surf_pmic_keymap;
 
 	msm7x30_ssbi_pmic_init();
+	msm7x30_i2c_0_init();
 	msm7x30_spi_init();
 
 	msm_device_hsusb.dev.platform_data = &msm_hsusb_pdata;
