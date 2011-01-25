@@ -30,6 +30,7 @@
 #include <linux/android_pmem.h>
 #include <linux/memblock.h>
 #include <linux/wakelock.h>
+#include <linux/cyttsp.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -529,6 +530,93 @@ static int __init msm7x30_ssbi_pmic_init(void)
 	return platform_device_register(&msm_device_ssbi_pmic);
 }
 
+static struct vreg *vreg_l15; /* gp6 */
+static struct vreg *vreg_l8;  /* gp7 */
+static struct vreg *vreg_l16; /* gp10 */
+
+static struct vreg *_get_vreg(char *name, u32 mv, bool en)
+{
+	struct vreg *vr;
+
+	vr = vreg_get(NULL, name);
+	if (IS_ERR(vr))
+		return NULL;
+	if (mv != 0)
+		vreg_set_level(vr, mv);
+	if (en)
+		vreg_enable(vr);
+	return vr;
+}
+
+static void _put_vreg(struct vreg *vr)
+{
+	if (vr) {
+		vreg_disable(vr);
+		vreg_put(vr);
+	}
+}
+
+static void fluid_cyttsp_init(void)
+{
+	vreg_l8 = _get_vreg("gp7", 1800, true);
+	vreg_l16 = _get_vreg("gp10", 2600, true);
+	vreg_l15 = _get_vreg("gp6", 3050, true);
+
+	if (!vreg_l8 || !vreg_l16 || !vreg_l15) {
+		pr_err("%s: can't get vregs\n", __func__);
+		_put_vreg(vreg_l8);
+		_put_vreg(vreg_l15);
+		_put_vreg(vreg_l16);
+		return;
+	}
+
+	/* enable interrupt gpio */
+	msm_gpiomux_write(MSM7X30_FLUID_GPIO_TOUCH_INT_N, 0,
+			  GPIOMUX_FUNC_GPIO |
+			  GPIOMUX_PULL_UP |
+			  GPIOMUX_DIR_INPUT |
+			  GPIOMUX_DRV_6MA | GPIOMUX_VALID);
+}
+
+static int fluid_cyttsp_resume(struct i2c_client *client)
+{
+	mdelay(10);
+	return CY_OK;
+}
+
+static struct cyttsp_platform_data fluid_cyttsp_pdata = {
+	.panel_maxx = 479,
+	.panel_maxy = 799,
+	.disp_maxx = 469,
+	.disp_maxy = 799,
+	.disp_minx = 10,
+	.disp_miny = 0,
+	.flags = 0,
+	.gen = CY_GEN3,	/* or */
+	.use_st = CY_USE_ST,
+	.use_mt = CY_USE_MT,
+	.use_hndshk = CY_SEND_HNDSHK,
+	.use_trk_id = CY_USE_TRACKING_ID,
+	.use_sleep = CY_USE_SLEEP,
+	.use_gestures = CY_USE_GESTURES,
+	.gest_set = CY_GEST_GRP1 | CY_GEST_GRP2 |
+				CY_GEST_GRP3 | CY_GEST_GRP4 |
+				CY_ACT_DIST,
+	.act_intrvl = CY_ACT_INTRVL_DFLT,
+	.tch_tmout = CY_TCH_TMOUT_DFLT,
+	.lp_intrvl = CY_LP_INTRVL_DFLT,
+	.resume = fluid_cyttsp_resume,
+	.init = NULL,
+};
+
+static struct i2c_board_info fluid_i2c_0_board_info[] = {
+	{
+		I2C_BOARD_INFO("cyttsp-i2c", 0x24),
+		.platform_data = &fluid_cyttsp_pdata,
+		.irq = MSM_GPIO_TO_INT(MSM7X30_FLUID_GPIO_TOUCH_INT_N),
+	}
+};
+
 static struct i2c_board_info surf_i2c_devices[] = {
 	/* marimba master is implied at 0x0c */
 	{
@@ -615,6 +703,11 @@ static void __init msm7x30_init(void)
 
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 
+	if (machine_is_msm7x30_fluid()) {
+		fluid_cyttsp_init();
+		i2c_register_board_info(0, fluid_i2c_0_board_info,
+					ARRAY_SIZE(fluid_i2c_0_board_info));
+	}
 	i2c_register_board_info(1, surf_i2c_devices,
 				ARRAY_SIZE(surf_i2c_devices));
 
