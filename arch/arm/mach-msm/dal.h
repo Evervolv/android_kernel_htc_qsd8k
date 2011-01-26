@@ -51,7 +51,7 @@ int dal_call_f1(struct dal_client *client, uint32_t ddi,
 int dal_call_f5(struct dal_client *client, uint32_t ddi,
 		void *ibuf, uint32_t ilen);
 int dal_call_f9(struct dal_client *client, uint32_t ddi,
-                void *obuf, uint32_t olen);
+		void *obuf, uint32_t olen);
 int dal_call_f13(struct dal_client *client, uint32_t ddi, void *ibuf1,
 		 uint32_t ilen1, void *ibuf2, uint32_t ilen2, void *obuf,
 		 uint32_t olen);

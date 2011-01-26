@@ -16,10 +16,10 @@
 
 #include <linux/mutex.h>
 #include <linux/sched.h>
+#include <linux/slab.h>
 #include <linux/wait.h>
 #include <linux/dma-mapping.h>
 #include <linux/clk.h>
-#include <linux/slab.h>
 
 #include <linux/delay.h>
 #include <linux/wakelock.h>
@@ -33,7 +33,7 @@
 #include "dal_adie.h"
 #include <mach/msm_qdsp6_audio.h>
 #include <mach/htc_acoustic_qsd.h>
-#include <mach/msm_audio_qcp.h>
+
 #include <linux/gpio.h>
 
 #include "q6audio_devices.h"
@@ -178,12 +178,12 @@ int q6_device_volume(uint32_t device_id, int level)
 	}
 }
 
-static inline int adie_open(struct dal_client *client)
+static inline int adie_open(struct dal_client *client) 
 {
 	return dal_call_f0(client, DAL_OP_OPEN, 0);
 }
 
-static inline int adie_close(struct dal_client *client)
+static inline int adie_close(struct dal_client *client) 
 {
 	return dal_call_f0(client, DAL_OP_CLOSE, 0);
 }
@@ -349,7 +349,7 @@ static int audio_ioctl(struct audio_client *ac, void *ptr, uint32_t len)
 	if (!wait_event_timeout(ac->wait, (ac->cb_status != -EBUSY), 5*HZ)) {
 		dal_trace_dump(ac->client);
 		pr_err("audio_ioctl: timeout. dsp dead?\n");
-		BUG();
+		q6audio_dsp_not_responding();
 	}
 	return ac->cb_status;
 }
@@ -435,156 +435,6 @@ static int audio_mp3_open(struct audio_client *ac, uint32_t bufsz,
 	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
 	rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_PLAYBACK;
 	rpc.buf_max_size = bufsz;
-
-	return audio_ioctl(ac, &rpc, sizeof(rpc));
-}
-
-static int audio_aac_open(struct audio_client *ac, uint32_t bufsz,
-			 void *data)
-{
-	struct aac_format *af = data;
-	struct adsp_open_command rpc;
-	uint32_t *aac_type;
-	int idx = sizeof(uint32_t);
-	struct adsp_audio_binary_format *fmt = &(rpc.format.binary);
-
-	memset(&rpc, 0, sizeof(rpc));
-
-	fmt->format = ADSP_AUDIO_FORMAT_MPEG4_AAC;
-	aac_type = (uint32_t *)(fmt->data);
-	switch (af->block_formats) {
-	case 0xffff:
-		if (ac->flags & AUDIO_FLAG_WRITE)
-			*aac_type = ADSP_AUDIO_AAC_ADTS;
-		else
-			*aac_type = ADSP_AUDIO_AAC_MPEG4_ADTS;
-		break;
-	case 0:
-		if (ac->flags & AUDIO_FLAG_WRITE)
-			*aac_type = ADSP_AUDIO_AAC_ADIF;
-		else
-			*aac_type = ADSP_AUDIO_AAC_RAW;
-		break;
-	case 1:
-		*aac_type = ADSP_AUDIO_AAC_RAW;
-		break;
-	case 2:
-		*aac_type = ADSP_AUDIO_AAC_LOAS;
-		break;
-	case 3:
-		*aac_type = ADSP_AUDIO_AAC_FRAMED_RAW;
-		break;
-	case 4:
-		*aac_type = ADSP_AUDIO_AAC_RAW;
-		break;
-	default:
-		pr_err("unsupported AAC type %d\n", af->block_formats);
-		return -EINVAL;
-	}
-
-	TRACE("aac_open: type %x, obj %d, idx %d\n",
-	      *aac_type, af->audio_object_type, idx);
-	fmt->data[idx++] = (u8)(((af->audio_object_type & 0x1F) << 3) |
-				((af->sample_rate >> 1) & 0x7));
-	fmt->data[idx] = (u8)(((af->sample_rate & 0x1) << 7) |
-				((af->channel_config & 0x7) << 3));
-
-	switch (af->audio_object_type) {
-	case AAC_OBJECT_ER_LC:
-	case AAC_OBJECT_ER_LTP:
-	case AAC_OBJECT_ER_LD:
-		/* extension flag */
-		fmt->data[idx++] |= 0x1;
-		fmt->data[idx] = (u8)(
-			((af->aac_section_data_resilience_flag & 0x1) << 7) |
-			((af->aac_scalefactor_data_resilience_flag & 0x1) << 6) |
-			((af->aac_spectral_data_resilience_flag	& 0x1) << 5) |
-			((af->ep_config & 0x3) << 2));
-		break;
-
-	case AAC_OBJECT_ER_SCALABLE:
-		fmt->data[idx++] |= 0x1;
-		/* extension flag */
-		fmt->data[idx++] = (u8)(
-			((af->aac_section_data_resilience_flag & 0x1) << 4) |
-			((af->aac_scalefactor_data_resilience_flag & 0x1) << 3) |
-			((af->aac_spectral_data_resilience_flag	& 0x1) << 2) |
-			((af->ep_config >> 1) & 0x1));
-		fmt->data[idx] = (u8)((af->ep_config & 0x1)
-			<< 7);
-		break;
-
-	case AAC_OBJECT_BSAC:
-		fmt->data[++idx] = (u8)((af->ep_config & 0x3)
-			<< 6);
-		break;
-
-	default:
-		pr_err("dbg unknown object type \n");
-		break;
-	}
-	fmt->num_bytes = idx + 1;
-
-	TRACE("aac_open: format %x%x %x%x%x%x %x%x, \n",
-	      fmt->data[0], fmt->data[1], fmt->data[2], fmt->data[3],
-	      fmt->data[4], fmt->data[5], fmt->data[6], fmt->data[7]);
-
-	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
-	rpc.config.aac.bit_rate = af->bit_rate;
-	if (ac->flags & AUDIO_FLAG_WRITE) {
-		rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_WRITE;
-		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_PLAYBACK;
-	} else {
-		rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_READ;
-		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
-	}
-
-	if ((af->sbr_on_flag == 0) && (af->sbr_ps_on_flag == 0)) {
-		rpc.config.aac.encoder_mode =
-			ADSP_AUDIO_ENC_AAC_LC_ONLY_MODE;
-	} else if ((af->sbr_on_flag == 1) && (af->sbr_ps_on_flag == 0)) {
-		rpc.config.aac.encoder_mode =
-			ADSP_AUDIO_ENC_AAC_PLUS_MODE;
-	} else if ((af->sbr_on_flag == 1) && (af->sbr_ps_on_flag == 1)) {
-		rpc.config.aac.encoder_mode =
-			ADSP_AUDIO_ENC_ENHANCED_AAC_PLUS_MODE;
-	} else {
-		pr_err("unsupported SBR flag\n");
-		return -EINVAL;
-	}
-	rpc.buf_max_size = bufsz; /* XXX ??? */
-	rpc.hdr.response_type = 0;
-
-	TRACE("aac_open: opcode %x, stream_context 0x%x, "
-	      "mode %d, bytes %d, bbuffer size %d\n",
-	      rpc.hdr.opcode, rpc.stream_context,
-	      rpc.config.aac.encoder_mode, fmt->num_bytes, bufsz);
-
-	return audio_ioctl(ac, &rpc, sizeof(rpc));
-}
-
-static int audio_qcelp_open(struct audio_client *ac, uint32_t bufsz,
-			 void *data)
-{
-	struct msm_audio_qcelp_config *qf = data;
-	struct adsp_open_command rpc;
-	struct adsp_audio_standard_format *fmt = &(rpc.format.standard);
-
-	memset(&rpc, 0, sizeof(rpc));
-
-	fmt->format = ADSP_AUDIO_FORMAT_V13K_FS;
-	fmt->sampling_rate = 8000;
-	fmt->channels = 1;
-	fmt->bits_per_sample = 16;
-	fmt->is_signed = 1;
-	fmt->is_interleaved = 0;
-
-	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
-	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_READ;
-	rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
-	rpc.config.qcelp13k.min_rate = (uint16_t) qf->min_bit_rate;
-	rpc.config.qcelp13k.max_rate = (uint16_t) qf->max_bit_rate;
-	rpc.buf_max_size = bufsz; /* XXX ??? */
 
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
@@ -735,10 +585,7 @@ static void callback(void *data, int len, void *cookie)
 {
 	struct adsp_event_hdr *e = data;
 	struct audio_client *ac;
-	struct adsp_buffer_event *abe = data;
 
-	TRACE("audio callback: context %d, event 0x%x, status %d\n",
-	      e->context, e->event_id, e->status);
 
 	if (e->context >= SESSION_MAX) {
 		pr_err("audio callback: bogus session %d\n",
@@ -765,9 +612,6 @@ static void callback(void *data, int len, void *cookie)
 
 	if (e->event_id == ADSP_AUDIO_EVT_STATUS_BUF_DONE) {
 		TRACE("%p: CB done (%d)\n", ac, e->status);
-		TRACE("%p: actual_size %d, buffer_size %d\n",
-		      ac, abe->buffer.actual_size, ac->buf[ac->dsp_buf].size);
-
 		if (e->status)
 			pr_err("buffer status %d\n", e->status);
 		ac->buf[ac->dsp_buf].used = 0;
@@ -1049,10 +893,6 @@ static void audio_rx_analog_enable(int en)
 		if (analog_ops->receiver_enable)
 			analog_ops->receiver_enable(en);
 		break;
-	case ADSP_AUDIO_DEVICE_ID_I2S_SPKR:
-		if (analog_ops->i2s_enable)
-			analog_ops->i2s_enable(en);
-		break;
 	}
 }
 
@@ -1098,8 +938,7 @@ static int audio_update_acdb(uint32_t adev, uint32_t acdb_id)
 			return -EINVAL;
 	}
 
-	if (sz > 0)
-		audio_set_table(ac_control, adev, sz);
+	audio_set_table(ac_control, adev, sz);
 	return 0;
 }
 
@@ -1375,7 +1214,7 @@ int q6audio_reinit_acdb(char* filename) {
 		return 0;
 
 	mutex_lock(&audio_path_lock);
-	if (strlen(filename) < 0) {
+	if (strlen(filename) < 0 || !strcmp(filename, acdb_file)) {
 		res = -EINVAL;
 		goto done;
 	}
@@ -1415,7 +1254,6 @@ done:
 int q6audio_set_tx_mute(int mute)
 {
 	uint32_t adev;
-	int rc;
 
 	if (q6audio_init())
 		return 0;
@@ -1428,8 +1266,8 @@ int q6audio_set_tx_mute(int mute)
 	}
 
 	adev = audio_tx_device_id;
-	rc = audio_tx_mute(ac_control, adev, mute);
-	if (!rc) tx_mute_status = mute;
+	audio_tx_mute(ac_control, adev, mute);
+	tx_mute_status = mute;
 	mutex_unlock(&audio_path_lock);
 	return 0;
 }
@@ -1621,7 +1459,7 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 		if (rc == 0)
 			break;
 		if (retry == 0)
-			BUG();
+			q6audio_dsp_not_responding();
 		pr_err("q6audio: open pcm error %d, retrying\n", rc);
 		msleep(1);
 	}
@@ -1646,7 +1484,7 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 		if (rc == 0)
 			break;
 		if (retry == 0)
-			BUG();
+			q6audio_dsp_not_responding();
 		pr_err("q6audio: stream start error %d, retrying\n", rc);
 	}
 
@@ -1686,10 +1524,9 @@ struct audio_client *q6voice_open(uint32_t flags, uint32_t acdb_id)
 		return 0;
 
 	ac->flags = flags;
-	if (ac->flags & AUDIO_FLAG_WRITE) {
+	if (ac->flags & AUDIO_FLAG_WRITE)
 		audio_rx_path_enable(1, acdb_id);
-		audio_rx_mute(ac_control, ADSP_AUDIO_DEVICE_ID_VOICE, 0);
-	} else {
+	else {
 		tx_clk_freq = 8000;
 		audio_tx_path_enable(1, acdb_id);
 	}
@@ -1699,10 +1536,9 @@ struct audio_client *q6voice_open(uint32_t flags, uint32_t acdb_id)
 
 int q6voice_close(struct audio_client *ac)
 {
-	if (ac->flags & AUDIO_FLAG_WRITE) {
-		audio_rx_mute(ac_control, ADSP_AUDIO_DEVICE_ID_VOICE, 1);
+	if (ac->flags & AUDIO_FLAG_WRITE)
 		audio_rx_path_enable(0, 0);
-	} else
+	else
 		audio_tx_path_enable(0, 0);
 
 	audio_client_free(ac);
@@ -1749,68 +1585,17 @@ int q6audio_async(struct audio_client *ac)
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
 
-struct audio_client *q6audio_open_aac(uint32_t bufsz, uint32_t rate,
-				      uint32_t flags, void *data, uint32_t acdb_id)
-{
-	struct audio_client *ac;
-
-	TRACE("q6audio_open_aac flags=%d rate=%d\n", flags, rate);
-
-	if (q6audio_init())
-		return 0;
-
-	ac = audio_client_alloc(bufsz);
-	if (!ac)
-		return 0;
-
-	ac->flags = flags;
-	if (ac->flags & AUDIO_FLAG_WRITE)
-		audio_rx_path_enable(1, acdb_id);
-	else {
-		/* TODO: consider concourrency with voice call */
-		tx_clk_freq = rate;
-		audio_tx_path_enable(1, acdb_id);
-	}
-
-	audio_aac_open(ac, bufsz, data);
-	audio_command(ac, ADSP_AUDIO_IOCTL_CMD_SESSION_START);
-
-	if (!(ac->flags & AUDIO_FLAG_WRITE)) {
-		ac->buf[0].used = 1;
-		ac->buf[1].used = 1;
-		q6audio_read(ac, &ac->buf[0]);
-		q6audio_read(ac, &ac->buf[1]);
-	}
-	audio_prevent_sleep();
-	return ac;
-}
-
-int q6audio_aac_close(struct audio_client *ac)
-{
-	audio_close(ac);
-	if (ac->flags & AUDIO_FLAG_WRITE)
-		audio_rx_path_enable(0, 0);
-	else
-		audio_tx_path_enable(0, 0);
-
-	audio_client_free(ac);
-	audio_allow_sleep();
-	return 0;
-}
-
 struct audio_client *q6fm_open(void)
 {
 	struct audio_client *ac;
 
-	printk("q6fm_open()\n");
-
 	if (q6audio_init())
 		return 0;
 
-	if (audio_rx_device_id != ADSP_AUDIO_DEVICE_ID_HEADSET_SPKR_STEREO &&
+/*	if (audio_rx_device_id != ADSP_AUDIO_DEVICE_ID_HEADSET_SPKR_STEREO &&
 	    audio_rx_device_id != ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_MONO)
 		return 0;
-
+*/
 	ac = audio_client_alloc(0);
 	if (!ac)
 		return 0;
@@ -1827,43 +1612,6 @@ int q6fm_close(struct audio_client *ac)
 	audio_rx_path_enable(0, 0);
 	enable_aux_loopback(0);
 	audio_client_free(ac);
-	return 0;
-}
-
-struct audio_client *q6audio_open_qcelp(uint32_t bufsz, uint32_t rate,
-				      void *data, uint32_t acdb_id)
-{
-	struct audio_client *ac;
-
-	if (q6audio_init())
-		return 0;
-
-	ac = audio_client_alloc(bufsz);
-	if (!ac)
-		return 0;
-
-	ac->flags = AUDIO_FLAG_READ;
-	tx_clk_freq = rate;
-	audio_tx_path_enable(1, acdb_id);
-
-	audio_qcelp_open(ac, bufsz, data);
-	audio_command(ac, ADSP_AUDIO_IOCTL_CMD_SESSION_START);
-
-	ac->buf[0].used = 1;
-	ac->buf[1].used = 1;
-	q6audio_read(ac, &ac->buf[0]);
-	q6audio_read(ac, &ac->buf[1]);
-
-	audio_prevent_sleep();
-	return ac;
-}
-
-int q6audio_qcelp_close(struct audio_client *ac)
-{
-	audio_close(ac);
-	audio_tx_path_enable(0, 0);
-	audio_client_free(ac);
-	audio_allow_sleep();
 	return 0;
 }
 
