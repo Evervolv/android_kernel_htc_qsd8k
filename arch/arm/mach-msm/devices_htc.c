@@ -36,8 +36,6 @@
 #include <mach/msm_iomap.h>
 #include <asm/mach/mmc.h>
 
-static char *df_serialno = "000000000000";
-
 #if 0
 struct platform_device *devices[] __initdata = {
 	&msm_device_nand,
@@ -195,6 +193,8 @@ static struct platform_device android_usb_device = {
 void __init msm_add_usb_devices(void (*phy_reset) (void))
 {
 	/* setup */
+  android_usb_pdata.serial_number = board_serialno();
+
 	if (phy_reset)
 		msm_hsusb_pdata.phy_reset = phy_reset;
 	msm_device_hsusb.dev.platform_data = &msm_hsusb_pdata;
@@ -354,6 +354,7 @@ int __init msm_add_serial_devices(unsigned num)
 	return platform_device_register(msm_serial_devices[num]);
 }
 #endif
+<<<<<<< HEAD
 
 #define ATAG_SMI 0x4d534D71
 /* setup calls mach->fixup, then parse_tags, parse_cmdline
@@ -423,6 +424,19 @@ int __init parse_tag_skuid(const struct tag *tags)
 	return skuid;
 }
 __tagtable(ATAG_SKUID, parse_tag_skuid);
+
+#define ATAG_HERO_PANEL_TYPE 0x4d534D74
+int panel_type;
+int __init tag_panel_parsing(const struct tag *tags)
+{
+	panel_type = tags->u.revision.rev;
+
+	printk(KERN_DEBUG "%s: panel type = %d\n", __func__,
+		panel_type);
+
+	return panel_type;
+}
+__tagtable(ATAG_HERO_PANEL_TYPE, tag_panel_parsing);
 
 #define ATAG_ENGINEERID 0x4d534D75
 int __init parse_tag_engineerid(const struct tag *tags)
@@ -497,3 +511,5 @@ static int __init board_serialno_setup(char *serialno)
 }
 
 __setup("androidboot.serialno=", board_serialno_setup);
+=======
+>>>>>>> 0bf3625... msm: Consolidate code for reading ATAG data

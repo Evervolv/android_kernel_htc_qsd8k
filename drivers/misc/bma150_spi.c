@@ -259,8 +259,7 @@ static int spi_bma150_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int spi_bma150_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
-	   unsigned long arg)
+static int spi_bma150_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	void __user *argp = (void __user *)arg;
 	char rwbuf[8];

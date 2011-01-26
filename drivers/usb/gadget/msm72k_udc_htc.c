@@ -2747,14 +2747,14 @@ static int msm72k_probe(struct platform_device *pdev)
 	return 0;
 }
 
-int usb_gadget_register_driver(struct usb_gadget_driver *driver)
+int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind)(struct usb_gadget *))
 {
 	struct usb_info *ui = the_usb_info;
 	int			retval, n;
 
 	if (!driver
 			|| driver->speed < USB_SPEED_FULL
-			|| !driver->bind
+                        || !bind
 			|| !driver->disconnect
 			|| !driver->setup)
 		return -EINVAL;
@@ -2787,7 +2787,7 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 	if (retval)
 		goto fail;
 
-	retval = driver->bind(&ui->gadget);
+	retval = bind(&ui->gadget);
 	if (retval) {
 		INFO("bind to driver %s --> error %d\n",
 				driver->driver.name, retval);
@@ -2811,7 +2811,7 @@ fail:
 	ui->gadget.dev.driver = NULL;
 	return retval;
 }
-EXPORT_SYMBOL(usb_gadget_register_driver);
+EXPORT_SYMBOL(usb_gadget_probe_driver);
 
 int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 {

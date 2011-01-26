@@ -27,10 +27,7 @@
 #include <linux/workqueue.h>
 #include <linux/freezer.h>
 #include <linux/akm8973.h>
-<<<<<<< HEAD
 #include <linux/mutex.h>
-=======
->>>>>>> 8988ee2... sensors: akm8973: Add HTC-variant driver.
 
 #define DEBUG 0
 #define MAX_FAILURE_COUNT 3
@@ -312,18 +309,12 @@ static int AKECS_GetCloseStatus(void)
 
 static void AKECS_CloseDone(void)
 {
-<<<<<<< HEAD
 	mutex_lock(&akmd_lock);
-=======
->>>>>>> 8988ee2... sensors: akm8973: Add HTC-variant driver.
 	atomic_set(&m_flag, 1);
 	atomic_set(&a_flag, 1);
 	atomic_set(&t_flag, 1);
 	atomic_set(&mv_flag, 1);
-<<<<<<< HEAD
 	mutex_unlock(&akmd_lock);
-=======
->>>>>>> 8988ee2... sensors: akm8973: Add HTC-variant driver.
 }
 
 static int akm_aot_open(struct inode *inode, struct file *file)
@@ -350,10 +341,7 @@ static int akm_aot_release(struct inode *inode, struct file *file)
 	atomic_set(&open_count, 0);
 	wake_up(&open_wq);
 	disable_irq(this_client->irq);
-<<<<<<< HEAD
 	mutex_unlock(&akmd_lock);
-=======
->>>>>>> 8988ee2... sensors: akm8973: Add HTC-variant driver.
 	return 0;
 }
 
