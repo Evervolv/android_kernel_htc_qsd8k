@@ -290,6 +290,51 @@ static struct platform_device msm_kgsl_device = {
 	.num_resources	= ARRAY_SIZE(msm_kgsl_resources),
 };
 
+#define PWR_RAIL_GRP_CLK		8
+static int msm7x30_kgsl_power_rail_mode(int follow_clk)
+{
+	int mode = follow_clk ? 0 : 1;
+	int rail_id = PWR_RAIL_GRP_CLK;
+
+	return msm_proc_comm(PCOM_CLKCTL_RPC_RAIL_CONTROL, &rail_id, &mode);
+}
+
+static int msm7x30_kgsl_power(bool on)
+{
+	int cmd;
+	int id;
+
+	if (on) {
+		/* turn clock on, turn power on, turn clock off */
+		cmd = PCOM_CLKCTL_RPC_RAIL_ENABLE;
+		id = P_GRP_3D_CLK;
+		msm_proc_comm(cmd, &id, NULL);
+
+		cmd = PCOM_CLKCTL_RPC_ENABLE;
+		id = PWR_RAIL_GRP_CLK;
+		msm_proc_comm(cmd, &id, NULL);
+
+		cmd = PCOM_CLKCTL_RPC_RAIL_DISABLE;
+		id = P_GRP_3D_CLK;
+		msm_proc_comm(cmd, &id, NULL);
+	} else {
+		/* turn clock on, turn power off, turn clock off */
+		cmd = PCOM_CLKCTL_RPC_RAIL_ENABLE;
+		id = P_GRP_3D_CLK;
+		msm_proc_comm(cmd, &id, NULL);
+
+		cmd = PCOM_CLKCTL_RPC_DISABLE;
+		id = PWR_RAIL_GRP_CLK;
+		msm_proc_comm(cmd, &id, NULL);
+
+		cmd = PCOM_CLKCTL_RPC_RAIL_DISABLE;
+		id = P_GRP_3D_CLK;
+		msm_proc_comm(cmd, &id, NULL);
+	}
+
+	return 0;
+}
+
 static struct platform_device *devices[] __initdata = {
 #if defined(CONFIG_SERIAL_MSM) && !defined(CONFIG_MSM_SERIAL_DEBUGGER)
         &msm_device_uart2,
@@ -750,6 +795,11 @@ static void __init msm7x30_init(void)
 	msm7x30_ssbi_pmic_init();
 	msm7x30_i2c_0_init();
 	msm7x30_spi_init();
+
+	/* set the gpu power rail to manual mode so clk en/dis will not
+	 * turn off gpu power, and hang it on resume */
+	msm7x30_kgsl_power_rail_mode(0);
+	msm7x30_kgsl_power(true);
 
 	msm_device_hsusb.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_spi.dev.platform_data = &msm7x30_spi_pdata;
