@@ -818,6 +818,8 @@ static void __init msm7x30_init(void)
 	if (machine_is_msm7x30_fluid())
 		fluid_board_props_init();
 
+	msm7x30_board_audio_init();
+
 	msm_hsusb_set_vbus_state(1);
 	msm_hsusb_set_vbus_state(0);
 	msm_hsusb_set_vbus_state(1);

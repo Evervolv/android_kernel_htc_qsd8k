@@ -85,6 +85,7 @@ obj-$(CONFIG_ARCH_MSM8X60) += board-msm8x60.o
 
 obj-$(CONFIG_MACH_MSM7X30_SURF) += board-msm7x30.o
 obj-$(CONFIG_MACH_MSM7X30_SURF) += board-msm7x30-panel.o
+obj-$(CONFIG_MACH_MSM7X30_SURF) += board-msm7x30-audio.o
 
 obj-$(CONFIG_ARCH_MSM7X30) += gpiomux-7x30.o gpiomux-v1.o gpiomux.o
 obj-$(CONFIG_ARCH_QSD8X50) += gpiomux-8x50.o gpiomux-v1.o gpiomux.o

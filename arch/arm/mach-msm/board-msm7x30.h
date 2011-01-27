@@ -32,4 +32,6 @@
 
 #define MSM7X30_SURF_GPU_MEM_SIZE	0x00500000
 
+void msm7x30_board_audio_init(void);
+
 #endif
