@@ -88,17 +88,17 @@
 #define SPKR_ADD_RIGHT_LEFT_CHAN_PROC 60
 #define SPKR_SET_GAIN_PROC 61
 #define SPKR_EN_PROC 62
-
+#define HSED_SET_PERIOD_PROC 63
+#define HSED_SET_HYSTERESIS_PROC 64
+#define HSED_SET_CURRENT_THRESHOLD_PROC 65
+#define HSED_ENABLE_PROC 66
 
 /* rpc related */
 #define PMIC_RPC_TIMEOUT (5*HZ)
 
 #define PMIC_RPC_PROG	0x30000061
-#ifdef CONFIG_ARCH_MSM7X30
-#define PMIC_RPC_VER	0x00030001
-#else
-#define PMIC_RPC_VER	0x00010001
-#endif
+#define PMIC_RPC_VER1	0x00010001
+#define PMIC_RPC_VER3	0x00030000
 
 /* error bit flags defined by modem side */
 #define PM_ERR_FLAG__PAR1_OUT_OF_RANGE		(0x0001)
@@ -160,8 +160,11 @@ static int pmic_rpc(int proc, void *msg, int msglen, void *rep, int replen)
 	mutex_lock(&pmic_mutex);
 
 	if (!pmic_ept) {
-		pmic_ept = msm_rpc_connect(PMIC_RPC_PROG, PMIC_RPC_VER, 0);
-		if (!pmic_ept) {
+		pmic_ept = msm_rpc_connect(PMIC_RPC_PROG, PMIC_RPC_VER3, 0);
+		if (IS_ERR(pmic_ept))
+			pmic_ept = msm_rpc_connect(PMIC_RPC_PROG, PMIC_RPC_VER1, 0);
+		if (IS_ERR(pmic_ept)) {
+			pmic_ept = NULL;
 			pr_err("pmic: cannot connect to rpc server\n");
 			r = -ENODEV;
 			goto done;
@@ -532,3 +535,13 @@ int pmic_spkr_en_stereo(uint enable)
 }
 EXPORT_SYMBOL(pmic_spkr_en_stereo);
 
+int pmic_hsed_enable(
+	enum hsed_controller controller,
+	enum hsed_enable enable_hsed
+)
+{
+	return pmic_rpc_set_only(controller, enable_hsed, 0, 0,
+				 2,
+				 HSED_ENABLE_PROC);
+}
+EXPORT_SYMBOL(pmic_hsed_enable);

@@ -270,6 +270,19 @@ enum rtc_alarm {
 };
 
 
+enum hsed_controller {
+	PM_HSED_CONTROLLER_0,
+	PM_HSED_CONTROLLER_1,
+	PM_HSED_CONTROLLER_2,
+};
+
+enum hsed_enable {
+	PM_HSED_ENABLE_OFF,
+	PM_HSED_ENABLE_TCXO,
+	PM_HSED_ENABLE_PWM_TCXO,
+	PM_HSED_ENABLE_ALWAYS,
+};
+
 int pmic_lp_mode_control(enum switch_cmd cmd, enum vreg_lp_id id);
 int pmic_secure_mpp_control_digital_output(enum mpp_which which,
 		enum mpp_dlogic_level level, enum mpp_dlogic_out_ctrl out);
@@ -306,5 +319,9 @@ int pmic_vib_mot_set_mode(enum pm_vib_mot_mode mode);
 int pmic_vib_mot_set_polarity(enum pm_vib_mot_pol pol);
 int pmic_vid_en(uint enable);
 int pmic_vid_load_detect_en(uint enable);
+int pmic_hsed_enable(
+	enum hsed_controller controller,
+	enum hsed_enable enable
+);
 
 #endif
