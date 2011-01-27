@@ -765,7 +765,8 @@ err_kobj_create:
 
 
 extern void msm_serial_debug_init(unsigned int base, int irq,
-				  struct device *clk_device, int signal_irq);
+				  struct device *clk_device, int signal_irq,
+				  int wakeup_irq);
 
 static void __init msm7x30_init(void)
 {
@@ -784,7 +785,7 @@ static void __init msm7x30_init(void)
 
 #if defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	msm_serial_debug_init(MSM_UART2_PHYS, INT_UART2,
-			      &msm_device_uart2.dev, 1);
+			      &msm_device_uart2.dev, 23, MSM_GPIO_TO_INT(51));
 #endif
 
 	if (machine_is_msm7x30_fluid())
