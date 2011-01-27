@@ -132,6 +132,7 @@ static int __init supersonic_wifi_init(void)
 
 	printk("%s: start\n", __func__);
 	supersonic_wifi_update_nvs("sd_oobonly=1\r\n");
+	supersonic_wifi_update_nvs("btc_params80=0\n", 1);
 	supersonic_init_wifi_mem();
 	ret = platform_device_register(&supersonic_wifi_device);
         return ret;
