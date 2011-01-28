@@ -302,8 +302,9 @@ void __init l2x0_init(void __iomem *base, __u32 aux_val, __u32 aux_mask)
 		type = "L2x0 series";
 		break;
 	}
-
+	writel(aux, l2x0_base + L2X0_AUX_CTRL);
 	l2x0_way_mask = (1 << ways) - 1;
+	l2x0_inv_all();
 
 	/*
 	 * L2 cache Size =  Way size * Number of ways
