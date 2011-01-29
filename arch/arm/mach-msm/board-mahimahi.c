@@ -15,7 +15,6 @@
  *
  */
 
-#include <linux/cy8c_tmg_ts.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/i2c.h>
@@ -378,19 +377,6 @@ static int mahimahi_ts_power(int on)
 	return 0;
 }
 
-struct cy8c_i2c_platform_data mahimahi_cy8c_ts_data = {
-	.version = 0x0001,
-	.abs_x_min = 0,
-	.abs_x_max = 479,
-	.abs_y_min = 0,
-	.abs_y_max = 799,
-	.abs_pressure_min = 0,
-	.abs_pressure_max = 255,
-	.abs_width_min = 0,
-	.abs_width_max = 10,
-	.power = mahimahi_ts_power,
-};
-
 static struct synaptics_i2c_rmi_platform_data mahimahi_synaptics_ts_data[] = {
 	{
 		.version = 0x105,
@@ -489,11 +475,6 @@ static struct i2c_board_info base_i2c_devices[] = {
 	{
 		I2C_BOARD_INFO("ds2482", 0x30 >> 1),
 		.platform_data = ds2482_set_slp_n,
-	},
-	{
-		I2C_BOARD_INFO("cy8c-tmg-ts", 0x34),
-		.platform_data = &mahimahi_cy8c_ts_data,
-		.irq = MSM_GPIO_TO_INT(MAHIMAHI_GPIO_TP_INT_N),
 	},
 	{
 		I2C_BOARD_INFO(SYNAPTICS_I2C_RMI_NAME, 0x40),
