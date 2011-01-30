@@ -48,37 +48,6 @@
 #define LCDC_MUX_CTL (MSM_TGPIO1_BASE + 0x278)
 #endif
 
-<<<<<<< HEAD
-struct mdp_lcdc_info {
-	struct mdp_info			*mdp;
-	struct clk			*mdp_clk;
-	struct clk			*mdp_pclk;
-	struct clk			*pclk;
-	struct clk			*pad_pclk;
-	struct msm_panel_data		fb_panel_data;
-	struct platform_device		fb_pdev;
-	struct msm_lcdc_platform_data	*pdata;
-	uint32_t fb_start;
-
-	struct msmfb_callback		frame_start_cb;
-	wait_queue_head_t		vsync_waitq;
-	int				got_vsync;
-
-	struct {
-		uint32_t	clk_rate;
-		uint32_t	hsync_ctl;
-		uint32_t	vsync_period;
-		uint32_t	vsync_pulse_width;
-		uint32_t	display_hctl;
-		uint32_t	display_vstart;
-		uint32_t	display_vend;
-		uint32_t	hsync_skew;
-		uint32_t	polarity;
-	} parms;
-};
-=======
->>>>>>> video: msm: Updated MDDI from HTC
-
 static struct mdp_device *mdp_dev;
 
 #ifdef CONFIG_MSM_MDP40
@@ -377,13 +346,10 @@ static int lcdc_hw_init(struct mdp_lcdc_info *lcdc)
 	mdp_writel(lcdc->mdp, 0, MDP_LCDC_ACTIVE_V_START);
 	mdp_writel(lcdc->mdp, 0, MDP_LCDC_ACTIVE_V_END);
 	mdp_writel(lcdc->mdp, lcdc->parms.polarity, MDP_LCDC_CTL_POLARITY);
-<<<<<<< HEAD
 
 	fb_size = ((fb_panel->fb_data->yres & 0x7ff) << 16) |
 		(fb_panel->fb_data->xres & 0x7ff);
 
-=======
->>>>>>> video: msm: Updated MDDI from HTC
 	/* config the dma_p block that drives the lcdc data */
 	mdp_writel(lcdc->mdp, lcdc->fb_start, MDP_DMA_P_IBUF_ADDR);
 	mdp_writel(lcdc->mdp, fb_size, MDP_DMA_P_SIZE);
@@ -396,7 +362,6 @@ static int lcdc_hw_init(struct mdp_lcdc_info *lcdc)
 #endif
 
 	dma_cfg = mdp_readl(lcdc->mdp, MDP_DMA_P_CONFIG);
-<<<<<<< HEAD
 	dma_cfg &= ~(DMA_PACK_PATTERN_MASK | DMA_PACK_ALIGN_MASK);
 	dma_cfg |= (DMA_PACK_ALIGN_MSB |
 		    DMA_PACK_PATTERN_RGB |
@@ -416,23 +381,6 @@ static int lcdc_hw_init(struct mdp_lcdc_info *lcdc)
 		dma_cfg |= DMA_DSTC0G_6BITS |
 			   DMA_DSTC1B_5BITS |
 			   DMA_DSTC2R_5BITS;
-=======
-	if (lcdc->mdp->mdp_dev.overrides & MSM_MDP_DMA_PACK_ALIGN_LSB)
-		dma_cfg &= ~DMA_PACK_ALIGN_MSB;
-	else
-		dma_cfg |= DMA_PACK_ALIGN_MSB;
-
-	dma_cfg |= (DMA_PACK_PATTERN_RGB |
-		   DMA_DITHER_EN);
-	dma_cfg |= DMA_OUT_SEL_LCDC;
-	dma_cfg &= ~DMA_DST_BITS_MASK;
-	if(lcdc->color_format == MSM_MDP_OUT_IF_FMT_RGB565)
-		dma_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_5BITS | DMA_DSTC2R_5BITS;
-	else if (lcdc->color_format == MSM_MDP_OUT_IF_FMT_RGB666)
-		dma_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_6BITS | DMA_DSTC2R_6BITS;
-	else if (lcdc->color_format == MSM_MDP_OUT_IF_FMT_RGB888)
-		dma_cfg |= DMA_DSTC0G_8BITS | DMA_DSTC1B_8BITS | DMA_DSTC2R_8BITS;
->>>>>>> video: msm: Updated MDDI from HTC
 
 	mdp_writel(lcdc->mdp, dma_cfg, MDP_DMA_P_CONFIG);
 
@@ -531,17 +479,13 @@ static void lcdc_dma_start(void *priv, uint32_t addr, uint32_t stride,
 			   uint32_t y)
 {
 	struct mdp_lcdc_info *lcdc = priv;
-<<<<<<< HEAD
+
 	struct mdp_info *mdp = lcdc->mdp;
 	uint32_t dma2_cfg;
 
 #ifdef CONFIG_MSM_MDP31
-	if (lcdc->mdp->dma_format_dirty) {
-=======
-	struct mdp_info *mdp = container_of(mdp_dev, struct mdp_info, mdp_dev);
-	if (mdp->dma_config_dirty)
-	{
->>>>>>> video: msm: Updated MDDI from HTC
+	if (lcdc->mdp->dma_config_dirty) {
+
 		mdp_writel(lcdc->mdp, 0, MDP_LCDC_EN);
 		mdelay(30);
 		mdp_dev->configure_dma(mdp_dev);
@@ -551,7 +495,7 @@ static void lcdc_dma_start(void *priv, uint32_t addr, uint32_t stride,
 	mdp_writel(lcdc->mdp, stride, MDP_DMA_P_IBUF_Y_STRIDE);
 	mdp_writel(lcdc->mdp, addr, MDP_DMA_P_IBUF_ADDR);
 #else
-	if (lcdc->mdp->dma_format_dirty) {
+	if (lcdc->mdp->dma_config_dirty) {
 		uint32_t fmt;
 		uint32_t dma_fmt;
 		uint32_t dma_ptrn;
@@ -583,7 +527,7 @@ static void lcdc_dma_start(void *priv, uint32_t addr, uint32_t stride,
 			      DMA_PACK_ALIGN_MASK);
 		dma2_cfg |= dma_ptrn | dma_fmt | DMA_PACK_ALIGN_MSB;
 		mdp_writel(mdp, dma2_cfg, MDP_DMA_P_CONFIG);
-		lcdc->mdp->dma_format_dirty = false;
+		lcdc->mdp->dma_config_dirty = false;
 	}
 
 	mdp_writel(mdp, addr, MDP_PIPE_RGB_SRC_ADDR(0));

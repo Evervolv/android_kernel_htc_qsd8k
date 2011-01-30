@@ -101,7 +101,6 @@ obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-tpa2018d1.o
 obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-tpa6130.o
 obj-$(CONFIG_MACH_SUPERSONIC) += htc_wifi_nvs.o htc_bluetooth.o
 obj-$(CONFIG_MACH_SUPERSONIC) += htc_acoustic_qsd.o
-obj-$(CONFIG_MACH_SUPERSONIC) += devices_htc.o
 
 obj-$(CONFIG_HTC_PWRSINK) += htc_pwrsink.o
 obj-$(CONFIG_HTC_PWRSPLY) += htc_power_supply.o

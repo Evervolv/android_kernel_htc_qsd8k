@@ -15,7 +15,7 @@
  *
  */
 
-#include <linux/cy8c_tmg_ts.h>
+//#include <linux/cy8c_tmg_ts.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/i2c.h>
