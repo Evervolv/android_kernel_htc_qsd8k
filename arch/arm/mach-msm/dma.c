@@ -56,7 +56,7 @@ void msm_dmov_stop_cmd(unsigned id, struct msm_dmov_cmd *cmd, int graceful)
 }
 EXPORT_SYMBOL(msm_dmov_stop_cmd);
 
-void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd)
+void msm_dmov_enqueue_cmd_ext(unsigned id, struct msm_dmov_cmd *cmd)
 {
 	unsigned long irq_flags;
 	unsigned int status;
@@ -92,6 +92,15 @@ void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd)
 		list_add_tail(&cmd->list, &ready_commands[id]);
 	}
 	spin_unlock_irqrestore(&msm_dmov_lock, irq_flags);
+}
+EXPORT_SYMBOL(msm_dmov_enqueue_cmd_ext);
+
+void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd)
+{
+	/* Disable callback function (for backwards compatibility) */
+	cmd->execute_func = NULL;
+
+	msm_dmov_enqueue_cmd_ext(id, cmd);
 }
 EXPORT_SYMBOL(msm_dmov_enqueue_cmd);
 
