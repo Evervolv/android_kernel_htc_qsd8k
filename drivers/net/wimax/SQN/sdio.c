@@ -1901,8 +1901,8 @@ static struct sdio_driver sqn_sdio_driver = {
 	, .id_table	= sqn_sdio_ids
 	, .probe	= sqn_sdio_probe
 	, .remove	= sqn_sdio_remove
-//	, .suspend 	= sqn_sdio_suspend
-//	, .resume	= sqn_sdio_resume
+	, .suspend 	= sqn_sdio_suspend
+	, .resume	= sqn_sdio_resume
 };
 
 

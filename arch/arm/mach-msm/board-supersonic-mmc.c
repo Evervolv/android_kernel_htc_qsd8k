@@ -199,7 +199,6 @@ static unsigned int supersonic_wifi_status(struct device *dev)
 
 static struct msm_mmc_platform_data supersonic_wifi_data = {
 	.ocr_mask		= MMC_VDD_28_29,
-	.built_in		= 1,
 	.status			= supersonic_wifi_status,
 	.register_status_notify	= supersonic_wifi_status_register,
 	.embedded_sdio		= &supersonic_wifi_emb_data,
@@ -326,7 +325,6 @@ static unsigned int supersonic_wimax_type = MMC_TYPE_SDIO_WIMAX;
 
 static struct msm_mmc_platform_data supersonic_wimax_data = {
 	.ocr_mask		= MMC_VDD_27_28 | MMC_VDD_28_29 | MMC_VDD_29_30,
-	.built_in		= 1,
 	.status			= supersonic_wimax_status,
 	.register_status_notify	= supersonic_wimax_status_register,
 	.embedded_sdio		= NULL,
