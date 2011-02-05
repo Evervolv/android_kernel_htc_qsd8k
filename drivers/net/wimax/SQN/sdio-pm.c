@@ -24,10 +24,10 @@
 #include <linux/spinlock.h>
 #include <linux/delay.h>
 #include <linux/wakelock.h>
+#include <linux/mmc/host.h>
+#include <linux/mmc/card.h>
 
-#ifdef ANDROID_KERNEL
 #include <linux/earlysuspend.h>
-#endif /* ANDROID_KERNEL */
 
 #include "sdio-netdev.h"
 #include "sdio.h"
@@ -36,8 +36,47 @@
 #include "thp.h"
 #include "sdio-sqn.h"
 
+#define SDIO_CLAIM_HOST_DEBUG 0
+
+#if SDIO_CLAIM_HOST_DEBUG
+#define sqn_sdio_claim_host(func)			\
+({							\
+	struct mmc_host *h = (func)->card->host;		\
+	sqn_pr_info("%s: claim_host+\n", __func__);	\
+	sqn_pr_info("%s: BEFORE claim: claimed %d, claim_cnt %d, claimer 0x%p\n" \
+	, __func__, h->claimed, h->claim_cnt, h->claimer);	\
+	sdio_claim_host((func));			\
+	sqn_pr_info("%s: AFTER claim: claimed %d, claim_cnt %d, claimer 0x%p\n" \
+	, __func__, h->claimed, h->claim_cnt, h->claimer);	\
+	sqn_pr_info("%s: claim_host-\n", __func__);	\
+})
+
+#define sqn_sdio_release_host(func)			\
+({							\
+	struct mmc_host *h = (func)->card->host;		\
+	sqn_pr_info("%s: release_host+\n", __func__);	\
+	sqn_pr_info("%s: BEFORE release: claimed %d, claim_cnt %d, claimer 0x%p\n" \
+	, __func__, h->claimed, h->claim_cnt, h->claimer);	\
+	sdio_release_host((func));			\
+	sqn_pr_info("%s: AFTER release: claimed %d, claim_cnt %d, claimer 0x%p\n" \
+	, __func__, h->claimed, h->claim_cnt, h->claimer);	\
+	sqn_pr_info("%s: release_host-\n", __func__);	\
+})
+#else
+#define sqn_sdio_claim_host(func)			\
+({							\
+	sdio_claim_host((func));			\
+})
+
+#define sqn_sdio_release_host(func)			\
+({							\
+	sdio_release_host((func));			\
+})
+#endif
+
 #define IGNORE_CARRIER_STATE 1
 extern int mmc_wimax_get_hostwakeup_gpio(void);
+extern void mmc_wimax_enable_host_wakeup(int on);
 
 enum sqn_thsp_service {
 #define	THSP_LSP_SERVICE_BASE		0x10010000
@@ -163,8 +202,7 @@ static u32		g_last_request_pm = 0;
 
 
 /* TODO: move this to per-card private structure */
-static DECLARE_WAIT_QUEUE_HEAD(g_card_sleep_waitq);
-
+DECLARE_WAIT_QUEUE_HEAD(g_card_sleep_waitq);
 
 /* Transaction ID for lsp requests */
 static u32		g_tid = 0;
@@ -697,9 +735,8 @@ int sqn_wakeup_fw(struct sdio_func *func)
 	u8 need_to_unlock_wakelock = 0;
 
 	sqn_pr_enter();
-
 	sqn_pr_info("waking up the card...\n");
-
+	
 	if (!wake_lock_active(&card->wakelock)) {
 		sqn_pr_dbg("lock wake_lock\n");
 		wake_lock(&card->wakelock);
@@ -707,7 +744,10 @@ int sqn_wakeup_fw(struct sdio_func *func)
 	}
 
 retry:
-	sdio_claim_host(func);
+	if (priv->removed)
+		goto out;
+
+	sqn_sdio_claim_host(func);
 
 #define  SDIO_CCCR_CCCR_SDIO_VERSION_VALUE	0x11
 
@@ -722,7 +762,7 @@ retry:
 
 	if (rv) {
 		sqn_pr_err("error when reading SDIO_VERSION\n");
-		sdio_release_host(func);
+		sqn_sdio_release_host(func);
 		goto out;
 	} else {
 		sqn_pr_dbg("SDIO_VERSION has been read successfully\n");
@@ -733,13 +773,16 @@ retry:
 	if (rv)
 		sqn_pr_err("error when writing to SQN_SOC_SIGS_LSBS: %d\n", rv);
 
-	sdio_release_host(func);
+	sqn_sdio_release_host(func);
 
 	sqn_pr_info("wait for completion (timeout %d msec)...\n"
 		, jiffies_to_msecs(timeout));
 
 	rv = wait_event_interruptible_timeout(g_card_sleep_waitq
-		, 0 == card->is_card_sleeps, timeout);
+		, 0 == card->is_card_sleeps || priv->removed, timeout);
+
+	if (priv->removed)
+		goto out;
 
 	if (-ERESTARTSYS == rv) {
 		sqn_pr_warn("got a signal from kernel %d\n", rv);
@@ -747,7 +790,7 @@ retry:
 		rv = -1;
 		sqn_pr_err("can't wake up the card - timeout elapsed\n");
 
-		if (retry_cnt-- > 0) {
+		if (retry_cnt-- > 0 && card->is_card_sleeps) {
 			sqn_pr_info("retry wake up\n");
 			goto retry;
     	}
@@ -771,22 +814,14 @@ out:
 	return rv;
 }
 
-#ifdef ANDROID_KERNEL
-
-extern u8 sqn_is_gpio_irq_enabled;
+extern void mmc_wimax_enable_host_wakeup(int on);
 
 static void sqn_handle_android_early_suspend(struct early_suspend *h)
 {
 	sqn_pr_enter();
 	sqn_pr_info("%s: enter\n", __func__);
 
-	if (!sqn_is_gpio_irq_enabled) {
-		sqn_pr_info("enable GPIO%d interrupt\n", mmc_wimax_get_hostwakeup_gpio());
-		enable_irq(MSM_GPIO_TO_INT(mmc_wimax_get_hostwakeup_gpio()));
-		enable_irq_wake(MSM_GPIO_TO_INT(mmc_wimax_get_hostwakeup_gpio()));
-
-		sqn_is_gpio_irq_enabled = 1;
-	}
+	mmc_wimax_enable_host_wakeup(1);
 
 	sqn_pr_info("%s: leave\n", __func__);
 	sqn_pr_leave();
@@ -798,12 +833,7 @@ static void sqn_handle_android_late_resume(struct early_suspend *h)
 	sqn_pr_enter();
 	sqn_pr_info("%s: enter\n", __func__);
 
-	if (sqn_is_gpio_irq_enabled) {
-		sqn_pr_info("disable GPIO%d interrupt\n", (mmc_wimax_get_hostwakeup_gpio()));
-		disable_irq_wake(MSM_GPIO_TO_INT(mmc_wimax_get_hostwakeup_gpio()));
-		disable_irq(MSM_GPIO_TO_INT(mmc_wimax_get_hostwakeup_gpio()));
-		sqn_is_gpio_irq_enabled = 0;
-    }
+	mmc_wimax_enable_host_wakeup(0);
 
 	sqn_pr_info("%s: leave\n", __func__);
 	sqn_pr_leave();
@@ -835,4 +865,3 @@ void unregister_android_earlysuspend(void)
 
 	sqn_pr_leave();
 }
-#endif /* ANDROID_KERNEL */

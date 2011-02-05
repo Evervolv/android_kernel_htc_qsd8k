@@ -46,6 +46,8 @@ extern bool drop_packet;
 const uint8_t  host_macaddr[ETH_ALEN] 	= {0x00, 0x16, 0x08, 0xff, 0x00, 0x01};
 const uint8_t  ss_macaddr[ETH_ALEN] 	= {0x00, 0x16, 0x08, 0xff, 0x00, 0x00};
 
+extern int sqn_sdio_dump_net_pkt(int on);
+extern int mmc_wimax_get_thp_log(void);
 
 // Queue of packets destined to the Connection Manager
 // TODO: check size of the queue, it's should always be one.
@@ -331,7 +333,7 @@ struct file_operations thp_fops =
 	, .read	=	thp_read
 	, .write=	thp_write
 	, .poll	=	thp_poll
-	, .ioctl =	thp_ioctl
+	, .unlocked_ioctl =	thp_ioctl
 };
 
 /********************** File Operations BEGIN  *****************************/
@@ -380,9 +382,8 @@ static ssize_t thp_read(struct file *filp, char *buf, size_t count, loff_t*ppos)
 	struct sk_buff_head *head = &to_sqntool_queue;
 	struct sk_buff *curr = NULL;
 	ssize_t retval;
-#if THP_HEADER_DUMP
 	const struct sqn_thp_header *th = 0;
-#endif
+
 	sqn_pr_enter();
 #if THP_DEBUG
 	printk(KERN_WARNING "thp_read +\n");
@@ -427,25 +428,21 @@ static ssize_t thp_read(struct file *filp, char *buf, size_t count, loff_t*ppos)
 		retval = -EFAULT;
 		goto free_skb;
 	}
-#if THP_TRACE
-	sqn_pr_info("%s: [to_user]: len = %d\n", __func__, count);
-#endif
-#if THP_HEADER_DUMP
-	th = (struct sqn_thp_header *) curr->data;
-	sqn_pr_info("%s:  PKTLen: %4u | TVer: 0x0%x | Flags: 0x0%x | Len: %4u"
-		" | SeqNum: %5u | AckNum: %5u | TLen: %5u\n", __func__
-		, count
-		, th->transport_version
-		, th->flags
-		, be16_to_cpu(th->length)
-		, be16_to_cpu(th->seq_number)
-		, be16_to_cpu(th->ack_number)
-		, be32_to_cpu(th->total_length));
-#endif
-	sqn_pr_dbg("[to_user]: len = %d\n", count);
-#ifdef SQN_DEBUG_DUMP
-	sqn_pr_dbg_dump("RX:", curr->data, count);
-#endif
+
+    if (mmc_wimax_get_thp_log()) {
+        sqn_pr_info("%s: [to_user]: len = %d\n", __func__, count);
+        th = (struct sqn_thp_header *) curr->data;
+        sqn_pr_info("%s:  PKTLen: %4u | TVer: 0x0%x | Flags: 0x0%x | Len: %4u"
+    		" | SeqNum: %5u | AckNum: %5u | TLen: %5u\n", __func__
+    		, count
+    		, th->transport_version
+    		, th->flags
+    		, be16_to_cpu(th->length)
+    		, be16_to_cpu(th->seq_number)
+    		, be16_to_cpu(th->ack_number)
+    		, be32_to_cpu(th->total_length));
+        sqn_pr_dbg_dump("THP RX:", curr->data, count);
+    }
 
 #if SKB_DEBUG
     sqn_pr_info("%s: free skb [0x%p], users %d\n", __func__, curr, atomic_read(&curr->users));
@@ -477,9 +474,7 @@ static ssize_t thp_write(struct file *file, const char *buf,
 	struct sk_buff *skb;
 	struct ethhdr ethh;
 	int size = count + ETH_HLEN;
-#if THP_HEADER_DUMP
 	const struct sqn_thp_header *th = 0;
-#endif
 
 	sqn_pr_enter();
 #if THP_DEBUG
@@ -509,25 +504,22 @@ static ssize_t thp_write(struct file *file, const char *buf,
 		return  -EFAULT;
 	}
 	skb_put(skb, count);
-#if THP_TRACE
-	sqn_pr_info("%s: [from_user]: len = %d\n", __func__, count);
-#endif
-#if THP_HEADER_DUMP
-	th = (struct sqn_thp_header *) buf;
-	sqn_pr_info("%s: PKTLen: %4u | TVer: 0x0%x | Flags: 0x0%x | Len: %4u"
-		" | SeqNum: %5u | AckNum: %5u | TLen: %5u\n", __func__
-		, count
-		, th->transport_version
-		, th->flags
-		, be16_to_cpu(th->length)
-		, be16_to_cpu(th->seq_number)
-		, be16_to_cpu(th->ack_number)
-		, be32_to_cpu(th->total_length));
-#endif
-	sqn_pr_dbg("[from_user]: len = %d\n", count);
-#ifdef SQN_DEBUG_DUMP
-	sqn_pr_dbg_dump("TX:", skb->data, count);
-#endif
+
+    if (mmc_wimax_get_thp_log()) {
+        sqn_pr_info("%s: [from_user]: len = %d\n", __func__, count);
+        th = (struct sqn_thp_header *) buf;
+    	sqn_pr_info("%s: PKTLen: %4u | TVer: 0x0%x | Flags: 0x0%x | Len: %4u"
+    		" | SeqNum: %5u | AckNum: %5u | TLen: %5u\n", __func__
+    		, count
+    		, th->transport_version
+    		, th->flags
+    		, be16_to_cpu(th->length)
+    		, be16_to_cpu(th->seq_number)
+    		, be16_to_cpu(th->ack_number)
+    		, be32_to_cpu(th->total_length));
+
+        sqn_pr_dbg_dump("THP TX:", skb->data, count);
+    }	
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
 	this_device->hard_start_xmit(skb, this_device);
@@ -601,6 +593,14 @@ static int thp_ioctl(struct inode* dev, struct file* handle, unsigned int cmd, u
 				mmc_wimax_uart_switch(0); // USB
 			break;  
         
+		 case IOCTL_SWITCH_NETLOG:
+			printk(KERN_WARNING "IOCTL_SWITCH_NETLOG arg=%d\n",(int)arg);
+			if(arg == 0) 
+			    sqn_sdio_dump_net_pkt(0); // Enable netlog
+			else 
+				sqn_sdio_dump_net_pkt(1); // Disable netlog
+			break;  
+
 		default:
 			printk(KERN_WARNING "UNKNOWN OPERATION in thp_ioctl\n");
 			return -1;

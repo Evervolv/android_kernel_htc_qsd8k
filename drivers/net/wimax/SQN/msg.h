@@ -19,7 +19,6 @@
 
 #include "version.h"
 
-
 #define sqn_pr(level, fmt, arg...)			\
 do {							\
 	char kthread_name[TASK_COMM_LEN] = { 0 };	\
@@ -34,18 +33,10 @@ do {							\
 } while (0)
 
 
-#if defined(DEBUG)
-
-#ifdef	SQN_DEBUG_LEVEL_INFO
-#define DEBUG_LEVEL	KERN_INFO
-#else
-#define DEBUG_LEVEL	KERN_DEBUG
-#endif
-
-#define sqn_pr_dbg(fmt, arg...)  sqn_pr(DEBUG_LEVEL, fmt, ##arg)
+#define SQN_DEBUG_DUMP 1
 
 #ifdef SQN_DEBUG_DUMP
-
+#define DEBUG_LEVEL	KERN_INFO
 #define sqn_pr_dbg_dump(prefix, data, len)			\
 do {								\
 	unsigned int i = 0;					\
@@ -60,12 +51,21 @@ do {								\
 			printk("\n");				\
 	}							\
 } while (0)
-
 #else /* !SQN_DEBUG_DUMP */
 
 #define sqn_pr_dbg_dump(prefix, data, len)	do {} while (0)
-
 #endif /* SQN_DEBUG_DUMP */
+
+
+#if defined(DEBUG)
+
+#ifdef	SQN_DEBUG_LEVEL_INFO
+#define DEBUG_LEVEL	KERN_INFO
+#else
+#define DEBUG_LEVEL	KERN_DEBUG
+#endif
+
+#define sqn_pr_dbg(fmt, arg...)  sqn_pr(DEBUG_LEVEL, fmt, ##arg)
 
 #ifdef SQN_DEBUG_TRACE
 
@@ -82,7 +82,6 @@ do {								\
 #else /* !DEBUG */
 
 #define sqn_pr_dbg(fmt, arg...)			do {} while (0)
-#define sqn_pr_dbg_dump(prefix, data, len)	do {} while (0)
 
 #define sqn_pr_enter()	do {} while (0)
 #define sqn_pr_leave()	do {} while (0)
@@ -100,11 +99,17 @@ do {								\
 	pr_err("%s: " fmt, SQN_MODULE_NAME, ##arg)
 
 
+void sqn_pr_info_dump(char *prefix, unsigned char *data, unsigned int len);
+void sqn_pr_info_dump_rawdata(char *prefix, unsigned char *data, unsigned int len);
+int sqn_filter_packet_check(char *prefix, unsigned char *data, unsigned int len);
+
+/*
 #define sqn_pr_info_dump(prefix, data, len)			\
 do {								\
 	unsigned int i = 0;					\
 	unsigned int width = 16;				\
 	unsigned int len_ = (unsigned int)(len);		\
+    sqn_pr_info_trace(prefix, data, len);   \
 	while (i < len_) {					\
 		if (i % width == 0)				\
 			printk(KERN_INFO "%s: %s: %04x ",	\
@@ -114,6 +119,6 @@ do {								\
 			printk("\n");				\
 	}							\
 } while (0)
-
+*/
 
 #endif /* _SQN_MSG_H */

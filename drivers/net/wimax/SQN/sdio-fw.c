@@ -119,43 +119,58 @@ out:
  *	this give up and try to alloc 4KB buffer if requested size bigger than
  *	4KB, otherwise allocate nothing and return 0.
  *
- *	@return a real size of allocated buffer or 0 if allocation failed
+ *  @return a real size of allocated buffer or 0 if allocation failed
+ * 
+ *   Normal: 3912*4kB 4833*8kB 0*16kB 0*32kB 0*64kB 0*128kB 0*256kB 0*512kB 0*1024kB 0*2048kB 0*4096kB = 54312kB
  */
 
 static size_t sqn_alloc_big_buffer(u8 **buf, size_t size, gfp_t gfp_flags)
 {
 	size_t	real_size = size;
-	int	retries   = 6;
+	// int	retries   = 6;
+    // int	retries   = 3;
 
 	sqn_pr_enter();
 
 	/* Try to allocate buffer of requested size, if it failes try to
 	 * allocate a twice smaller buffer. Repeat this <retries> number of
 	 * times. */
+	/*
 	do
 	{
 		*buf = kmalloc(real_size, gfp_flags);
+		printk("%s: kmalloc %d in %x trial:%d\n", __func__, real_size, *buf, retries); 
+
 		if (!(*buf)) {
-			real_size /= 2;
-			/* adjust the size to be a multiple of 4 */
+            printk("%s: kmalloc %d failed, trial:%d\n", __func__, real_size, retries); 
+			// real_size /= 2;
+            real_size /= 4;
+			// adjust the size to be a multiple of 4
 			real_size += real_size % 4 ? 4 - real_size % 4 : 0;
 		}
 	} while (retries-- > 0 && !(*buf));
+    */
 
-	/* If all retries failed, then allocate 4KB buffer */
+	// If all retries failed, then allocate 4KB buffer
 	if (!(*buf)) {
-		real_size = 4 * 1024;
+		real_size = 8 * 1024;
 		if (size >= real_size) {
 			*buf = kmalloc(real_size, gfp_flags);
-			/* If it also failed, then just return 0, indicating
-			 * that we failed to alloc buffer */
+			// printk("%s: kmalloc %d in %x\n", __func__, real_size, *buf); 
+
+			// If it also failed, then just return 0, indicating
+			// that we failed to alloc buffer
 			if (!(*buf))
 				real_size = 0;
 		} else {
-			/* We should _not_ return buffer bigger than requested */
-			real_size = 0;
+			// We should _not_ return buffer bigger than requested
+			// real_size = 0;
+						
+			// printk("%s: We should _not_ return buffer bigger than requested size:%d real_size:%d\n", __func__, size, real_size); 
+			*buf = kmalloc(size, gfp_flags);
+			real_size = size;			
 		}
-	}
+	} 
 
 	sqn_pr_leave();
 
@@ -478,19 +493,19 @@ static int sqn_handle_mac_addr_tag(struct sdio_func *func, u8 *data, u32 length)
 		sqn_pr_dbg("single mac address\n");
 		/* we have only one mac addr */
 		get_mac_addr_from_str(data, length, priv->mac_addr);
-				
+
 		// Andrew 0720
 		// ++(priv->mac_addr[ETH_ALEN - 1])
-        // real MAC: 38:E6:D8:86:00:00 
+		// real MAC: 38:E6:D8:86:00:00 
 		// hboot will store: 38:E6:D8:85:FF:FF (minus 1)
 		// sdio need to recovery it by plusing 1: 38:E6:D8:86:00:00 (plus 1)
-	
+
 		if ((++(priv->mac_addr[ETH_ALEN - 1])) == 0x00)
-           if ((++(priv->mac_addr[ETH_ALEN - 2])) == 0x00)
-			   if ((++(priv->mac_addr[ETH_ALEN - 3])) == 0x00)
-                  if ((++(priv->mac_addr[ETH_ALEN - 4])) == 0x00) 
-					  if ((++(priv->mac_addr[ETH_ALEN - 5])) == 0x00) 
-						  ++(priv->mac_addr[ETH_ALEN - 6]);
+			if ((++(priv->mac_addr[ETH_ALEN - 2])) == 0x00)
+				if ((++(priv->mac_addr[ETH_ALEN - 3])) == 0x00)
+					if ((++(priv->mac_addr[ETH_ALEN - 4])) == 0x00)
+						if ((++(priv->mac_addr[ETH_ALEN - 5])) == 0x00)
+							++(priv->mac_addr[ETH_ALEN - 6]);
 
 	}
 	else if (2 * MAC_ADDR_STRING_LEN + 1 == length) { /* we have two macs */
@@ -673,7 +688,7 @@ int sqn_load_firmware(struct sdio_func *func)
 	}
 
 	sqn_pr_info("loading bootloader to the card...\n");
-	if ((rv = sqn_load_bootstrapper(func, fw->data, fw->size)))
+	if ((rv = sqn_load_bootstrapper(func, (u8*) fw->data, fw->size)))
 		goto out;
 
 	/* boot the card */
@@ -686,6 +701,12 @@ int sqn_load_firmware(struct sdio_func *func)
 	sqn_pr_info("  done\n");
 
 out:
+	// To avoid kzalloc leakage in /drivers/base/firmware_class.c	
+	if (fw) {
+		release_firmware(fw);
+		fw = NULL;
+	}
+
 	sqn_pr_leave();
 	return rv;
 }

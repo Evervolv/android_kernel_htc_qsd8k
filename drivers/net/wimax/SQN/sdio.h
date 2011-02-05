@@ -15,4 +15,6 @@
 #include <linux/mmc/sdio_func.h>
 #include <linux/mmc/sdio_ids.h>
 
+int sqn_sdio_dump_net_pkt(int on);
+
 #endif  /* _SQN_SDIO_WRAPPERS_H */

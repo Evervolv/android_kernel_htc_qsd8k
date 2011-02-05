@@ -77,7 +77,7 @@ SQN_USB		:=
 obj-$(SQN_SDIO)	+= sequans_sdio.o
 obj-$(SQN_USB)	+= sequans_usb.o
 
-sequans_sdio-objs := sdio.o sdio-driver.o sdio-fw.o sdio-pm.o thp.o
+sequans_sdio-objs := sdio.o sdio-driver.o sdio-fw.o sdio-pm.o thp.o sdio_netlink.o msg.o
 
 sequans_usb-objs  := usb-driver.o thp.o
 
@@ -96,21 +96,6 @@ sequans_usb-objs  := usb-driver.o thp.o
 EXTRA_CFLAGS	+= -D$(SQN_TARGET) -Wno-unused-function -Wno-unused-label	\
 		   -Wno-unused-variable
 
-
-### For TI kernel we need the following lines
-### For other kernels we should comment them
-
-#EXTRA_CFLAGS	+= -DTI_KERNEL
-#sequans_sdio-objs += sdio-ti.o
-
-### end of TI kernel specific options
-
-
-### For ANDROID kernel we need the following lines
-### For other kernels we should comment them
-
 EXTRA_CFLAGS	+= -DANDROID_KERNEL
-
-### end of HTC kernel specific options
 
 endif

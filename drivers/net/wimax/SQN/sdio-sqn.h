@@ -133,6 +133,7 @@ int sqn_sdio_tx_skb(struct sqn_sdio_card *card, struct sk_buff *skb
 #define SQN_SDIO_IT_STATUS_MSBS		0x2047
 
 /* Firmware loading registers */
+#define SQN_H_GRSTN			0x2400
 #define SQN_H_CRSTN			0x2404
 #define SQN_H_SDRAMCTL_RSTN		0x2414
 #define SQN_H_SDRAM_NO_EMR		0x2415
