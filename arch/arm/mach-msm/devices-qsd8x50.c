@@ -969,6 +969,11 @@ struct clk msm_clocks_8x50[] = {
 
 };
 
+void msm_i2c_gpio_init(void)
+{
+        gpio_request(GPIO_I2C_CLK, "i2c_clk");
+        gpio_request(GPIO_I2C_DAT, "i2c_data");
+}
 
 unsigned msm_num_clocks_8x50 = ARRAY_SIZE(msm_clocks_8x50);
 

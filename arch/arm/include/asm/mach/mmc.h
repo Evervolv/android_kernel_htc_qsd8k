@@ -22,6 +22,8 @@ struct mmc_platform_data {
 	unsigned int (*status)(struct device *);
 	struct embedded_sdio_data *embedded_sdio;
 	int (*register_status_notify)(void (*callback)(int card_present, void *dev_id), void *dev_id);
+	unsigned int *slot_type;
+	unsigned dat0_gpio;
 };
 
 #endif

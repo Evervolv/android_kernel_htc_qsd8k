@@ -1717,13 +1717,6 @@ static void usb_lpm_enter(struct usb_info *ui)
 	clk_set_rate(ui->ebi1clk, 0);
 	ui->in_lpm = 1;
 	spin_unlock_irqrestore(&ui->lock, iflags);
-
-	if (board_mfg_mode() == 1) {/*for MFG adb unstable in FROYO ROM*/
-		printk(KERN_INFO "usb: idle_wake_unlock and perf unlock\n");
-		wake_unlock(&vbus_idle_wake_lock);
-		if (is_perf_lock_active(&usb_perf_lock))
-			perf_unlock(&usb_perf_lock);
-	}
 }
 
 static void usb_lpm_exit(struct usb_info *ui)
@@ -1741,13 +1734,6 @@ static void usb_lpm_exit(struct usb_info *ui)
 		clk_enable(ui->otgclk);
 	usb_wakeup_phy(ui);
 	ui->in_lpm = 0;
-
-	if (board_mfg_mode() == 1) {/*for MFG adb unstable in FROYO ROM*/
-		printk(KERN_INFO "usb: idle_wake_lock and perf lock\n");
-		wake_lock(&vbus_idle_wake_lock);
-		if (!is_perf_lock_active(&usb_perf_lock))
-			perf_lock(&usb_perf_lock);
-	}
 }
 
 #ifdef CONFIG_DOCK_ACCESSORY_DETECT
@@ -2760,7 +2746,7 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind)(struct
 
 	if (!driver
 			|| driver->speed < USB_SPEED_FULL
-                        || !bind
+            || !bind
 			|| !driver->disconnect
 			|| !driver->setup)
 		return -EINVAL;

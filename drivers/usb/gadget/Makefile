@@ -30,6 +30,7 @@ else
 obj-$(CONFIG_USB_MSM_72K)  += msm72k_udc.o
 endif
 
+
 #
 # USB gadget drivers
 #
