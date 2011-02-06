@@ -114,8 +114,8 @@ const int ov8810_ver_qtr_blk_lines_array[] = {44, 44, 365};
 /* Registers*/
 /* PLL Registers */
 #define REG_PRE_PLL_CLK_DIV		0x3011 /*0x0305*/
-#define REG_PLL_MULTIPLIER		0x3010
-#define REG_VT_CLK_DIV			0x300E	/*[7:4]VT_SYS_DIV, [3-0]VT_PIX_DIV*/
+#define REG_PLL_MULTIPLIER		0x3010	
+#define REG_VT_CLK_DIV			0x300E	/*[7:4]VT_SYS_DIV, [3-0]VT_PIX_DIV*/	
 #define REG_OP_CLK_DIV			0x300F	/*[7:4]OP_SYS_DIV, [3-0]OP_PIX_DIV*/
 
 /* ISP Enable Control */
@@ -2053,6 +2053,10 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 	pr_info("[CAM]doing clk switch (ov8810)\n");
 	if(data->camera_clk_switch != NULL)
 		data->camera_clk_switch();
+	
+	/* enable mclk first */
+	msm_camio_clk_rate_set(OV8810_DEFAULT_CLOCK_RATE);
+	msleep(20);
 
 	msm_camio_camif_pad_reg_reset();
 	msleep(20);
@@ -2067,11 +2071,6 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 	gpio_free(data->sensor_pwd);
 	msleep(5);
 
-	/* enable mclk first */
-	msm_camio_clk_rate_set(OV8810_DEFAULT_CLOCK_RATE);
-	msm_camio_camif_pad_reg_reset();
-	msleep(3);
-	/*Pull reset*/
 	rc = gpio_request(data->sensor_reset, "ov8810");
 	if (!rc)
 		gpio_direction_output(data->sensor_reset, 1);
@@ -2100,7 +2099,7 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 	/* enable AF actuator */
 	rc = vreg_enable(vreg_af_actuator);
 	if (!rc) {
-
+		
 		rc = vreg_set_level(vreg_af_actuator, 2800); /*2v8*/
 		if (rc)
 		{
@@ -2631,6 +2630,7 @@ static int ov8810_sensor_release(void)
 
 	pr_info("[CAM]vreg_af_actuator vreg_disable\n");
 	vreg_disable(vreg_af_actuator);
+
 	msleep(20);
 
 	pr_info("[CAM]%s, %d\n", __func__, __LINE__);
@@ -2762,6 +2762,7 @@ static int ov8810_vreg_disable(struct platform_device *pdev)
 
 static int __ov8810_probe(struct platform_device *pdev)
 {
+	
 	struct msm_camera_sensor_info *sdata = pdev->dev.platform_data;
 	printk("[CAM]__ov8810_probe\n");
 	ov8810_pdev = pdev;
