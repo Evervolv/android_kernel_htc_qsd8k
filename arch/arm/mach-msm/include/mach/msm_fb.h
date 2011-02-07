@@ -158,6 +158,8 @@ struct msm_mddi_platform_data {
 	/* fixup the mfr name, product id */
 	void (*fixup)(uint16_t *mfr_name, uint16_t *product_id);
 
+	int vsync_irq;
+	
 	struct resource *fb_resource; /*optional*/
 	/* number of clients in the list that follows */
 	int num_clients;

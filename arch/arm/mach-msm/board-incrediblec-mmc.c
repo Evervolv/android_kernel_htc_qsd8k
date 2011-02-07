@@ -150,20 +150,15 @@ static struct mmc_platform_data incrediblec_sdslot_data = {
 	.ocr_mask	= INCREDIBLEC_MMC_VDD,
 	.status		= incrediblec_sdslot_status,
 	.translate_vdd	= incrediblec_sdslot_switchvdd,
-	//.slot_type	= &incrediblec_sdslot_type,
+	.slot_type	= &incrediblec_sdslot_type,
 };
 
 static unsigned int incrediblec_mmc_type = MMC_TYPE_MMC;
 
 static struct mmc_platform_data incrediblec_movinand_data = {
 	.ocr_mask	= INCREDIBLEC_MMC_VDD,
-	//.slot_type	= &incrediblec_mmc_type,
+	.slot_type	= &incrediblec_mmc_type,
 };
-
-/* int msm_add_sdcc(unsigned int controller, struct mmc_platform_data *plat,
-		 unsigned int stat_irq, unsigned long stat_irq_flags); */
-
-
 
 /* ---- WIFI ---- */
 
