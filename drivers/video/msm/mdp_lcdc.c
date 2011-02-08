@@ -550,6 +550,7 @@ static void precompute_timing_parms(struct mdp_lcdc_info *lcdc)
 	unsigned int display_vstart;
 	unsigned int display_vend;
 
+#ifdef CONFIG_MACH_SUPERSONIC
 	hsync_period = (timing->hsync_pulse_width + timing->hsync_back_porch +
 			fb_data->xres + timing->hsync_front_porch);
 	hsync_start_x = (timing->hsync_pulse_width + timing->hsync_back_porch);
@@ -565,6 +566,23 @@ static void precompute_timing_parms(struct mdp_lcdc_info *lcdc)
 
 	display_vend = (timing->vsync_pulse_width + timing->vsync_back_porch +
 			 fb_data->yres) * hsync_period;
+#else
+	hsync_period = (timing->hsync_back_porch +
+			fb_data->xres + timing->hsync_front_porch);
+	hsync_start_x = timing->hsync_back_porch;
+	hsync_end_x = hsync_start_x + fb_data->xres - 1;
+
+	vsync_period = (timing->vsync_back_porch +
+			fb_data->yres + timing->vsync_front_porch);
+	vsync_period *= hsync_period;
+
+	display_vstart = timing->vsync_back_porch;
+	display_vstart *= hsync_period;
+	display_vstart += timing->hsync_skew;
+
+	display_vend = (timing->vsync_back_porch + fb_data->yres) *
+		hsync_period;
+#endif
 	display_vend += timing->hsync_skew - 1;
 
 	/* register values we pre-compute at init time from the timing
