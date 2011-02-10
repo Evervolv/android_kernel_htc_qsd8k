@@ -251,7 +251,7 @@ static struct capella_cm3602_platform_data capella_cm3602_pdata = {
 static struct htc_headset_microp_platform_data htc_headset_microp_data = {
 	.remote_int		= 1 << 5,
 	.remote_irq		= MSM_uP_TO_INT(5),
-	.remote_enable_pin	= NULL,
+	.remote_enable_pin	= 0,
 	.adc_channel		= 0x01,
 	.adc_remote		= {0, 33, 50, 110, 160, 220},
 };
@@ -746,105 +746,6 @@ static struct regulator_init_data tps65023_data[5] = {
 	},
 };
 
-static void set_h2w_dat(int n)
-{
-	gpio_set_value(INCREDIBLEC_GPIO_H2W_DATA, n);
-}
-
-static void set_h2w_clk(int n)
-{
-	gpio_set_value(INCREDIBLEC_GPIO_H2W_CLK, n);
-}
-
-static int get_h2w_dat(void)
-{
-	return gpio_get_value(INCREDIBLEC_GPIO_H2W_DATA);
-}
-
-static int get_h2w_clk(void)
-{
-	return gpio_get_value(INCREDIBLEC_GPIO_H2W_CLK);
-}
-
-static void h2w_dev_power_on(int on)
-{
-	printk(KERN_INFO "Not support H2W power\n");
-}
-
-/* default TX,RX to GPI */
-static uint32_t uart3_off_gpi_table[] = {
-	/* RX, H2W DATA */
-	PCOM_GPIO_CFG(INCREDIBLEC_GPIO_H2W_DATA, 0,
-		      GPIO_INPUT, GPIO_NO_PULL, GPIO_2MA),
-	/* TX, H2W CLK */
-	PCOM_GPIO_CFG(INCREDIBLEC_GPIO_H2W_CLK, 0,
-		      GPIO_INPUT, GPIO_NO_PULL, GPIO_2MA),
-};
-
-/* set TX,RX to GPO */
-static uint32_t uart3_off_gpo_table[] = {
-	/* RX, H2W DATA */
-	PCOM_GPIO_CFG(INCREDIBLEC_GPIO_H2W_DATA, 0,
-		      GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),
-	/* TX, H2W CLK */
-	PCOM_GPIO_CFG(INCREDIBLEC_GPIO_H2W_CLK, 0,
-		      GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),
-};
-
-static void set_h2w_dat_dir(int n)
-{
-#if 0
-	if (n == 0) /* input */
-		gpio_direction_input(INCREDIBLEC_GPIO_H2W_DATA);
-	else
-		gpio_configure(INCREDIBLEC_GPIO_H2W_DATA, GPIOF_DRIVE_OUTPUT);
-#else
-	if (n == 0) /* input */
-		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX,
-			      uart3_off_gpi_table + 0, 0);
-	else
-		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX,
-			      uart3_off_gpo_table + 0, 0);
-#endif
-}
-
-static void set_h2w_clk_dir(int n)
-{
-#if 0
-	if (n == 0) /* input */
-		gpio_direction_input(INCREDIBLEC_GPIO_H2W_CLK);
-	else
-		gpio_configure(INCREDIBLEC_GPIO_H2W_CLK, GPIOF_DRIVE_OUTPUT);
-#else
-	if (n == 0) /* input */
-		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX,
-			      uart3_off_gpi_table + 1, 0);
-	else
-		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX,
-			      uart3_off_gpo_table + 1, 0);
-#endif
-}
-
-
-static void incrediblec_config_serial_debug_gpios(void);
-
-static void h2w_configure(int route)
-{
-	printk(KERN_INFO "H2W route = %d \n", route);
-	switch (route) {
-	case H2W_UART3:
-		incrediblec_config_serial_debug_gpios();
-		printk(KERN_INFO "H2W -> UART3\n");
-		break;
-	case H2W_GPIO:
-		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX,
-			      uart3_off_gpi_table + 0, 0);
-		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX,
-			      uart3_off_gpi_table + 1, 0);
-		printk(KERN_INFO "H2W -> GPIO\n");
-		break;
-	}
-}
 
 static struct htc_headset_mgr_platform_data htc_headset_mgr_data = {
 };
@@ -859,8 +760,8 @@ static struct platform_device htc_headset_mgr = {
 
 static struct htc_headset_gpio_platform_data htc_headset_gpio_data = {
 	.hpin_gpio		= INCREDIBLEC_GPIO_35MM_HEADSET_DET,
-	.key_enable_gpio	= NULL,
-	.mic_select_gpio	= NULL,
+	.key_enable_gpio	= 0,
+	.mic_select_gpio	= 0,
 };
 
 static struct platform_device htc_headset_gpio = {
@@ -1161,14 +1062,6 @@ static struct platform_device incrediblec_oj = {
 	}
 };
 
-static struct resource resources_msm_fb[] = {
-	{
-		.start = MSM_FB_BASE,
-		.end = MSM_FB_BASE + MSM_FB_SIZE - 1,
-		.flags = IORESOURCE_MEM,
-	},
-};
-
 static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
         .rx_wakeup_irq = -1,
         .inject_rx_on_wakeup = 0,
@@ -1250,19 +1143,6 @@ static uint32_t usb_phy_3v3_table[] = {
 	PCOM_GPIO_CFG(INCREDIBLEC_USB_PHY_3V3_ENABLE, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA)
 };
 
-static uint32_t usb_ID_PIN_table[] = {
-	PCOM_GPIO_CFG(INCREDIBLEC_GPIO_USB_ID_PIN, 0, GPIO_INPUT, GPIO_NO_PULL, GPIO_4MA),
-};
-
-static uint32_t incrediblec_serial_debug_table[] = {
-	/* RX */
-	PCOM_GPIO_CFG(INCREDIBLEC_GPIO_UART3_RX, 3, GPIO_INPUT, GPIO_NO_PULL,
-		      GPIO_4MA),
-	/* TX */
-	PCOM_GPIO_CFG(INCREDIBLEC_GPIO_UART3_TX, 3, GPIO_OUTPUT, GPIO_NO_PULL,
-		      GPIO_4MA),
-};
-
 static uint32_t incrediblec_uart_gpio_table[] = {
         /* RX */
 	PCOM_GPIO_CFG(INCREDIBLEC_GPIO_UART3_RX, 3, GPIO_INPUT, GPIO_NO_PULL,
@@ -1271,12 +1151,6 @@ static uint32_t incrediblec_uart_gpio_table[] = {
         PCOM_GPIO_CFG(INCREDIBLEC_GPIO_UART3_TX, 3, GPIO_INPUT, GPIO_NO_PULL,
                       GPIO_4MA),
 };
-
-static void incrediblec_config_serial_debug_gpios(void)
-{
-	config_gpio_table(incrediblec_serial_debug_table,
-				ARRAY_SIZE(incrediblec_serial_debug_table));
-}
 
 static void incrediblec_config_uart_gpios(void)
 {
