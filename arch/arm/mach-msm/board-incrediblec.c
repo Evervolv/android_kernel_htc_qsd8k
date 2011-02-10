@@ -17,7 +17,6 @@
 
 #include <linux/gpio.h>
 #include <linux/i2c.h>
-#include <linux/i2c-msm.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/kernel.h>
