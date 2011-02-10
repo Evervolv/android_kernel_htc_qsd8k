@@ -25,8 +25,8 @@
 
 #include <asm/io.h>
 #include <asm/mach-types.h>
-#include <asm/mach/mmc.h>
 
+#include <mach/mmc.h>
 #include <mach/vreg.h>
 
 #include "board-incrediblec.h"
@@ -146,7 +146,7 @@ static unsigned int incrediblec_sdslot_status(struct device *dev)
 
 static unsigned int incrediblec_sdslot_type = MMC_TYPE_SD;
 
-static struct mmc_platform_data incrediblec_sdslot_data = {
+static struct msm_mmc_platform_data incrediblec_sdslot_data = {
 	.ocr_mask	= INCREDIBLEC_MMC_VDD,
 	.status		= incrediblec_sdslot_status,
 	.translate_vdd	= incrediblec_sdslot_switchvdd,
@@ -155,7 +155,7 @@ static struct mmc_platform_data incrediblec_sdslot_data = {
 
 static unsigned int incrediblec_mmc_type = MMC_TYPE_MMC;
 
-static struct mmc_platform_data incrediblec_movinand_data = {
+static struct msm_mmc_platform_data incrediblec_movinand_data = {
 	.ocr_mask	= INCREDIBLEC_MMC_VDD,
 	.slot_type	= &incrediblec_mmc_type,
 };
@@ -217,7 +217,7 @@ static unsigned int incrediblec_wifi_status(struct device *dev)
 	return incrediblec_wifi_cd;
 }
 
-static struct mmc_platform_data incrediblec_wifi_data = {
+static struct msm_mmc_platform_data incrediblec_wifi_data = {
 	.ocr_mask		= MMC_VDD_28_29,
 	.status			= incrediblec_wifi_status,
 	.register_status_notify	= incrediblec_wifi_status_register,
