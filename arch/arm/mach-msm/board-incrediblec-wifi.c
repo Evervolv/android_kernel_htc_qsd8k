@@ -9,7 +9,7 @@
 #include <asm/gpio.h>
 #include <asm/io.h>
 #include <linux/skbuff.h>
-#include <linux/wifi_tiwlan.h>
+#include <linux/wlan_plat.h>
 
 #include "board-incrediblec.h"
 
@@ -77,7 +77,7 @@ static struct resource incrediblec_wifi_resources[] = {
 		.name		= "bcm4329_wlan_irq",
 		.start		= MSM_GPIO_TO_INT(INCREDIBLEC_GPIO_WIFI_IRQ),
 		.end		= MSM_GPIO_TO_INT(INCREDIBLEC_GPIO_WIFI_IRQ),
-		.flags          = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL,
+		.flags          = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE,
 	},
 };
 
@@ -99,8 +99,9 @@ static struct platform_device incrediblec_wifi_device = {
 };
 
 extern unsigned char *get_wifi_nvs_ram(void);
+extern int wifi_calibration_size_set(void);
 
-static unsigned incrediblec_wifi_update_nvs(char *str)
+static unsigned incrediblec_wifi_update_nvs(char *str, int add_flag)
 {
 #define NVS_LEN_OFFSET		0x0C
 #define NVS_DATA_OFFSET		0x40
@@ -112,14 +113,18 @@ static unsigned incrediblec_wifi_update_nvs(char *str)
 	ptr = get_wifi_nvs_ram();
 	/* Size in format LE assumed */
 	memcpy(&len, ptr + NVS_LEN_OFFSET, sizeof(len));
-
-	/* the last bye in NVRAM is 0, trim it */
-	if (ptr[NVS_DATA_OFFSET + len -1] == 0)
+	/* if the last byte in NVRAM is 0, trim it */
+	if (ptr[NVS_DATA_OFFSET + len - 1] == 0)
 		len -= 1;
-
-	strcpy(ptr + NVS_DATA_OFFSET + len, str);
-	len += strlen(str);
+	if (add_flag) {
+		strcpy(ptr + NVS_DATA_OFFSET + len, str);
+		len += strlen(str);
+	} else {
+		if (strnstr(ptr + NVS_DATA_OFFSET, str, len))
+			len -= strlen(str);
+	}
 	memcpy(ptr + NVS_LEN_OFFSET, &len, sizeof(len));
+	wifi_calibration_size_set();
 	return 0;
 }
 
@@ -131,7 +136,8 @@ static int __init incrediblec_wifi_init(void)
 		return 0;
 
 	printk("%s: start\n", __func__);
-	incrediblec_wifi_update_nvs("sd_oobonly=1\r\n");
+	incrediblec_wifi_update_nvs("sd_oobonly=1\r\n", 0);
+	incrediblec_wifi_update_nvs("btc_params70=0x32\r\n", 1);
 	incrediblec_init_wifi_mem();
 	ret = platform_device_register(&incrediblec_wifi_device);
         return ret;
