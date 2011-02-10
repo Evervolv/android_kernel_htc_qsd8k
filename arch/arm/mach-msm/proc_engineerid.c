@@ -19,9 +19,11 @@
 #include <linux/seq_file.h>
 #include "devices.h"
 
+extern unsigned engineer_id;
+
 static int c_show(struct seq_file *m, void *v)
 {
-	seq_printf(m, "%d\n");
+	seq_printf(m, "%u\n", engineer_id);
 
 	return 0;
 }
