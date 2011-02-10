@@ -149,7 +149,7 @@ err:
 	return rc;
 }
 
-static int tpa2018d1_ioctl(struct inode *inode, struct file *file,
+static long tpa2018d1_ioctl(struct file *file,
 		unsigned int cmd, unsigned long arg)
 {
 	void __user *argp = (void __user *)arg;

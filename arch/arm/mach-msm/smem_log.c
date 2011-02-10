@@ -1392,8 +1392,7 @@ static int smem_log_release(struct inode *ip, struct file *fp)
 	return 0;
 }
 
-static int smem_log_ioctl(struct inode *ip, struct file *fp,
-			  unsigned int cmd, unsigned long arg);
+static long smem_log_ioctl(struct file *fp, unsigned int cmd, unsigned long arg);
 
 static const struct file_operations smem_log_fops = {
 	.owner = THIS_MODULE,
@@ -1413,8 +1412,7 @@ static const struct file_operations smem_log_bin_fops = {
 	.unlocked_ioctl = smem_log_ioctl,
 };
 
-static int smem_log_ioctl(struct inode *ip, struct file *fp,
-			  unsigned int cmd, unsigned long arg)
+static long smem_log_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 {
 	struct smem_log_inst *inst;
 
