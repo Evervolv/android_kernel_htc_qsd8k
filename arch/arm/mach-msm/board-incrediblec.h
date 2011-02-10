@@ -145,20 +145,16 @@
 #define INCREDIBLEC_SPI_CLK                     (17)
 #define INCREDIBLEC_SPI_DO                      (18)
 #define INCREDIBLEC_SPI_CS                      (20)
+
 #define INCREDIBLEC_LCD_RST_ID1                 (29)
 #define INCREDIBLEC_LCD_ID0                     (32)
-#define INCREDIBLEC_GPIO_LCD_RST_N				29
-#define INCREDIBLEC_GPIO_LCD_ID0				147
+
 /* TV-out */
 #define INCREDIBLEC_TV_LOAD_DET			(82)
 #define INCREDIBLEC_VIDEO_SHDN_N                (109)
 #define INCREDIBLEC_AV_SWITCH			(119)
 
 /* LCD */
-#define INCREDIBLEC_LCD_SPI_CLK            		(17)
-#define INCREDIBLEC_LCD_SPI_DO             		(18)
-#define INCREDIBLEC_LCD_SPI_CSz            		(20)
-#define INCREDIBLEC_LCD_RSTz               		(29)
 #define INCREDIBLEC_LCD_R0                      (113)
 #define INCREDIBLEC_LCD_R1                      (114)
 #define INCREDIBLEC_LCD_R2                      (115)
