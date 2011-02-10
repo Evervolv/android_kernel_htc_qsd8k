@@ -48,7 +48,6 @@
 #include <mach/system.h>
 #include <linux/spi/spi.h>
 #include <linux/curcial_oj.h>
-#include <mach/msm_panel.h>
 #include "board-incrediblec.h"
 #include "devices.h"
 #include "proc_comm.h"
