@@ -419,7 +419,7 @@ static struct platform_device usb_mass_storage_device = {
 
 #ifdef CONFIG_USB_ANDROID_RNDIS
 static struct usb_ether_platform_data rndis_pdata = {
-	/* ethaddr is filled by board_serialno_setup */
+	/* ethaddr is filled by incrediblec_board_serialno_setup */
 	.vendorID	= 0x18d1,
 	.vendorDescr	= "Google, Inc.",
 };
@@ -1181,6 +1181,27 @@ static int __init parse_tag_bdaddr(const struct tag *tag)
 
 __tagtable(ATAG_BDADDR, parse_tag_bdaddr);
 
+static int __init incrediblec_board_serialno_setup(char *serialno)
+{
+#ifdef CONFIG_USB_ANDROID_RNDIS
+	int i;
+	char *src = serialno;
+
+	/* create a fake MAC address from our serial number.
+	 * first byte is 0x02 to signify locally administered.
+	 */
+	rndis_pdata.ethaddr[0] = 0x02;
+	for (i = 0; *src; i++) {
+		/* XOR the USB serial across the remaining bytes */
+		rndis_pdata.ethaddr[i % (ETH_ALEN - 1) + 1] ^= *src++;
+	}
+#endif
+
+	android_usb_pdata.serial_number = serialno;
+	msm_hsusb_pdata.serial_number = serialno;
+	return 1;
+}
+
 static struct msm_acpu_clock_platform_data incrediblec_clock_data = {
 	.acpu_switch_time_us	= 20,
 	.max_speed_delta_khz	= 256000,
@@ -1290,6 +1311,8 @@ static void __init incrediblec_init(void)
 		msm_kgsl_resources[1].start = MSM_GPU_MEM_BASE;
 		msm_kgsl_resources[1].end =  msm_kgsl_resources[1].start + MSM_GPU_MEM_SIZE - 1;
 	}
+
+	incrediblec_board_serialno_setup(board_serialno());
 
 	OJ_BMA_power();
 
