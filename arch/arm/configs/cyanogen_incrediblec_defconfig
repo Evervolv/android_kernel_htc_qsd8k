@@ -1035,7 +1035,7 @@ CONFIG_SMC91X=y
 # CONFIG_NETDEV_10000 is not set
 CONFIG_WLAN=y
 CONFIG_BCM4329=m
-CONFIG_BCM4329_FW_PATH="/system/etc/firmware/fw_bcm4329.bin"
+CONFIG_BCM4329_FW_PATH="/vendor/firmware/fw_bcm4329.bin"
 CONFIG_BCM4329_NVRAM_PATH="/proc/calibration"
 # CONFIG_HOSTAP is not set
 # CONFIG_TIWLAN1251 is not set
