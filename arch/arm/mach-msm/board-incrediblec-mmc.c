@@ -219,6 +219,7 @@ static unsigned int incrediblec_wifi_status(struct device *dev)
 
 static struct msm_mmc_platform_data incrediblec_wifi_data = {
 	.ocr_mask		= MMC_VDD_28_29,
+	.built_in		= 1,
 	.status			= incrediblec_wifi_status,
 	.register_status_notify	= incrediblec_wifi_status_register,
 	.embedded_sdio		= &incrediblec_wifi_emb_data,
@@ -236,18 +237,16 @@ int incrediblec_wifi_set_carddetect(int val)
 }
 EXPORT_SYMBOL(incrediblec_wifi_set_carddetect);
 
+static int incrediblec_wifi_power_state;
+
 int incrediblec_wifi_power(int on)
 {
-	int rc = 0;
-
 	printk(KERN_INFO "%s: %d\n", __func__, on);
 
 	if (on) {
 		config_gpio_table(wifi_on_gpio_table,
 				  ARRAY_SIZE(wifi_on_gpio_table));
 		mdelay(50);
-		if (rc)
-			return rc;
 	} else {
 		config_gpio_table(wifi_off_gpio_table,
 				  ARRAY_SIZE(wifi_off_gpio_table));
@@ -255,14 +254,18 @@ int incrediblec_wifi_power(int on)
 
 	mdelay(100);
 	gpio_set_value(INCREDIBLEC_GPIO_WIFI_SHUTDOWN_N, on); /* WIFI_SHUTDOWN */
-	mdelay(100);
+	mdelay(200);
+
+	incrediblec_wifi_power_state = on;
 	return 0;
 }
-EXPORT_SYMBOL(incrediblec_wifi_power);
+
+static int incrediblec_wifi_reset_state;
 
 int incrediblec_wifi_reset(int on)
 {
 	printk(KERN_INFO "%s: do nothing\n", __func__);
+	incrediblec_wifi_reset_state = on;
 	return 0;
 }
 
@@ -270,8 +273,6 @@ int incrediblec_wifi_reset(int on)
 int __init incrediblec_init_mmc(unsigned int sys_rev)
 {
 	uint32_t id;
-
-	wifi_status_cb = NULL;
 
 	printk(KERN_INFO "%s()+\n", __func__);
 
