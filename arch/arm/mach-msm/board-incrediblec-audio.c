@@ -25,7 +25,6 @@
 #include "board-incrediblec.h"
 #include "proc_comm.h"
 #include "pmic.h"
-#include "board-incrediblec-tpa2018d1.h"
 
 #if 1
 #define D(fmt, args...) printk(KERN_INFO "Audio: "fmt, ##args)
@@ -105,7 +104,6 @@ void incrediblec_speaker_enable(int en)
 
 		pmic_set_spkr_configuration(&scm);
 	}
-	tpa2018d1_set_speaker_amp(en);
 }
 
 void incrediblec_receiver_enable(int en)
