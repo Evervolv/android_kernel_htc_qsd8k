@@ -199,6 +199,7 @@ static unsigned int supersonic_wifi_status(struct device *dev)
 
 static struct msm_mmc_platform_data supersonic_wifi_data = {
 	.ocr_mask		= MMC_VDD_28_29,
+	.built_in		= 1,
 	.status			= supersonic_wifi_status,
 	.register_status_notify	= supersonic_wifi_status_register,
 	.embedded_sdio		= &supersonic_wifi_emb_data,
@@ -216,18 +217,16 @@ int supersonic_wifi_set_carddetect(int val)
 }
 EXPORT_SYMBOL(supersonic_wifi_set_carddetect);
 
+static int supersonic_wifi_power_state;
+
 int supersonic_wifi_power(int on)
 {
-	int rc = 0;
-
 	printk(KERN_INFO "%s: %d\n", __func__, on);
 
 	if (on) {
 		config_gpio_table(wifi_on_gpio_table,
 				  ARRAY_SIZE(wifi_on_gpio_table));
 		mdelay(50);
-		if (rc)
-			return rc;
 	} else {
 		config_gpio_table(wifi_off_gpio_table,
 				  ARRAY_SIZE(wifi_off_gpio_table));
@@ -235,14 +234,18 @@ int supersonic_wifi_power(int on)
 
 	mdelay(100);
 	gpio_set_value(SUPERSONIC_GPIO_WIFI_SHUTDOWN_N, on); /* WIFI_SHUTDOWN */
-	mdelay(100);
+	mdelay(200);
+
+	supersonic_wifi_power_state = on;
 	return 0;
 }
-EXPORT_SYMBOL(supersonic_wifi_power);
+
+static int supersonic_wifi_reset_state;
 
 int supersonic_wifi_reset(int on)
 {
 	printk(KERN_INFO "%s: do nothing\n", __func__);
+	supersonic_wifi_reset_state = on;
 	return 0;
 }
 
@@ -610,8 +613,6 @@ EXPORT_SYMBOL(mmc_wimax_enable_host_wakeup);
 int __init supersonic_init_mmc(unsigned int sys_rev)
 {
 	uint32_t id;
-
-	wifi_status_cb = NULL;
 
 	printk(KERN_INFO "%s()+\n", __func__);
 
