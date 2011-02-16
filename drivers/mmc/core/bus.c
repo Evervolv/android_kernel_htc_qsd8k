@@ -292,6 +292,7 @@ int mmc_add_card(struct mmc_card *card)
 		break;
 	case MMC_TYPE_SDIO_WIMAX:
 		type = "SD-WiMAX";
+		break;
 	default:
 		type = "?";
 		break;
