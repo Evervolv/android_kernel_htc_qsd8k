@@ -328,6 +328,7 @@ static unsigned int supersonic_wimax_type = MMC_TYPE_SDIO_WIMAX;
 
 static struct msm_mmc_platform_data supersonic_wimax_data = {
 	.ocr_mask		= MMC_VDD_27_28 | MMC_VDD_28_29 | MMC_VDD_29_30,
+	.built_in		= 1,
 	.status			= supersonic_wimax_status,
 	.register_status_notify	= supersonic_wimax_status_register,
 	.embedded_sdio		= NULL,
@@ -372,6 +373,9 @@ int mmc_wimax_get_uart_switch(void)
 }
 EXPORT_SYMBOL(mmc_wimax_get_uart_switch);
 
+static int supersonic_wimax_power_state;
+
+
 int mmc_wimax_power(int on)
 {
 	printk("%s\n", __func__);
@@ -406,7 +410,9 @@ int mmc_wimax_power(int on)
 		gpio_set_value(154, 0);
 		gpio_set_value(48, 0);
 		mdelay(5);
+
 	}
+supersonic_wimax_power_state = on;
 	return 0;
 }
 EXPORT_SYMBOL(mmc_wimax_power);
