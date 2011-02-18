@@ -18,6 +18,7 @@
 
 	.text
 
+#ifdef CONFIG_MSM_CPU_AVS
 	.global avs_test_delays
 avs_test_delays:
 
@@ -60,8 +61,7 @@ avs_test_delays:
                 isb
 
 		bx lr
-
-
+#endif
 
 
 	.global avs_get_avscsr
@@ -102,17 +102,30 @@ avs_set_tscsr:
 	.global avs_reset_delays
 avs_reset_delays:
 
-/*      AVSCSR(0x61) to enable CPU, V and L2 AVS module  */
-		mov r3, #0x61
-		mcr p15, 7, r3, c15, c1, 7
-
 /*      AVSDSCR(dly) to program delay */
 		mcr p15, 7, r0, c15, c0, 6
 
 /*      Read r0=AVSDSCR */
 		mrc p15, 7, r0, c15, c0, 6
 
-	bx lr
+/*      AVSCSR(0x61) to enable CPU, V and L2 AVS module  */
+		mov r3, #0x61
+		mcr p15, 7, r3, c15, c1, 7
+
+		bx lr
+
+
+
+        .global avs_disable
+avs_disable:
+
+/*      Clear AVSCSR */
+		mov r0, #0
+
+/*      Write AVSCSR */
+		mcr p15, 7, r0, c15, c1, 7
+
+		bx lr
 
 	.end
 

@@ -663,13 +663,24 @@ config AXI_SCREEN_POLICY
 	  Simple AXI scaling based on screen ON/OFF and PWRC.
 
 config MSM_CPU_AVS
-	bool "Enable Adaptive Voltage Scaling (AVS)"
+	bool "Enable software controlled Adaptive Voltage Scaling (AVS)"
 	depends on (ARCH_MSM_SCORPION && QSD_SVS)
-	default y
+	depends on ARCH_QSD8X50
+	default n
+	select MSM_AVS_HW
 	help
-	  This enables the Adaptive Voltage Scaling feature of
-	  Qualcomm ARMv7 CPUs. It adjusts the voltage for each frequency
+	  This enables the s/w control of Adaptive Voltage Scaling feature
+	  in Qualcomm ARMv7 CPUs. It adjusts the voltage for each frequency
 	  based on feedback from three ring oscillators in the CPU.
+
+config MSM_AVS_HW
+	bool "Enable Adaptive Voltage Scaling (AVS)"
+	default n
+	help
+	  Enable AVS hardware to fine tune voltage at each frequency. The
+	  AVS hardware blocks associated with each Qualcomm ARMv7 cores can
+	  fine tune the voltages based on the feedback from the ring
+	  oscillators.
 
 config MSM_ADSP
 	depends on ARCH_MSM7X00A
