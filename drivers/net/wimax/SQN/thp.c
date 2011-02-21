@@ -43,6 +43,8 @@
 
 extern bool drop_packet;
 
+static struct mutex thp_lock;
+
 const uint8_t  host_macaddr[ETH_ALEN] 	= {0x00, 0x16, 0x08, 0xff, 0x00, 0x01};
 const uint8_t  ss_macaddr[ETH_ALEN] 	= {0x00, 0x16, 0x08, 0xff, 0x00, 0x00};
 
@@ -340,11 +342,13 @@ struct file_operations thp_fops =
 
 static int thp_open(struct inode * inode, struct file * filp)
 {
+	mutex_lock(&thp_lock);
+
 	sqn_pr_enter();
 #if THP_DEBUG
 	printk(KERN_WARNING "thp_open +\n");
 #endif
-
+	
 	// allow multiple open() call for supporting ioctl on HTC Supersonic
 	/*
 	if(once_open_flag)
@@ -358,11 +362,14 @@ static int thp_open(struct inode * inode, struct file * filp)
 #endif
 	sqn_pr_leave();
 
+	mutex_unlock(&thp_lock);
 	return 0;
 }
 
 static ssize_t thp_release(struct inode *inode, struct file *filp)
 {
+	mutex_lock(&thp_lock);
+
 	sqn_pr_enter();
 
 	once_open_flag = 0;
@@ -372,6 +379,7 @@ static ssize_t thp_release(struct inode *inode, struct file *filp)
 
 	sqn_pr_leave();
 
+	mutex_unlock(&thp_lock);
 	return 0;
 }
 
@@ -574,6 +582,7 @@ static int thp_ioctl(struct inode* dev, struct file* handle, unsigned int cmd, u
 #if THP_DEBUG
 	printk(KERN_WARNING "thp_ioctl +\n");
 #endif
+	mutex_lock(&thp_lock);
 	sqn_pr_enter();
 
 	switch (cmd) {
@@ -611,6 +620,7 @@ static int thp_ioctl(struct inode* dev, struct file* handle, unsigned int cmd, u
 	printk(KERN_WARNING "thp_ioctl -\n");
 #endif
 
+	mutex_unlock(&thp_lock);
 	return 0;
 }
 
@@ -724,7 +734,7 @@ int init_thp(struct net_device* dev)
 			/* return -1; */
 
 		this_device = dev;
-
+		mutex_init(&thp_lock);
 		sqn_pr_info("KTHP initialized\n");
 	}
 
