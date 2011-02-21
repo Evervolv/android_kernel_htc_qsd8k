@@ -77,7 +77,7 @@ static struct resource supersonic_wifi_resources[] = {
 		.name		= "bcm4329_wlan_irq",
 		.start		= MSM_GPIO_TO_INT(SUPERSONIC_GPIO_WIFI_IRQ),
 		.end		= MSM_GPIO_TO_INT(SUPERSONIC_GPIO_WIFI_IRQ),
-		.flags          = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL,
+		.flags          = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE,
 	},
 };
 
@@ -140,6 +140,7 @@ static int __init supersonic_wifi_init(void)
 	printk("%s: start\n", __func__);
 	supersonic_wifi_update_nvs("sd_oobonly=1\r\n", 0);
 	supersonic_wifi_update_nvs("btc_params80=0\n", 1);
+	supersonic_wifi_update_nvs("btc_params70=0x32\n", 1);
 	supersonic_init_wifi_mem();
 	ret = platform_device_register(&supersonic_wifi_device);
         return ret;
