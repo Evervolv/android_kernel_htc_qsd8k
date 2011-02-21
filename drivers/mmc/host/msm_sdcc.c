@@ -76,7 +76,6 @@ static unsigned int msmsdcc_4bit = 1;
 static unsigned int msmsdcc_pwrsave = 1;
 static unsigned int msmsdcc_piopoll = 1;
 static unsigned int msmsdcc_sdioirq;
-static unsigned int msmsdcc_sdioirq = 1;
 static unsigned long msmsdcc_irqtime;
 
 #define PIO_SPINMAX 30
