@@ -582,9 +582,12 @@ static struct msm_clock msm_clocks[] = {
 		.regbase = MSM_GPT_BASE,
 		.freq = GPT_HZ,
 		.flags   =
+#ifdef CONFIG_ARCH_MSM_ARM11
 			MSM_CLOCK_FLAGS_UNSTABLE_COUNT |
 			MSM_CLOCK_FLAGS_ODD_MATCH_WRITE |
-			MSM_CLOCK_FLAGS_DELAYED_WRITE_POST,
+			MSM_CLOCK_FLAGS_DELAYED_WRITE_POST |
+#endif
+			0,
 		.write_delay = 9,
 	},
 	[MSM_CLOCK_DGT] = {
