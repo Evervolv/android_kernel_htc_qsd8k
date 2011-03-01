@@ -34,6 +34,13 @@ enum {
 #define HDMI_GET_EDID		_IOR(HDMI_IOCTL_MAGIC, 9, unsigned)
 #define HDMI_GET_DISPLAY_INFO	_IOR(HDMI_IOCTL_MAGIC, 10, unsigned)
 
+#define HDMI_GET_MIRRORING      _IOR(HDMI_IOCTL_MAGIC, 30, unsigned)
+#define HDMI_SET_MIRRORING      _IOW(HDMI_IOCTL_MAGIC, 31, unsigned)
+#define HDMI_GET_STATISTICS     _IOR(HDMI_IOCTL_MAGIC, 32, unsigned)
+#define HDMI_CLEAR_STATISTICS   _IOW(HDMI_IOCTL_MAGIC, 33, unsigned)
+#define HDMI_GET_VSYNC_MODE     _IOR(HDMI_IOCTL_MAGIC, 34, unsigned)
+#define HDMI_SET_VSYNC_MODE     _IOW(HDMI_IOCTL_MAGIC, 35, unsigned)
+
 #define ASPECT(w, h)            (w << 8 | h)
 struct video_mode {
         unsigned short  width, height, refresh_rate, aspect;
@@ -47,10 +54,26 @@ enum {
 };
 
 struct display_info {
-	unsigned int	visible_width;		/* in mm */
-	unsigned int	visible_height;	
-	unsigned int	resolution_width;	/* in pixel */
-	unsigned int	resolution_height;
+    unsigned int    visible_width;      /* in mm */
+    unsigned int    visible_height; 
+    unsigned int    resolution_width;   /* in pixel */
+    unsigned int    resolution_height;
+};
+
+/* Gathered statistics for mirroring */
+struct mirror_statistics {
+    unsigned int    frames;                 /* Number of panel frames requested */
+    unsigned int    underflows;             /* Number of times we underflowed the LCDC */
+    s64         statisticsTime;             /* Mirror time, in ns */
+};
+
+/* Panel state while mirroring */
+enum {
+    VSYNC_ALL = 0, 
+    VSYNC_PANEL_ONLY, 
+    VSYNC_HDMI_ONLY, 
+    VSYNC_NONE
 };
 
 #endif
+

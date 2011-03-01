@@ -382,7 +382,7 @@ static int hdmi_get_cable_state(struct hdmi_device *hdmi_device, int *connect)
 		container_of(hdmi_device, struct hdmi_info, hdmi_dev);
 	*connect = hdmi->cable_connected;
 #endif
-	HDMI_DBG("%s, state=%s\n", __func__, *connect ? "on" : "off" );
+//	HDMI_DBG("%s, state=%s\n", __func__, *connect ? "on" : "off" );
 	return 0;
 }
 

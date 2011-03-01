@@ -36,6 +36,9 @@
 
 struct class *mdp_class;
 
+/* Used to report LCDC underflows */
+void reportUnderflow(void);
+
 #define MDP_CMD_DEBUG_ACCESS_BASE (0x10000)
 
 static DECLARE_WAIT_QUEUE_HEAD(mdp_ppp_waitqueue);
@@ -171,6 +174,12 @@ static irqreturn_t mdp_isr(int irq, void *data)
 		del_timer_sync(&mdp->dma_timer);
 		mdp_dma_timer_enable = 0;
 	}
+
+    if (status & MDP_LCDC_UNDERFLOW)
+    {
+        pr_err("%s: LCDC Underflow\n", __func__);
+		reportUnderflow();
+    }
 
 	status &= mdp_irq_mask;
 #ifdef CONFIG_MSM_MDP40
