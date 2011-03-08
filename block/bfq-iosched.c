@@ -1674,7 +1674,7 @@ static void bfq_rq_enqueued(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 			if (bfq_bfqq_budget_timeout(bfqq))
 				bfq_bfqq_expire(bfqd, bfqq, 0,
 						BFQ_BFQQ_BUDGET_TIMEOUT);
-			__blk_run_queue(bfqd->queue);
+			__blk_run_queue(bfqd->queue, false);
 		}
 	}
 }
@@ -1910,7 +1910,7 @@ static void bfq_kick_queue(struct work_struct *work)
 	unsigned long flags;
 
 	spin_lock_irqsave(q->queue_lock, flags);
-	__blk_run_queue(q);
+	__blk_run_queue(q, false);
 	spin_unlock_irqrestore(q->queue_lock, flags);
 }
 
