@@ -901,6 +901,10 @@ a1026_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EFAULT;
 			goto out;
 		}
+		if (pathid < 0 || pathid >= A1026_PATH_MAX) {
+			rc = -EINVAL;
+			goto out;
+		}
 		rc = a1026_set_config(pathid, A1026_CONFIG_FULL);
 		if (rc < 0)
 			pr_err("%s: A1026_SET_CONFIG (%d) error %d!\n",
