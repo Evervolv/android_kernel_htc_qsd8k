@@ -44,6 +44,7 @@
 #include <linux/fcntl.h>
 #include <linux/fs.h>
 #include <linux/mutex.h>
+#include <linux/sched.h>
 
 #include <asm/uaccess.h>
 #include <asm/unaligned.h>
