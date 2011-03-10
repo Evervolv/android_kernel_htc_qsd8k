@@ -325,7 +325,7 @@ static ssize_t thp_write(struct file *file, const char *buf,
 
 static unsigned int thp_poll(struct file *filp, poll_table *wait);
 
-static int thp_ioctl(struct inode*, struct file*, unsigned int, unsigned long);
+static long thp_ioctl(struct file*, unsigned int, unsigned long);
 
 struct file_operations thp_fops =
 {
@@ -577,7 +577,7 @@ static unsigned int thp_poll(struct file *filp, poll_table *wait)
 	return mask;
 }
 
-static int thp_ioctl(struct inode* dev, struct file* handle, unsigned int cmd, unsigned long arg)
+static long thp_ioctl(struct file* handle, unsigned int cmd, unsigned long arg)
 {
 #if THP_DEBUG
 	printk(KERN_WARNING "thp_ioctl +\n");
