@@ -35,6 +35,7 @@
 
 static struct mutex mic_lock;
 static struct mutex bt_sco_lock;
+static struct mutex hdmi_i2s_lock;
 static int headset_status = 0;
 
 static struct q6_hw_info q6_audio_hw[Q6_HW_COUNT] = {
@@ -139,6 +140,42 @@ void supersonic_receiver_enable(int en)
 	}
 }
 
+static uint32_t hdmi_i2s_enable[] = {
+	PCOM_GPIO_CFG(SUPERSONIC_I2S_CLK, 2, GPIO_OUTPUT,
+			GPIO_PULL_DOWN, GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_I2S_WS, 1, GPIO_OUTPUT,
+			GPIO_PULL_DOWN, GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_I2S_DOUT, 1, GPIO_OUTPUT,
+			GPIO_PULL_DOWN, GPIO_2MA),
+};
+
+static uint32_t hdmi_i2s_disable[] = {
+	PCOM_GPIO_CFG(SUPERSONIC_I2S_CLK, 0, GPIO_OUTPUT,
+			GPIO_PULL_DOWN, GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_I2S_WS, 0, GPIO_OUTPUT,
+			GPIO_PULL_DOWN, GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_I2S_DOUT, 0, GPIO_OUTPUT,
+			GPIO_PULL_DOWN, GPIO_2MA),
+};
+
+void supersonic_hdmi_i2s_enable(int en)
+{
+	static int hdmi_i2s_refcount;
+	D("%s %d\n", __func__, en);
+	mutex_lock(&hdmi_i2s_lock);
+	if (en) {
+		if (++hdmi_i2s_refcount == 1)
+			config_gpio_table(hdmi_i2s_enable,
+					ARRAY_SIZE(hdmi_i2s_enable));
+	} else {
+		if (--hdmi_i2s_refcount == 0) {
+			config_gpio_table(hdmi_i2s_disable, ARRAY_SIZE(hdmi_i2s_disable));
+		}
+	}
+	mutex_unlock(&hdmi_i2s_lock);
+}
+
+
 static uint32_t bt_sco_enable[] = {
 	PCOM_GPIO_CFG(SUPERSONIC_BT_PCM_OUT, 1, GPIO_INPUT,
 			GPIO_PULL_DOWN, GPIO_2MA),
@@ -231,7 +268,6 @@ void supersonic_analog_init(void)
 	pmic_mic_set_volt(MIC_VOLT_1_80V);
 	pmic_set_speaker_delay(SPKR_DLY_100MS);
 
-	gpio_request(SUPERSONIC_AUD_JACKHP_EN, "aud_jackhp_en");
 	gpio_direction_output(SUPERSONIC_AUD_JACKHP_EN, 0);
 	gpio_set_value(SUPERSONIC_AUD_JACKHP_EN, 0);
 
@@ -266,6 +302,7 @@ static struct q6audio_analog_ops ops = {
 	.bt_sco_enable = supersonic_bt_sco_enable,
 	.int_mic_enable = supersonic_int_mic_enable,
 	.ext_mic_enable = supersonic_ext_mic_enable,
+	.i2s_enable = supersonic_hdmi_i2s_enable,
 	.get_rx_vol = supersonic_get_rx_vol,
 };
 
@@ -273,6 +310,7 @@ void __init supersonic_audio_init(void)
 {
 	mutex_init(&mic_lock);
 	mutex_init(&bt_sco_lock);
+	mutex_init(&hdmi_i2s_lock);
 	q6audio_register_analog_ops(&ops);
 	acoustic_register_ops(&acoustic);
 }

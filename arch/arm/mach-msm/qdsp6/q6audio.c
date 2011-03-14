@@ -893,6 +893,10 @@ static void audio_rx_analog_enable(int en)
 		if (analog_ops->receiver_enable)
 			analog_ops->receiver_enable(en);
 		break;
+	case ADSP_AUDIO_DEVICE_ID_I2S_SPKR:
+		if (analog_ops->i2s_enable)
+			analog_ops->i2s_enable(en);
+		break;
 	}
 }
 
