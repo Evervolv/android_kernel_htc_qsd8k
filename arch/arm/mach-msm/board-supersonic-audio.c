@@ -268,6 +268,7 @@ void supersonic_analog_init(void)
 	pmic_mic_set_volt(MIC_VOLT_1_80V);
 	pmic_set_speaker_delay(SPKR_DLY_100MS);
 
+	gpio_request(SUPERSONIC_AUD_JACKHP_EN, "aud_jackhp_en");
 	gpio_direction_output(SUPERSONIC_AUD_JACKHP_EN, 0);
 	gpio_set_value(SUPERSONIC_AUD_JACKHP_EN, 0);
 
