@@ -521,7 +521,8 @@ u8 edid_simple_parsing(struct hdmi_info *hdmi)
 	if (extensions == 1) {
 		EDID_DBG("Block-1: additional timing\n");
 		/* Block-1: additional timing */
-        /*  edid_buf[127] is last byte of standard edid data
+        /*  
+            edid_buf[127] is last byte of standard edid data
             edid_buf[128 + 00] should be byte 00 of eedid
             edid_buf[128 + 01] byte 01 rev number
             edid_buf[128 + 02] byte 02 nonstandard DTD locations, not being parsed yet
@@ -531,7 +532,8 @@ u8 edid_simple_parsing(struct hdmi_info *hdmi)
 		for( i = 0; i < (edid_buf[128 + 3] & 0x0f); i++) { // Change by Ian: only bits 3-0 show length of blocks
 			// Check if byte type is Video (2)
 			if ((edid_buf[128 + 4 + i] & 0xe0) == 2){
-				index = edid_buf[128 + 4 + i] & 0x7f;
+				// Byte block IS video
+                index = edid_buf[128 + 4 + i] & 0x7f;
 				additional_timing_db[index-1].supported = true;
 				EDID_DBG("%s\n", additional_timing_db[index-1].descrption);
 			} else {
@@ -543,7 +545,7 @@ u8 edid_simple_parsing(struct hdmi_info *hdmi)
 			}
 		edid_check_hdmi_sink(hdmi, 1);
 	} else {
-        // Probably also contaions errors corrected above
+        // Probably also contaions errors corrected above but probably not used
 		EDID_DBG("Block-2: additional timing\n");
 		for( i = 0; i < (edid_buf[384 + 4] & 0x1f); i++) {
 			index = edid_buf[384 + 5 + i] & 0x7f;
