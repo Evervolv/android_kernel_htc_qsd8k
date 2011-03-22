@@ -575,7 +575,7 @@ u8 edid_simple_parsing(struct hdmi_info *hdmi)
             // The block will be an array of indexes
             for (byte = 1; byte < blockLen; byte++)
             {
-                index = edid_buf[baseOffset + dbcOffset] & 0x7f;
+                index = edid_buf[baseOffset + dbcOffset + byte] & 0x7f;
 
                 if (index > 63)
                 {
