@@ -182,5 +182,11 @@ config GENLOCK_MISCDEVICE
          Create a miscdevice for the purposes of allowing userspace to create
          and interact with locks created using genlock.
 
+config ARCH_NO_SYSDEV_OPS
+	bool
+	---help---
+	  To be selected by architectures that don't use sysdev class or
+	  sysdev driver power management (suspend/resume) and shutdown
+	  operations.
 
 endmenu
