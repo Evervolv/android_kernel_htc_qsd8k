@@ -43,6 +43,7 @@ struct wake_lock {
 		int             count;
 		int             expire_count;
 		int             wakeup_count;
+		int		wakeup_last_generation;
 		ktime_t         total_time;
 		ktime_t         prevent_suspend_time;
 		ktime_t         max_time;

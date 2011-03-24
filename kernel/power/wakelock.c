@@ -50,9 +50,11 @@ suspend_state_t requested_suspend_state = PM_SUSPEND_MEM;
 static struct wake_lock unknown_wakeup;
 
 #ifdef CONFIG_WAKELOCK_STAT
+static bool resuming_devices;
+static int suspend_generation;
 static struct wake_lock deleted_wake_locks;
 static ktime_t last_sleep_time_update;
-static int wait_for_wakeup;
+
 
 int get_expired_time(struct wake_lock *lock, ktime_t *expire_time)
 {
@@ -267,10 +269,37 @@ static void suspend(struct work_struct *work)
 	}
 
 	entry_event_num = current_event_num;
+
+#ifdef CONFIG_WAKELOCK_STAT
+	suspend_generation++;
+#endif
+
 	sys_sync();
 	if (debug_mask & DEBUG_SUSPEND)
 		pr_info("suspend: enter suspend\n");
 	ret = pm_suspend(requested_suspend_state);
+
+#ifdef CONFIG_WAKELOCK_STAT
+	if (debug_mask & DEBUG_WAKEUP) {
+		unsigned long irqflags;
+		struct wake_lock *lock;
+		int type;
+
+		spin_lock_irqsave(&list_lock, irqflags);
+		pr_info("wakeup wake lock:");
+
+		for (type = 0; type < WAKE_LOCK_TYPE_COUNT; type++) {
+			list_for_each_entry(lock, &active_wake_locks[type],
+					    link)
+				if (lock->stat.wakeup_last_generation ==
+				    suspend_generation)
+					pr_cont(" %s", lock->name);
+		}
+		pr_cont("\n");
+		spin_unlock_irqrestore(&list_lock, irqflags);
+	}
+#endif
+
 	if (debug_mask & DEBUG_EXIT_SUSPEND) {
 		struct timespec ts;
 		struct rtc_time tm;
@@ -282,8 +311,8 @@ static void suspend(struct work_struct *work)
 			tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec);
 	}
 	if (current_event_num == entry_event_num) {
-		if (debug_mask & DEBUG_SUSPEND)
-			pr_info("suspend: pm_suspend returned with no event\n");
+		if (debug_mask & DEBUG_WAKEUP)
+			pr_info("suspend: no wakelock for wakeup source\n");
 		wake_lock_timeout(&unknown_wakeup, HZ / 2);
 	}
 }
@@ -310,16 +339,24 @@ static DEFINE_TIMER(expire_timer, expire_wake_locks, 0, 0);
 static int power_suspend_late(struct device *dev)
 {
 	int ret = has_wake_lock(WAKE_LOCK_SUSPEND) ? -EAGAIN : 0;
-#ifdef CONFIG_WAKELOCK_STAT
-	wait_for_wakeup = 1;
-#endif
+
 	if (debug_mask & DEBUG_SUSPEND)
 		pr_info("power_suspend_late return %d\n", ret);
+
+	if (!ret)
+		resuming_devices = true;
+
 	return ret;
+}
+
+static void wakelocks_resume_complete(struct device *dev)
+{
+	resuming_devices = false;
 }
 
 static struct dev_pm_ops power_driver_pm_ops = {
 	.suspend_noirq = power_suspend_late,
+	.complete = wakelocks_resume_complete,
 };
 
 static struct platform_driver power_driver = {
@@ -344,6 +381,7 @@ void wake_lock_init(struct wake_lock *lock, int type, const char *name)
 	lock->stat.count = 0;
 	lock->stat.expire_count = 0;
 	lock->stat.wakeup_count = 0;
+	lock->stat.wakeup_last_generation = 0;
 	lock->stat.total_time = ktime_set(0, 0);
 	lock->stat.prevent_suspend_time = ktime_set(0, 0);
 	lock->stat.max_time = ktime_set(0, 0);
@@ -397,11 +435,10 @@ static void wake_lock_internal(
 	BUG_ON(type >= WAKE_LOCK_TYPE_COUNT);
 	BUG_ON(!(lock->flags & WAKE_LOCK_INITIALIZED));
 #ifdef CONFIG_WAKELOCK_STAT
-	if (type == WAKE_LOCK_SUSPEND && wait_for_wakeup) {
-		if (debug_mask & DEBUG_WAKEUP)
-			pr_info("wakeup wake lock: %s\n", lock->name);
-		wait_for_wakeup = 0;
+	if (type == WAKE_LOCK_SUSPEND && resuming_devices &&
+	    lock->stat.wakeup_last_generation != suspend_generation) {
 		lock->stat.wakeup_count++;
+		lock->stat.wakeup_last_generation = suspend_generation;
 	}
 	if ((lock->flags & WAKE_LOCK_AUTO_EXPIRE) &&
 	    (long)(lock->expires - jiffies) <= 0) {
