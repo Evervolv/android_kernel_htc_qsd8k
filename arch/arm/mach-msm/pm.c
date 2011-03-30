@@ -131,9 +131,11 @@ int msm_irq_idle_sleep_allowed(void);
 int msm_irq_pending(void);
 int clks_print_running(void);
 
+#ifdef CONFIG_AXI_SCREEN_POLICY
 static int axi_rate;
 static int sleep_axi_rate;
 static struct clk *axi_clk;
+#endif
 static uint32_t *msm_pm_reset_vector;
 
 static uint32_t msm_pm_max_sleep_time;
@@ -374,16 +376,18 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 	}
 
 	if (sleep_mode <= MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT) {
-		pm_saved_acpu_clk_rate = acpuclk_power_collapse();
+		pm_saved_acpu_clk_rate = acpuclk_power_collapse(from_idle);
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_CLOCK)
 			printk(KERN_INFO "msm_sleep(): %ld enter power collapse"
 			       "\n", pm_saved_acpu_clk_rate);
 		if (pm_saved_acpu_clk_rate == 0)
 			goto ramp_down_failed;
 
+#ifdef CONFIG_AXI_SCREEN_POLICY
 		/* Drop AXI request when the screen is on */
 		if (axi_rate)
 			clk_set_rate(axi_clk, sleep_axi_rate);
+#endif
 	}
 	if (sleep_mode < MSM_PM_SLEEP_MODE_APPS_SLEEP) {
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_SMSM_STATE)
@@ -420,13 +424,20 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_CLOCK)
 			printk(KERN_INFO "msm_sleep(): exit power collapse %ld"
 			       "\n", pm_saved_acpu_clk_rate);
-		if (acpuclk_set_rate(pm_saved_acpu_clk_rate, 1) < 0)
+#if defined(CONFIG_ARCH_QSD8X50)
+	if (acpuclk_set_rate(pm_saved_acpu_clk_rate, 1) < 0)
+#else
+	if (acpuclk_set_rate(pm_saved_acpu_clk_rate,
+		from_idle ? SETRATE_PC_IDLE : SETRATE_PC) < 0)
+#endif
 			printk(KERN_ERR "msm_sleep(): clk_set_rate %ld "
 			       "failed\n", pm_saved_acpu_clk_rate);
 
+#ifdef CONFIG_AXI_SCREEN_POLICY
 		/* Restore axi rate if needed */
 		if (axi_rate)
 			clk_set_rate(axi_clk, axi_rate);
+#endif
 	}
 	if (msm_pm_debug_mask & MSM_PM_DEBUG_STATE)
 		printk(KERN_INFO "msm_sleep(): exit A11S_CLK_SLEEP_EN %x, "
@@ -535,7 +546,12 @@ void arch_idle(void)
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_CLOCK)
 			printk(KERN_DEBUG "msm_sleep: clk swfi -> %ld\n",
 				saved_rate);
-		if (acpuclk_set_rate(saved_rate, 1) < 0)
+#if defined(CONFIG_ARCH_QSD8X50)
+	if (saved_rate && acpuclk_set_rate(saved_rate, 1) < 0)
+#else
+	if (saved_rate
+		&& acpuclk_set_rate(saved_rate, SETRATE_SWFI) < 0)
+#endif
 			printk(KERN_ERR "msm_sleep(): clk_set_rate %ld "
 			       "failed\n", saved_rate);
 #ifdef CONFIG_MSM_IDLE_STATS
@@ -731,6 +747,7 @@ void msm_pm_set_max_sleep_time(int64_t max_sleep_time_ns)
 EXPORT_SYMBOL(msm_pm_set_max_sleep_time);
 
 #if defined(CONFIG_EARLYSUSPEND) && defined(CONFIG_ARCH_MSM_SCORPION)
+#ifdef CONFIG_AXI_SCREEN_POLICY
 /* axi 128 screen on, 61mhz screen off */
 static void axi_early_suspend(struct early_suspend *handler) {
 	axi_rate = 0;
@@ -748,7 +765,9 @@ static struct early_suspend axi_screen_suspend = {
 	.resume = axi_late_resume,
 };
 #endif
+#endif
 
+#ifdef CONFIG_AXI_SCREEN_POLICY
 static void __init msm_pm_axi_init(void)
 {
 #if defined(CONFIG_EARLYSUSPEND) && defined(CONFIG_ARCH_MSM_SCORPION)
@@ -766,14 +785,16 @@ static void __init msm_pm_axi_init(void)
 	axi_rate = 0;
 #endif
 }
+#endif
 
 static int __init msm_pm_init(void)
 {
 	pm_power_off = msm_pm_power_off;
 	arm_pm_restart = msm_pm_restart;
 	msm_pm_max_sleep_time = 0;
+#ifdef CONFIG_AXI_SCREEN_POLICY
 	msm_pm_axi_init();
-
+#endif
 	register_reboot_notifier(&msm_reboot_notifier);
 
 	msm_pm_reset_vector = ioremap(RESET_VECTOR, PAGE_SIZE);

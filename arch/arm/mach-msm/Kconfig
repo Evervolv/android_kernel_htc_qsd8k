@@ -525,6 +525,14 @@ config MSM_CPU_FREQ_MIN
 
 endif # CPU_FREQ_MSM
 
+config AXI_SCREEN_POLICY
+	depends on ARCH_QSD8X50 || ARCH_MSM7X00A || ARCH_MSM7227 || ARCH_MSM7225
+	depends on HAS_EARLYSUSPEND
+	bool "Use higher AXI bus while screen ON"
+	default y
+	help
+	  Simple AXI scaling based on screen ON/OFF and PWRC.
+
 config MSM_HW3D
 	tristate "MSM Hardware 3D Register Driver"
 	depends on EARLYSUSPEND

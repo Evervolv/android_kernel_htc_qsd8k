@@ -176,11 +176,12 @@ static int pc_pll_request(unsigned id, unsigned on)
  * ARM11 'owned' clock control
  *---------------------------------------------------------------------------*/
 
-unsigned long acpuclk_power_collapse(void) {
+unsigned long acpuclk_power_collapse(int from_idle) {
 	int ret = acpuclk_get_rate();
 	ret *= 1000;
 	if (ret > drv_state.power_collapse_khz)
-		acpuclk_set_rate(drv_state.power_collapse_khz, 1);
+		acpuclk_set_rate(drv_state.power_collapse_khz,
+			(from_idle ? SETRATE_PC_IDLE : SETRATE_PC));
 	return ret;
 }
 
@@ -193,7 +194,7 @@ unsigned long acpuclk_wait_for_irq(void) {
 	int ret = acpuclk_get_rate();
 	ret *= 1000;
 	if (ret > drv_state.wait_for_irq_khz)
-		acpuclk_set_rate(drv_state.wait_for_irq_khz, 1);
+		acpuclk_set_rate(drv_state.wait_for_irq_khz, SETRATE_SWFI);
 	return ret;
 }
 
@@ -290,7 +291,7 @@ static void acpuclk_set_div(const struct clkctl_acpu_speed *hunt_s) {
 	}
 }
 
-int acpuclk_set_rate(unsigned long rate, int for_power_collapse)
+int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 {
 	uint32_t reg_clkctl;
 	struct clkctl_acpu_speed *cur_s, *tgt_s, *strt_s;
@@ -315,7 +316,7 @@ int acpuclk_set_rate(unsigned long rate, int for_power_collapse)
 		return -EINVAL;
 
 	/* Choose the highest speed speed at or below 'rate' with same PLL. */
-	if (for_power_collapse && tgt_s->a11clk_khz < cur_s->a11clk_khz) {
+	if (reason != SETRATE_CPUFREQ && tgt_s->a11clk_khz < cur_s->a11clk_khz) {
 		while (tgt_s->pll != ACPU_PLL_TCXO && tgt_s->pll != cur_s->pll)
 			tgt_s--;
 	}
@@ -323,7 +324,7 @@ int acpuclk_set_rate(unsigned long rate, int for_power_collapse)
 	if (strt_s->pll != ACPU_PLL_TCXO)
 		plls_enabled |= 1 << strt_s->pll;
 
-	if (!for_power_collapse) {
+	if (reason == SETRATE_CPUFREQ) {
 		mutex_lock(&drv_state.lock);
 		if (strt_s->pll != tgt_s->pll && tgt_s->pll != ACPU_PLL_TCXO) {
 			rc = pc_pll_request(tgt_s->pll, 1);
@@ -343,7 +344,7 @@ int acpuclk_set_rate(unsigned long rate, int for_power_collapse)
 		}
 	}
 
-	/* Set wait states for CPU inbetween frequency changes */
+	/* Set wait states for CPU in/between frequency changes */
 	reg_clkctl = readl(A11S_CLK_CNTL_ADDR);
 	reg_clkctl |= (100 << 16); /* set WT_ST_CNT */
 	writel(reg_clkctl, A11S_CLK_CNTL_ADDR);
@@ -378,7 +379,7 @@ int acpuclk_set_rate(unsigned long rate, int for_power_collapse)
 		printk(KERN_DEBUG "%s: STEP khz = %u, pll = %d\n",
 			__FUNCTION__, cur_s->a11clk_khz, cur_s->pll);
 #endif
-		if (!for_power_collapse&& cur_s->pll != ACPU_PLL_TCXO
+		if (reason == SETRATE_CPUFREQ && cur_s->pll != ACPU_PLL_TCXO
 		    && !(plls_enabled & (1 << cur_s->pll))) {
 			rc = pc_pll_request(cur_s->pll, 1);
 			if (rc < 0) {
@@ -397,7 +398,7 @@ int acpuclk_set_rate(unsigned long rate, int for_power_collapse)
 	}
 
 	/* Nothing else to do for power collapse. */
-	if (for_power_collapse)
+	if (reason != SETRATE_CPUFREQ)
 		return 0;
 
 	/* Disable PLLs we are not using anymore. */
@@ -428,7 +429,7 @@ int acpuclk_set_rate(unsigned long rate, int for_power_collapse)
 	printk(KERN_DEBUG "%s: ACPU speed change complete\n", __FUNCTION__);
 #endif
 out:
-	if (!for_power_collapse)
+	if (reason == SETRATE_CPUFREQ)
 		mutex_unlock(&drv_state.lock);
 	return rc;
 }
