@@ -430,7 +430,7 @@ static ssize_t set_reg(struct device *dev, struct device_attribute *attr, const 
 	return count;
 }
 
-static DEVICE_ATTR(setreg, 0644, NULL, set_reg);
+static DEVICE_ATTR(setreg, 0666, NULL, set_reg);
 
 static ssize_t dump_regs(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -482,7 +482,7 @@ static ssize_t dump_regs(struct device *dev, struct device_attribute *attr, char
 	return ret;
 }
 
-static DEVICE_ATTR(dumpreg, 0644, dump_regs, NULL);
+static DEVICE_ATTR(dumpreg, 0444, dump_regs, NULL);
 
 static ssize_t show_status_reg(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -526,7 +526,7 @@ static ssize_t store_status_reg(struct device *dev, struct device_attribute *att
 	return count;
 }
 
-static DEVICE_ATTR(statusreg, 0644, show_status_reg, store_status_reg);
+static DEVICE_ATTR(statusreg, 0666, show_status_reg, store_status_reg);
 
 static ssize_t show_voltage(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -547,7 +547,8 @@ static ssize_t show_voltage(struct device *dev, struct device_attribute *attr, c
 	return ret;
 }
 
-static DEVICE_ATTR(getvoltage, 0644, show_voltage, NULL);
+static DEVICE_ATTR(getvoltage, 0644, show_voltage, NULL);  // deprecated
+static DEVICE_ATTR(voltageNow, 0444, show_voltage, NULL);
 
 static ssize_t show_current(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -570,7 +571,8 @@ static ssize_t show_current(struct device *dev, struct device_attribute *attr, c
 	return ret;
 }
 
-static DEVICE_ATTR(getcurrent, 0644, show_current, NULL);
+static DEVICE_ATTR(getcurrent, 0644, show_current, NULL);  // deprecated
+static DEVICE_ATTR(currentNow, 0444, show_current, NULL);
 
 static ssize_t show_avgcurrent(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -593,7 +595,9 @@ static ssize_t show_avgcurrent(struct device *dev, struct device_attribute *attr
 	return ret;
 }
 
-static DEVICE_ATTR(getavgcurrent, 0644, show_avgcurrent, NULL);
+// compatibility til app update
+static DEVICE_ATTR(getavgcurrent, 0644, show_avgcurrent, NULL);  // deprecated
+static DEVICE_ATTR(currentAverage, 0444, show_avgcurrent, NULL);
 
 static ssize_t show_age(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -640,7 +644,7 @@ static ssize_t set_age(struct device *dev, struct device_attribute *attr, const 
 	return count;
 }
 
-static DEVICE_ATTR(age, 0644, show_age, set_age);
+static DEVICE_ATTR(age, 0666, show_age, set_age);
 
 static ssize_t show_AEvolt(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -658,7 +662,7 @@ static ssize_t show_AEvolt(struct device *dev, struct device_attribute *attr, ch
 	rawaevolt = di->raw[DS2784_REG_ACTIVE_EMPTY_VOLT];
 	aevolt = (rawaevolt * 1952) / 100;
 
-	pr_info("batt: Active Empty Voltage is: %d volts\n", aevolt);
+	// pr_info("batt: Active Empty Voltage is: %d volts\n", aevolt);
 
 	ret = sprintf(buf, "%d\n", aevolt);
 
@@ -689,7 +693,8 @@ static ssize_t set_AEvolt (struct device *dev, struct device_attribute *attr, co
 	return count;
 }
 
-static DEVICE_ATTR(voltAE, 0644, show_AEvolt, set_AEvolt);
+static DEVICE_ATTR(voltAE, 0644, show_AEvolt, set_AEvolt);  // deprecated
+static DEVICE_ATTR(voltageActiveEmpty, 0666, show_AEvolt, set_AEvolt);
 
 static ssize_t show_full40(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -708,16 +713,23 @@ static ssize_t show_full40(struct device *dev, struct device_attribute *attr, ch
 
 	full40mAh = ((full40raw * 625) / 100) / 15;
 
-	pr_info("batt: Full40 mAh capacity is: %d mAh\n", full40mAh);
+	// no need to put this in log, only when writing
+	// pr_info("batt: Full40 mAh capacity is: %d mAh\n", full40mAh);
 
 	ret = sprintf(buf, "%dmAh\n", full40mAh);
 
 	return ret;
 }
 
-// backwards compatibility for app until it is updated
-static DEVICE_ATTR(getFull40, 0644, show_full40, NULL);
-static DEVICE_ATTR(getfull40, 0644, show_full40, NULL);
+// backwards compatibility removed
+// static DEVICE_ATTR(getFull40, 0644, show_full40, NULL);
+
+// again, backwards compatibility until app updated
+static DEVICE_ATTR(getfull40, 0644, show_full40, NULL);  // deprecated
+
+// use "proper" permissions, appropriate to read/write nature of file
+// correct the filename - permissions indicate whether value changeable from now on
+static DEVICE_ATTR(full40, 0444, show_full40, NULL);
 
 static ssize_t show_mAh(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -739,7 +751,8 @@ static ssize_t show_mAh(struct device *dev, struct device_attribute *attr, char 
 	return ret;
 }
 
-static DEVICE_ATTR(getmAh, 0644, show_mAh, NULL);
+static DEVICE_ATTR(getmAh, 0644, show_mAh, NULL);  // deprecated
+static DEVICE_ATTR(mAh, 0444, show_mAh, NULL);
 
 static void ds2784_battery_update_status(struct ds2784_device_info *di)
 {
@@ -1015,15 +1028,21 @@ static int ds2784_battery_probe(struct platform_device *pdev)
 	if(ret < 0)
 	    pr_err("%s: Failed to create sysfs entry for statusreg\n", __func__);
 
-	ret = device_create_file(&pdev->dev, &dev_attr_getvoltage);
+	ret = device_create_file(&pdev->dev, &dev_attr_getvoltage);  // deprecated
+
+	ret = device_create_file(&pdev->dev, &dev_attr_voltageNow);
 	if(ret < 0)
 	    pr_err("%s: Failed to create sysfs entry for voltage\n", __func__);
 
-	ret = device_create_file(&pdev->dev, &dev_attr_getcurrent);
+	ret = device_create_file(&pdev->dev, &dev_attr_getcurrent);  // deprecated
+
+	ret = device_create_file(&pdev->dev, &dev_attr_currentNow);
 	if(ret < 0)
 	    pr_err("%s: Failed to create sysfs entry for current\n", __func__);
 
-	ret = device_create_file(&pdev->dev, &dev_attr_getavgcurrent);
+	ret = device_create_file(&pdev->dev, &dev_attr_getavgcurrent);  // deprecated
+
+	ret = device_create_file(&pdev->dev, &dev_attr_currentAverage);
 	if(ret < 0)
 	    pr_err("%s: Failed to create sysfs entry for avg current\n", __func__);
 
@@ -1031,18 +1050,21 @@ static int ds2784_battery_probe(struct platform_device *pdev)
 	if(ret < 0)
 	    pr_err("%s: Failed to create sysfs entry for age\n", __func__);
 
-	ret = device_create_file(&pdev->dev, &dev_attr_voltAE);
+	ret = device_create_file(&pdev->dev, &dev_attr_voltAE);  // deprecated
+
+	ret = device_create_file(&pdev->dev, &dev_attr_voltageActiveEmpty);
 	if(ret < 0)
 	    pr_err("%s: Failed to create sysfs entry for voltAE\n", __func__);
 
-	// backwards compatibility for app until it is updated
-	ret = device_create_file(&pdev->dev, &dev_attr_getFull40);
+	ret = device_create_file(&pdev->dev, &dev_attr_getfull40);  // deprecated
 	
-	ret = device_create_file(&pdev->dev, &dev_attr_getfull40);
+	ret = device_create_file(&pdev->dev, &dev_attr_full40);
 	if (ret < 0)
 		pr_err("%s: Failed to create sysfs entry for getfull40\n", __func__);
 
-	ret = device_create_file(&pdev->dev, &dev_attr_getmAh);
+	ret = device_create_file(&pdev->dev, &dev_attr_getmAh);  // deprecated
+
+	ret = device_create_file(&pdev->dev, &dev_attr_mAh);
 	if(ret < 0)
 	    pr_err("%s: Failed to create sysfs entry for mAh\n", __func__);
 
