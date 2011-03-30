@@ -12,6 +12,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
+ * additional code by XDA members RogerPodacter and theloginwithnoname, 2010
  */
 #include <linux/module.h>
 #include <linux/param.h>
@@ -403,27 +404,7 @@ static int battery_get_property(struct power_supply *psy,
 	return 0;
 }
 
-/* Here we begin to add our device attribute files which is our link from
- * kernel space to user space. These files appear under
- * /sys/devices/platform/ds2784-battery/ and are named setreg, dumpreg,
- * statusreg, getvoltage and getcurrent. These files/functions allow us to
- * interact with the battery's read and write functions which is the
- * foundation for a re-calibration mode app along with a number of other
- * features/advantages.
- *
- * Here we call out the functions and the device attribute macros, and in the
- * probe function (end of this driver) we call out the actual file creations.
- * --RogerPodacter, theloginwithnoname
- */
-
-/* setreg - this creates a file called "setreg" and allows us to
- * echo 2 values with a space between them, register and value, which
- * calls the battery write function.  For example, "echo 0x14 0x80"
- * writes register 0x14 with a value of 0x80.
- *
- * --RogerPodacter
- */
-static ssize_t store_set_reg(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t set_reg(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 	int reg;
@@ -448,15 +429,10 @@ static ssize_t store_set_reg(struct device *dev, struct device_attribute *attr, 
 
 	return count;
 }
-/*This is the actual device attr macro call-out for "setreg" file*/
-static DEVICE_ATTR(setreg, 0644, NULL, store_set_reg);
 
-/* dumpreg - this creates a file called "dumpreg" and this is a read-only
- * file.  When this file is read, it returns all values from the battery
- * EEPROM chip.
- * --RP
- */
-static ssize_t show_dump_reg(struct device *dev, struct device_attribute *attr, char *buf)
+static DEVICE_ATTR(setreg, 0644, NULL, set_reg);
+
+static ssize_t dump_regs(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 
@@ -505,16 +481,9 @@ static ssize_t show_dump_reg(struct device *dev, struct device_attribute *attr, 
 
 	return ret;
 }
-/*This is the actual device attr macro call-out for "dumpreg" file*/
-static DEVICE_ATTR(dumpreg, 0644, show_dump_reg, NULL);
 
-/* statusreg - this creates a file called "statusreg" which is needed.
- * This allows us to read the status register more frequently than
- * the driver's 1-minute intervals. We often only get a 3-5 second
- * window from the status reg updating to shutdown to hit learn mode,
- * so this gives us more accurate polling of the status register.
- * --RP
- */
+static DEVICE_ATTR(dumpreg, 0644, dump_regs, NULL);
+
 static ssize_t show_status_reg(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
@@ -556,17 +525,10 @@ static ssize_t store_status_reg(struct device *dev, struct device_attribute *att
 
 	return count;
 }
-/*This is the actual device attr macro call-out for "statusreg" file*/
+
 static DEVICE_ATTR(statusreg, 0644, show_status_reg, store_status_reg);
 
-/* getvoltage - this creates a file called "getvoltage". This allows us
- * to poll the battery voltage more frequently than the driver's 1-minute
- * intervals should we want that option for the graphing portion of the
- * calibration app.
- *
- * --RP
- */
-static ssize_t show_getvoltage(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t show_voltage(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 	int ret;
@@ -584,17 +546,10 @@ static ssize_t show_getvoltage(struct device *dev, struct device_attribute *attr
 	ret = sprintf(buf, "%d\n", getvoltage);
 	return ret;
 }
-/*This is the actual device attr macro call-out for "getvoltage" file*/
-static DEVICE_ATTR(getvoltage, 0644, show_getvoltage, NULL);
 
-/* getcurrent - this creates a file called "getcurrent". This allows us
- * to poll the battery voltage more frequently than the driver's 1-minute
- * intervals should we want that option for the graphing portion of the
- * calibration app.
- *
- * --RP
- */
-static ssize_t show_getcurrent(struct device *dev, struct device_attribute *attr, char *buf)
+static DEVICE_ATTR(getvoltage, 0644, show_voltage, NULL);
+
+static ssize_t show_current(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 	short n;
@@ -614,17 +569,10 @@ static ssize_t show_getcurrent(struct device *dev, struct device_attribute *attr
 	ret = sprintf(buf, "%d\n", getcurrent);
 	return ret;
 }
-/*This is the actual device attr macro call-out for "getcurrent" file*/
-static DEVICE_ATTR(getcurrent, 0644, show_getcurrent, NULL);
 
-/* getavgcurrent - this creates a file called "getavgcurrent". This allows us
- * to poll the battery voltage more frequently than the driver's 1-minute
- * intervals should we want that option for the graphing portion of the
- * calibration app.
- *
- * --RP
- */
-static ssize_t show_getavgcurrent(struct device *dev, struct device_attribute *attr, char *buf)
+static DEVICE_ATTR(getcurrent, 0644, show_current, NULL);
+
+static ssize_t show_avgcurrent(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 	short n;
@@ -644,10 +592,10 @@ static ssize_t show_getavgcurrent(struct device *dev, struct device_attribute *a
 	ret = sprintf(buf, "%d\n", getavgcurrent);
 	return ret;
 }
-/*This is the actual device attr macro call-out for "getavgcurrent" file*/
-static DEVICE_ATTR(getavgcurrent, 0644, show_getavgcurrent, NULL);
 
-static ssize_t show_set_age(struct device *dev, struct device_attribute *attr, char *buf)
+static DEVICE_ATTR(getavgcurrent, 0644, show_avgcurrent, NULL);
+
+static ssize_t show_age(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 	int ret;
@@ -664,14 +612,14 @@ static ssize_t show_set_age(struct device *dev, struct device_attribute *attr, c
 	ageraw = di->raw[DS2784_REG_AGE_SCALAR];
 	age = (ageraw * 100) / 128;
 
-	pr_info("batt: age_scalar life left is: %d\n", age);
+	pr_info("%d\n", age);
 
 	ret = sprintf(buf, "%d\n", age);
-	return ret;
 
+	return ret;
 }
 
-static ssize_t store_set_age(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t set_age(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 	int age;
@@ -692,9 +640,9 @@ static ssize_t store_set_age(struct device *dev, struct device_attribute *attr, 
 	return count;
 }
 
-static DEVICE_ATTR(age, 0644, show_set_age, store_set_age);
+static DEVICE_ATTR(age, 0644, show_age, set_age);
 
-static ssize_t show_set_AEvolt(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t show_AEvolt(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 	int ret;
@@ -712,12 +660,12 @@ static ssize_t show_set_AEvolt(struct device *dev, struct device_attribute *attr
 
 	pr_info("batt: Active Empty Voltage is: %d volts\n", aevolt);
 
-	ret = sprintf(buf, "AEvolt: %d\n", aevolt);
+	ret = sprintf(buf, "%d\n", aevolt);
 
 	return ret;
 }
 
-static ssize_t store_set_AEvolt (struct device *dev, struct device_attribute *attr, const char  *buf, size_t count)
+static ssize_t set_AEvolt (struct device *dev, struct device_attribute *attr, const char  *buf, size_t count)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 	int val;
@@ -741,9 +689,9 @@ static ssize_t store_set_AEvolt (struct device *dev, struct device_attribute *at
 	return count;
 }
 
-static DEVICE_ATTR(voltAE, 0644, show_set_AEvolt, store_set_AEvolt);
+static DEVICE_ATTR(voltAE, 0644, show_AEvolt, set_AEvolt);
 
-static ssize_t show_get_full40(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t show_full40(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 	int ret;
@@ -762,14 +710,16 @@ static ssize_t show_get_full40(struct device *dev, struct device_attribute *attr
 
 	pr_info("batt: Full40 mAh capacity is: %d mAh\n", full40mAh);
 
-	ret = sprintf(buf, "Full40: %d mAh\n", full40mAh);
+	ret = sprintf(buf, "%dmAh\n", full40mAh);
 
 	return ret;
 }
 
-static DEVICE_ATTR(getFull40, 0644, show_get_full40, NULL);
+// backwards compatibility for app until it is updated
+static DEVICE_ATTR(getFull40, 0644, show_full40, NULL);
+static DEVICE_ATTR(getfull40, 0644, show_full40, NULL);
 
-static ssize_t show_get_mAh(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t show_mAh(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct ds2784_device_info *di = dev_get_drvdata(dev);
 	int ret;
@@ -789,9 +739,7 @@ static ssize_t show_get_mAh(struct device *dev, struct device_attribute *attr, c
 	return ret;
 }
 
-static DEVICE_ATTR(getmAh, 0644, show_get_mAh, NULL);
-
-/*End of file functions edits --RP*/
+static DEVICE_ATTR(getmAh, 0644, show_mAh, NULL);
 
 static void ds2784_battery_update_status(struct ds2784_device_info *di)
 {
@@ -1055,10 +1003,6 @@ static int ds2784_battery_probe(struct platform_device *pdev)
 	if (rc)
 		goto fail_register;
 
-	/* Here we call out all of the new file creations in the
-	 * probe function.
-       * --RP
-	 */
 	ret = device_create_file(&pdev->dev, &dev_attr_setreg);
 	if(ret < 0)
 	    pr_err("%s: Failed to create sysfs entry for setreg\n", __func__);
@@ -1091,15 +1035,16 @@ static int ds2784_battery_probe(struct platform_device *pdev)
 	if(ret < 0)
 	    pr_err("%s: Failed to create sysfs entry for voltAE\n", __func__);
 
+	// backwards compatibility for app until it is updated
 	ret = device_create_file(&pdev->dev, &dev_attr_getFull40);
-	if(ret < 0)
-	    pr_err("%s: Failed to create sysfs entry for getFull40\n", __func__);
+	
+	ret = device_create_file(&pdev->dev, &dev_attr_getfull40);
+	if (ret < 0)
+		pr_err("%s: Failed to create sysfs entry for getfull40\n", __func__);
 
 	ret = device_create_file(&pdev->dev, &dev_attr_getmAh);
 	if(ret < 0)
 	    pr_err("%s: Failed to create sysfs entry for mAh\n", __func__);
-
-	/* End of file call-outs --RP*/
 
 	INIT_WORK(&di->monitor_work, ds2784_battery_work);
 	di->monitor_wqueue = create_freezable_workqueue(dev_name(&pdev->dev));
