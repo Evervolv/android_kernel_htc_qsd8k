@@ -210,7 +210,7 @@ static void enable_intr_do_work(struct work_struct *w)
 		}
 	}
 
-	report_lightseneor_data();
+	report_lightsensor_data();
 }
 
 static void lightsensor_do_work(struct work_struct *w)
@@ -221,7 +221,7 @@ static void lightsensor_do_work(struct work_struct *w)
 		msleep(300);
 	}
 
-	report_lightseneor_data();
+	report_lightsensor_data();
 }
 
 static irqreturn_t lightsensor_irq_handler(int irq, void *data)
