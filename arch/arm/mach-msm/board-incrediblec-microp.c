@@ -18,7 +18,7 @@
 #include <linux/platform_device.h>
 #include <asm/mach-types.h>
 #include <mach/atmega_microp.h>
-#include <linux/capella_cm3602.h>
+#include <linux/capella_cm3602_htc.h>
 #include <linux/input.h>
 #include <linux/uaccess.h>
 #include <linux/miscdevice.h>
