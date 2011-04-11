@@ -323,7 +323,7 @@ config MACH_INCREDIBLE
 
 config MACH_INCREDIBLEC
 	depends on ARCH_QSD8X50
-	default y
+	default n
 	bool "IncredibleC"
 	help
 	  Select this to support the IncredibleC device
