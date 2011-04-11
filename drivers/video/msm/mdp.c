@@ -36,8 +36,10 @@
 
 struct class *mdp_class;
 
+#ifdef CONFIG_MSM_HDMI
 /* Used to report LCDC underflows */
 void reportUnderflow(void);
+#endif
 
 #define MDP_CMD_DEBUG_ACCESS_BASE (0x10000)
 
@@ -175,11 +177,13 @@ static irqreturn_t mdp_isr(int irq, void *data)
 		mdp_dma_timer_enable = 0;
 	}
 
+#ifdef CONFIG_MSM_HDMI
     if (status & MDP_LCDC_UNDERFLOW)
     {
         pr_err("%s: LCDC Underflow\n", __func__);
 		reportUnderflow();
     }
+#endif
 
 	status &= mdp_irq_mask;
 #ifdef CONFIG_MSM_MDP40

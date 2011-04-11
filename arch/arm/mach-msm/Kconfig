@@ -201,7 +201,7 @@ config MACH_MSM7X30_FLUID
 
 config MACH_SWORDFISH
 	depends on ARCH_QSD8X50
-	default y
+	default n
 	bool "Swordfish Board (QCT SURF8250)"
 	help
 	  Support for the Qualcomm SURF8250 eval board.
@@ -295,21 +295,21 @@ config MACH_MAHIMAHI
 
 config MACH_SUPERSONIC
 	depends on ARCH_QSD8X50
-	default y
+	default n
 	bool "Supersonic (HTC EVO 4G)"
 	help
 	  Select this to support the Supersonic device
 
 config MACH_QSD8X50_FFA
 	depends on ARCH_QSD8X50
-	default y
+	default n
 	bool "8x50-ffa"
 	help
 	  Select this to support the 8x50 ffa device
 
 config MACH_MSM7X30_SURF
 	depends on ARCH_MSM7X30
-	default y
+	default n
 	bool "QCT SURF7x30 Board"
 	help
 	  Select this to support the Qualcomm SURF7X30 development board
@@ -617,6 +617,7 @@ config MSM_ADSP
 
 config HTC_ACOUSTIC
         tristate "HTC acoustic driver"
+	depends on ARCH_MSM7X00A
         default y
         help
           The driver provide user space use shared memory allocate by using
@@ -625,7 +626,7 @@ config HTC_ACOUSTIC
 config HTC_ACOUSTIC_QSD
         tristate "HTC acoustic driver for QSD"
         depends on ARCH_QSD8X50
-        default n
+        default y
         help
           Provides user space use shared memory allocate by using RPC code.
           Provides headset amp, mic bias and speaker amp control.

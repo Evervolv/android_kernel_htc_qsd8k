@@ -29,7 +29,7 @@
 #ifdef __KERNEL__
 #define CAPELLA_CM3602 "capella_cm3602"
 struct capella_cm3602_platform_data {
-	int (*power)(int, uint8_t); /* power to the chip */
+	int (*power)(int); /* power to the chip */
 	int p_out; /* proximity-sensor output */
 	int p_en;
 };

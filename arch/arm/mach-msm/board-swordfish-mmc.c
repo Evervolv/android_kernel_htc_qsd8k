@@ -42,25 +42,6 @@ static void __iomem *fpga_base;
 extern int msm_add_sdcc(unsigned int controller, struct mmc_platform_data *plat,
 			unsigned int stat_irq, unsigned long stat_irq_flags);
 
-static int config_gpio_table(unsigned *table, int len, int enable)
-{
-	int n;
-	int rc = 0;
-
-	for (n = 0; n < len; n++) {
-		unsigned dis = !enable;
-		unsigned id = table[n];
-
-		if (msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &id, &dis)) {
-			pr_err("%s: id=0x%08x dis=%d\n", __func__, table[n],
-			       dis);
-			rc = -1;
-		}
-	}
-
-	return rc;
-}
-
 static unsigned sdc1_gpio_table[] = {
 	PCOM_GPIO_CFG(51, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA),
 	PCOM_GPIO_CFG(52, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA),

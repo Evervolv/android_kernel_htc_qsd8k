@@ -39,8 +39,10 @@ extern void start_drawing_late_resume(struct early_suspend *h);
 static void msmfb_resume_handler(struct early_suspend *h);
 static void msmfb_resume(struct work_struct *work);
 
+#ifdef CONFIG_MSM_HDMI
 void hdmi_DoBlit(int offset);
 int hdmi_usePanelSync(void);
+#endif
 
 #define MSMFB_DEBUG 1
 #ifdef CONFIG_FB_MSM_LOGO
@@ -419,6 +421,7 @@ restart:
 		msmfb->yoffset);
 	spin_unlock_irqrestore(&msmfb->update_lock, irq_flags);
 
+#ifdef CONFIG_MSM_HDMI
     if (!hdmi_usePanelSync())
     {
 #endif
@@ -445,7 +448,7 @@ restart:
 
     /* We did the DMA, now blit the data to the other display */
     hdmi_DoBlit(msmfb->xres * msmfb->yoffset * BYTES_PER_PIXEL(msmfb));
-
+#endif
     return;
 }
 

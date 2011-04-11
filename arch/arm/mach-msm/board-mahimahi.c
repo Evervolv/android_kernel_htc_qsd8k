@@ -70,8 +70,6 @@ extern void __init mahimahi_audio_init(void);
 
 extern int microp_headset_has_mic(void);
 
-static void config_gpio_table(uint32_t *table, int len);
-
 static int mahimahi_phy_init_seq[] = {
 	0x0C, 0x31,
 	0x31, 0x32,
@@ -550,8 +548,6 @@ static struct i2c_board_info rev_CX_i2c_devices[] = {
 	},
 };
 
-static void config_gpio_table(uint32_t *table, int len);
-
 static uint32_t camera_off_gpio_table[] = {
 	/* CAMERA */
 	PCOM_GPIO_CFG(0, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT0 */
@@ -968,16 +964,6 @@ static int __init board_serialno_setup(char *serialno)
 	return 1;
 }
 __setup("androidboot.serialno=", board_serialno_setup);
-
-static void config_gpio_table(uint32_t *table, int len)
-{
-	int n;
-	unsigned id;
-	for(n = 0; n < len; n++) {
-		id = table[n];
-		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &id, 0);
-	}
-}
 
 static struct msm_acpu_clock_platform_data mahimahi_clock_data = {
 	.acpu_switch_time_us	= 20,
