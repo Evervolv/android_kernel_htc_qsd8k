@@ -424,13 +424,12 @@ restart:
 #ifdef CONFIG_MSM_HDMI
     if (!hdmi_usePanelSync())
     {
-#endif
         msmfb->vsync_request_time = ktime_get();
         msmfb_start_dma(msmfb);
-#ifdef CONFIG_MSM_HDMI
     }
     else
     {
+#endif
         /* if the panel is all the way on wait for vsync, otherwise sleep
          * for 16 ms (long enough for the dma to panel) and then begin dma */
         msmfb->vsync_request_time = ktime_get();
@@ -444,6 +443,7 @@ restart:
                           HRTIMER_MODE_REL);
             }
         }
+#ifdef CONFIG_MSM_HDMI
     }
 
     /* We did the DMA, now blit the data to the other display */
