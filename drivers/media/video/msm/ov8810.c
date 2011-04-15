@@ -230,6 +230,7 @@ int global_mode;
 extern unsigned char *get_cam_awb_cal(void);
 
 static int sensor_probe_node = 0;
+static int preview_frame_count = 0;
 
 static struct wake_lock ov8810_wake_lock;
 
@@ -735,7 +736,7 @@ static int ov8810_i2c_rxdata(unsigned short saddr,
 	CDBG("%s: raddr=0x%X\n", __func__, *rxdata);
 
 	if (i2c_transfer(ov8810_client->adapter, msgs, 2) < 0) {
-		pr_err("ov8810_i2c_rxdata failed!\n");
+		pr_err("[CAM]ov8810_i2c_rxdata failed!\n");
 		return -EIO;
 	}
 	CDBG("%s: rxdata=0x%X\n", __func__, *rxdata);
@@ -754,7 +755,7 @@ static int32_t ov8810_i2c_txdata(unsigned short saddr,
 		 },
 	};
 	if (i2c_transfer(ov8810_client->adapter, msg, 1) < 0) {
-		pr_err("ov8810_i2c_txdata faild 0x%x\n", ov8810_client->addr);
+		pr_err("[CAM]ov8810_i2c_txdata faild 0x%x\n", ov8810_client->addr);
 		return -EIO;
 	}
 
@@ -779,7 +780,7 @@ retry:
 	rc = ov8810_i2c_rxdata(ov8810_client->addr, buf, rlen);
 
 	if (rc < 0) {
-		pr_err("ov8810_i2c_read 0x%x failed!\n", raddr);
+		pr_err("[CAM]ov8810_i2c_read 0x%x failed!\n", raddr);
 		printk(KERN_ERR "starting read retry policy count:%d\n", count);
 		udelay(10);
 		count++;
@@ -814,7 +815,7 @@ retry:
 	rc = ov8810_i2c_txdata(saddr, buf, 3);
 
 	if (rc < 0) {
-		pr_err("i2c_write_b failed, addr = 0x%x, val = 0x%x!\n",
+		pr_err("[CAM]i2c_write_b failed, addr = 0x%x, val = 0x%x!\n",
 			 waddr, bdata);
 		pr_err(KERN_ERR "starting read retry policy count:%d\n", count);
 		udelay(10);
@@ -835,13 +836,13 @@ retry:
 static int ov8810_update_lsc_table(struct sensor_cfg_data *cdata)
 {
 	int i = 0;
-	pr_info("[LSC calibration]ov8810_update_lsc_table\n");
+	pr_info("[CAM][LSC calibration]ov8810_update_lsc_table\n");
 	for (i = 0; i < 144; i++) {
 		ov8810_i2c_write_b(
 			ov8810_client->addr,
 			cdata->cfg.lsctable.lsc_table[i].reg_addr,
 			cdata->cfg.lsctable.lsc_table[i].reg_val);
-		pr_info("[LSC calibration]update_lsc_table: 0x%x, 0x%x\n",
+		pr_info("[CAM][LSC calibration]update_lsc_table: 0x%x, 0x%x\n",
 				cdata->cfg.lsctable.lsc_table[i].reg_addr,
 				cdata->cfg.lsctable.lsc_table[i].reg_val);
 	}
@@ -896,7 +897,7 @@ static int ov8810_i2c_read_fuseid(struct sensor_cfg_data *cdata)
 	cdata->cfg.fuse.fuse_id_word3 = 0;
 	cdata->cfg.fuse.fuse_id_word4 = 0;
 	for (count = 0; count < MAX_FUSE_ID_INFO; count++)
-		pr_info("Ov8810 Get fuse: fuse_id[%d]: %x\n",
+		pr_info("[CAM]Ov8810 Get fuse: fuse_id[%d]: %x\n",
 			count, fuse_id[count]);
 	return 0;
 }
@@ -905,7 +906,7 @@ static int ov8810_i2c_read_fuseid(struct sensor_cfg_data *cdata)
 static int32_t ov8810_af_i2c_write(uint16_t data)
 {
 	uint8_t code_val_msb, code_val_lsb; /* S3_to_0; */
-	uint32_t rc = 0;
+	int32_t rc = 0;
 	/* S3_to_0 = 0x9;  S[3:0] */
 	code_val_msb = data >> 4; /* D[9:4] */
 	code_val_lsb = ((data & 0x000F) << 4) | S3_to_0;
@@ -916,14 +917,14 @@ static int32_t ov8810_af_i2c_write(uint16_t data)
 				OV8810_AF_MSB, code_val_msb);
 
 	if (rc < 0) {
-		pr_err("Unable to write code_val_msb = %d\n", code_val_msb);
+		pr_err("[CAM]Unable to write code_val_msb = %d\n", code_val_msb);
 		return rc;
 	}
 
 	rc = ov8810_i2c_write_b(ov8810_client->addr,
 				OV8810_AF_LSB, code_val_lsb);
 	if (rc < 0) {
-		pr_err("Unable to write code_val_lsb = %disclaimer\n",
+		pr_err("[CAM]Unable to write code_val_lsb = %disclaimer\n",
 			code_val_lsb);
 		return rc;
 	}
@@ -949,7 +950,7 @@ static int32_t ov8810_move_focus(int direction, int32_t num_steps)
 	} else if (direction == MOVE_FAR) {
 		step_direction = -1;
 	} else {
-		pr_err("Illegal focus direction\n");
+		pr_err("[CAM]Illegal focus direction\n");
 		return -EINVAL;; /* CAMERA_INVALID_PARM; */
 	}
 
@@ -1243,7 +1244,7 @@ static int32_t ov8810_write_exp_gain
 		CDBG("updated_BLC = %d\n", updated_BLC);
 		if (updated_BLC == 5) {
 			/*50 BLC trigger by gain 40 BLC every frame */
-			pr_info("### BLC to 0x50 ###\n");
+			pr_info("[CAM]### BLC to 0x50 ###\n");
 #if 0
 			ov8810_i2c_write_b(ov8810_client->addr, 0x3071, 0x50);
 #endif
@@ -1268,26 +1269,26 @@ static int32_t ov8810_write_exp_gain
 
 	}
 #if 0
-	pr_info("Stella: backup_line_gain[0].line = %d\n",
+	pr_info("[CAM]Stella: backup_line_gain[0].line = %d\n",
 		backup_line_gain[0].line);
-	pr_info("Stella: backup_line_gain[0].mul = %d\n",
+	pr_info("[CAM]Stella: backup_line_gain[0].mul = %d\n",
 		backup_line_gain[0].mul);
-	pr_info("Stella: backup_line_gain[0].gain = %d\n",
+	pr_info("[CAM]Stella: backup_line_gain[0].gain = %d\n",
 		backup_line_gain[0].gain);
-	pr_info("Stella: backup_line_gain[0].extra_line_length = %d\n",
+	pr_info("[CAM]Stella: backup_line_gain[0].extra_line_length = %d\n",
 		backup_line_gain[0].extra_line_length);
-	pr_info("Stella: backup_line_gain[1].line = %d\n",
+	pr_info("[CAM]Stella: backup_line_gain[1].line = %d\n",
 		backup_line_gain[1].line);
-	pr_info("Stella: backup_line_gain[1].mul = %d\n",
+	pr_info("[CAM]Stella: backup_line_gain[1].mul = %d\n",
 		backup_line_gain[1].mul);
-	pr_info("Stella: backup_line_gain[1].gain = %d\n",
+	pr_info("[CAM]Stella: backup_line_gain[1].gain = %d\n",
 		backup_line_gain[1].gain);
-	pr_info("Stella: backup_line_gain[1].extra_line_length = %d\n",
+	pr_info("[CAM]Stella: backup_line_gain[1].extra_line_length = %d\n",
 		backup_line_gain[1].extra_line_length);
 
-	pr_info("Stella: phy_line=%d\n", phy_line);
-	pr_info("Stella: phy_gain=%d\n", phy_gain);
-	pr_info("Stella: phy_extra_line_length=%d\n", phy_extra_line_length);
+	pr_info("[CAM]Stella: phy_line=%d\n", phy_line);
+	pr_info("[CAM]Stella: phy_gain=%d\n", phy_gain);
+	pr_info("[CAM]Stella: phy_extra_line_length=%d\n", phy_extra_line_length);
 #endif
 
 	extra_line_msb = (uint16_t)(phy_extra_line_length & 0xFF00) >> 8;
@@ -1303,7 +1304,7 @@ static int32_t ov8810_write_exp_gain
 	rc = ov8810_i2c_read(OV8810_REG_MUL_GAIN,
 		&ori_reg_mul_gain, 2);
 	if (rc < 0) {
-		pr_err("read OV8810_REG_MUL_GAIN fail\n");
+		pr_err("[CAM]read OV8810_REG_MUL_GAIN fail\n");
 		return rc;
 	}
 
@@ -1379,13 +1380,13 @@ static int32_t ov8810_write_exp_gain
 	}
 
 	if (ov8810_ctrl->sensormode == SENSOR_RAW_SNAPSHOT_MODE) {
-	    pr_info("sleep 500 ms for safety raw snapshot");
+	    pr_info("[CAM]sleep 500 ms for safety raw snapshot");
 		msleep(500);
     }
 
 	/* STREAM ON for SNAPSHOT */
 	if (ov8810_ctrl->sensormode == SENSOR_SNAPSHOT_MODE) {
-		pr_info("ov8810_ctrl: STREAM ON for SNAPSHOT\n");
+		pr_info("[CAM]ov8810_ctrl: STREAM ON for SNAPSHOT\n");
 		rc = ov8810_i2c_write_b(ov8810_client->addr,
 			OV8810_REG_MODE_SELECT,
 			OV8810_MODE_SELECT_STREAM);
@@ -1540,7 +1541,7 @@ static int32_t HTC_update_ov8810_lsc_registers(void)
 	}
 
 	for (i = 0; i < LSC_table_length; i++) {
-		pr_info("[LSC calibration]  read LSC table 0x%x, 0x%x\n",
+		pr_info("[CAM][LSC calibration]  read LSC table 0x%x, 0x%x\n",
 			awb_lsc_data_ptr->LSC_table[i].reg_addr,
 			awb_lsc_data_ptr->LSC_table[i].reg_val);
 	}
@@ -1551,7 +1552,7 @@ static int32_t HTC_update_ov8810_lsc_registers(void)
 			150 * sizeof(struct reg_addr_val_pair_struct), 0) &&
 		awb_lsc_data_ptr->LSC_table_CRC != 0) {
 
-		pr_info("[LSC calibration]checksum pass,use calibrated LSC\n");
+		pr_info("[CAM][LSC calibration]checksum pass,use calibrated LSC\n");
 
 		for (i = 0; i < LSC_table_length; i++) {
 			ov8810_i2c_write_b(ov8810_client->addr,
@@ -1565,7 +1566,7 @@ static int32_t HTC_update_ov8810_lsc_registers(void)
 			OV8810_REG_MODE_SELECT, OV8810_MODE_SELECT_STREAM);
 
 	} else {/*use default LSC table*/
-	      pr_info("[LSC calibration]checksum fail\n");
+	      pr_info("[CAM][LSC calibration]checksum fail\n");
 	      return false;
 	}
 	return true;
@@ -1575,6 +1576,8 @@ static int32_t initialize_ov8810_registers(void)
 {
 	int32_t i, array_length;
 	int32_t rc = 0;
+
+	struct msm_camera_sensor_info *sdata = ov8810_pdev->dev.platform_data;
 
 	mdelay(5);
 	ov8810_i2c_write_b(
@@ -1600,8 +1603,9 @@ static int32_t initialize_ov8810_registers(void)
 	}
 
 	/*use calibrated LSC table*/
+  if (!sdata->sensor_lc_disable) { /* 0902 disable old LSC method */
 	if (HTC_update_ov8810_lsc_registers()) {
-		pr_info("[LSC calibration] use calibrated LSC table done!\n");
+		pr_info("[CAM][LSC calibration] use calibrated LSC table done!\n");
 	} else {/*use default LSC table*/
 		array_length =
 			sizeof(lsc_table_array) / sizeof(lsc_table_array[0]);
@@ -1611,8 +1615,13 @@ static int32_t initialize_ov8810_registers(void)
 				lsc_table_array[i].reg_addr,
 				lsc_table_array[i].reg_val);
 		}
-		pr_info("[LSC calibration] use default LSC table done\n");
+		pr_info("[CAM][LSC calibration] use default LSC table done\n");
 	}
+  } else {
+	  /* add streaming on */
+	  ov8810_i2c_write_b(ov8810_client->addr,
+		  OV8810_REG_MODE_SELECT, OV8810_MODE_SELECT_STREAM);
+  }
 	return rc;
 } /* end of initialize_ov8810_ov8m0vc_registers. */
 
@@ -1628,12 +1637,12 @@ static int32_t ov8810_setting(int rt)
 
 	write_cnt = 0;
 
-	pr_info("ov8810_setting rt = %d\n", rt);
+	pr_info("[CAM]ov8810_setting rt = %d\n", rt);
 
 	if (rt == FULL_SIZE) {
 
 		ov8810_i2c_read(0x30b7, &i2c_ret, 1);
-		pr_info("0x30b7, i2c_ret = 0x%X\n", i2c_ret);
+		pr_info("[CAM]0x30b7, i2c_ret = 0x%X\n", i2c_ret);
     /*Retry writing group update bottom to ensure capture settings can be updated Weiting0331*/
 		while (i2c_ret != 0x84) {
 
@@ -1649,7 +1658,7 @@ static int32_t ov8810_setting(int rt)
 
 		msleep(50);
 		ov8810_i2c_read(0x30b7, &i2c_ret, 1);
-		pr_info("retry 0x30b7, i2c_ret = 0x%X\n", i2c_ret);
+		pr_info("[CAM]retry 0x30b7, i2c_ret = 0x%X\n", i2c_ret);
 		};
 	}
 
@@ -1661,7 +1670,7 @@ static int32_t ov8810_setting(int rt)
 	}
 
 	ov8810_i2c_read(OV8810_REG_MODE_SELECT, &i2c_ret, 1);
-	pr_info("OV8810_REG_MODE_SELECT, i2c_ret = 0x%X\n", i2c_ret);
+	pr_info("[CAM]OV8810_REG_MODE_SELECT, i2c_ret = 0x%X\n", i2c_ret);
 
 	switch (rt) {
 
@@ -1686,6 +1695,7 @@ static int32_t ov8810_setting(int rt)
 		uint16_t fl_line = 0;
 		fl_line = OV8810_QTR_SIZE_HEIGHT +
 			ov8810_ver_qtr_blk_lines_array[cam_mode_sel];
+		pr_info("%s fl_line = %d\n", __func__, __LINE__);
 		rc = ov8810_i2c_write_b(ov8810_client->addr,
 			REG_FRAME_LENGTH_LINES_MSB,
 			(fl_line & 0xFF00) >> 8);
@@ -1698,7 +1708,7 @@ static int32_t ov8810_setting(int rt)
 			return rc;
 #if 0
 		if (cam_mode_sel > 0)  {
-		pr_info("andy write binning ctrl 0x00, cam_mode_sel %d\n", cam_mode_sel);
+		pr_info("[CAM]andy write binning ctrl 0x00, cam_mode_sel %d\n", cam_mode_sel);
 		    rc = ov8810_i2c_write_b(ov8810_client->addr, //weiting ori c0
 			   REG_BINNING_CONTROL, 0x00);
 		if (rc < 0)
@@ -1744,7 +1754,7 @@ static int32_t ov8810_setting(int rt)
 
 		rc = ov8810_i2c_read(OV8810_REG_MUL_GAIN, &ori_reg_mul_gain, 2);
 		if (rc < 0) {
-			pr_err("read OV8810_REG_MUL_GAIN fail\n");
+			pr_err("[CAM]read OV8810_REG_MUL_GAIN fail\n");
 			return rc;
 		}
 		ori_reg_mul_gain_8bit =
@@ -1789,8 +1799,7 @@ static int32_t ov8810_setting(int rt)
 		break;
 
 	case FULL_SIZE:
-		if (rc < 0)
-			return rc;
+
 		array_length = sizeof(ov8810_full_settings_array) /
 			sizeof(ov8810_full_settings_array[0]);
 		/* Configure sensor for QXGA capture mode */
@@ -1811,7 +1820,7 @@ static int32_t ov8810_setting(int rt)
 	}
 
 	/*disablt LSC for calibration*/
-	pr_info("[LSC calibration] global_mode=%d!!!!\n", global_mode);
+	pr_info("[CAM][LSC calibration] global_mode=%d!!!!\n", global_mode);
 	/*take raw picture for LSC calibration*/
 	if (global_mode) {
 		/*disable sensor LSC*/
@@ -1820,7 +1829,7 @@ static int32_t ov8810_setting(int rt)
 		rc = ov8810_i2c_write_b(ov8810_client->addr, 0x30f8, 0x00);
 		/*mirror off*/
 		rc = ov8810_i2c_write_b(ov8810_client->addr, 0x3316, 0x02);
-		pr_info("[LSC calibration]turn off LSC!Mirror On\n");
+		pr_info("[CAM][LSC calibration]turn off LSC!Mirror On\n");
 
 		/*fix gain & linecount*/
 		/*Gain=0x9,exp=008d*/
@@ -1830,7 +1839,7 @@ static int32_t ov8810_setting(int rt)
 		rc = ov8810_i2c_write_b(ov8810_client->addr, 0x3002, 0x00);
 		/*AEC_LSB*/
 		rc = ov8810_i2c_write_b(ov8810_client->addr, 0x3003, 0x8d);
-		pr_info("[LSC calibration]fix gain & linecount\n");
+		pr_info("[CAM][LSC calibration]fix gain & linecount\n");
 		global_mode = 0;
 	}
 
@@ -1862,7 +1871,9 @@ static int32_t ov8810_video_config(int mode)
 
 	ov8810_ctrl->sensormode = mode;
 
-	pr_info("%s cam_mode_sel %d cur_sel %d \n", __func__, cam_mode_sel, cur_sel);
+	pr_info("[CAM]%s cam_mode_sel %d cur_sel %d \n", __func__, cam_mode_sel, cur_sel);
+
+	preview_frame_count = 0;
 
 	if (ov8810_ctrl->curr_res != ov8810_ctrl->prev_res
 		|| pre_sel != cur_sel
@@ -1931,14 +1942,14 @@ static int32_t ov8810_set_sensor_mode(int mode,
 		break;
 
 	case SENSOR_SNAPSHOT_MODE:
-		pr_info("KPI PA: start sensor snapshot config: %d\n", __LINE__);
+		pr_info("[CAM]KPI PA: start sensor snapshot config: %d\n", __LINE__);
 		sinfo->kpi_sensor_start = ktime_to_ns(ktime_get());
 		rc = ov8810_snapshot_config(mode);
 		break;
 
 	case SENSOR_RAW_SNAPSHOT_MODE:
 		/*global_mode = 1; //20100330 vincent lsc calibration*/
-		pr_info("KPI PA: start sensor snapshot config: %d\n", __LINE__);
+		pr_info("[CAM]KPI PA: start sensor snapshot config: %d\n", __LINE__);
 		sinfo->kpi_sensor_start = ktime_to_ns(ktime_get());
 		rc = ov8810_raw_snapshot_config(mode);
 		break;
@@ -1962,31 +1973,33 @@ static int ov8810_probe_read_id(const struct msm_camera_sensor_info *data)
 	uint16_t  chipidh = 0; /*, chipidl;*/
 	uint16_t  def_chipid = 0;
 	msleep(20);
-	pr_info("%s, ov8810_probe_init_sensor 1\n", __func__);
+	pr_info("[CAM]%s, ov8810_probe_init_sensor 1\n", __func__);
 	/* 3. Read sensor Model ID: */
 	if (ov8810_i2c_read(OV8810_PIDH_REG, &chipidh, 2) < 0) {
 		rc = -1;
-		pr_err("read sensor id fail\n");
+		pr_err("[CAM]read sensor id fail\n");
 	}
 
-	pr_info("ov8810 model_id + ver = 0x%x\n", chipidh);
+	pr_info("[CAM]ov8810 model_id + ver = 0x%x\n", chipidh);
 
 	/* 4. Compare sensor ID to OV8810 ID: */
 	def_chipid = (((OV8810_PID << 8) & 0xFF00) + (OV8810_VER & 0x00FF));
-	pr_info("%s, Expected id=0x%x\n", __func__, def_chipid);
+	pr_info("[CAM]%s, Expected id=0x%x\n", __func__, def_chipid);
 
 	if (chipidh < def_chipid) {
 		rc = -ENODEV;
-		pr_err("read sensor id incorrect\n");
+		pr_err("[CAM]read sensor id incorrect\n");
 	}
 
-	pr_info("%s, vreg_get vreg_af_actuator\n", __func__);
+	pr_info("[CAM]%s, vreg_get vreg_af_actuator\n", __func__);
 	vreg_af_actuator = vreg_get(0, "gp5");
 	if (IS_ERR(vreg_af_actuator))
 		return PTR_ERR(vreg_af_actuator);
 
+#ifdef CONFIG_ARCH_QSD8X50
 	data->camera_set_source(MAIN_SOURCE);
-	pr_info(" ov8810_probe_init_sensor finishes\n");
+#endif
+	pr_info("[CAM]ov8810_probe_init_sensor finishes\n");
 	return rc;
 }
 
@@ -2000,12 +2013,12 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 	uint16_t ov8810_nl_region_code_per_step = 35; /*101;*/
 	uint16_t ov8810_l_region_code_per_step = 20; /*18;*/
 	int timeout;
-	pr_info("Calling ov8810_sensor_open_init\n");
+	pr_info("[CAM]Calling ov8810_sensor_open_init\n");
 
 	down(&ov8810_sem);
 
 	if (data == NULL) {
-		pr_info("data is a NULL pointer\n");
+		pr_info("[CAM]data is a NULL pointer\n");
 		return -EINVAL;
 	}
 	/*check whether resume done*/
@@ -2013,7 +2026,7 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 		ov8810_event.event_wait,
 		ov8810_event.waked_up,
 		30*HZ);
-	pr_info("wait event : %d timeout:%d\n", ov8810_event.waked_up, timeout);
+	pr_info("[CAM]wait event : %d timeout:%d\n", ov8810_event.waked_up, timeout);
 	if (timeout == 0) {
 		up(&ov8810_sem);
 		return rc;
@@ -2021,7 +2034,7 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 	msm_camio_probe_on(ov8810_pdev);
 	ov8810_ctrl = kzalloc(sizeof(struct ov8810_ctrl), GFP_KERNEL);
 	if (!ov8810_ctrl) {
-		pr_err("ov8810_init failed!\n");
+		pr_err("[CAM]ov8810_init failed!\n");
 		rc = -ENOMEM;
 		goto init_done;
 	}
@@ -2037,19 +2050,22 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 
 	/*switch pclk and mclk between main cam and 2nd cam*/
 	/*only for supersonic*/
-	pr_info("doing clk switch (ov8810)\n");
+	pr_info("[CAM]doing clk switch (ov8810)\n");
 	if(data->camera_clk_switch != NULL)
 		data->camera_clk_switch();
 
-	/*PWD config*/
-	pr_info("%s, GPIO(%d) sensor_pwd 0\n", __func__, data->sensor_pwd);
+	msm_camio_camif_pad_reg_reset();
+	msleep(20);
+
+	/*PWD and RST config*/
+	pr_info("[CAM]%s, GPIO(%d) sensor_pwd 0\n", __func__, data->sensor_pwd);
 	rc = gpio_request(data->sensor_pwd, "ov8810");
 	if (!rc)
 		gpio_direction_output(data->sensor_pwd, 0);
 	else
-		pr_err("GPIO (%d) request faile\n", data->sensor_pwd);
+		pr_err("[CAM]GPIO (%d) request faile\n", data->sensor_pwd);
 	gpio_free(data->sensor_pwd);
-	mdelay(3);
+	msleep(5);
 
 	/* enable mclk first */
 	msm_camio_clk_rate_set(OV8810_DEFAULT_CLOCK_RATE);
@@ -2060,34 +2076,26 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 	if (!rc)
 		gpio_direction_output(data->sensor_reset, 1);
 	else
-		pr_err("GPIO (%d) request faile\n", data->sensor_reset);
+		pr_err("[CAM]GPIO (%d) request faile\n", data->sensor_reset);
 	gpio_free(data->sensor_reset);
-	msleep(20);
+	msleep(1);
+
 	/*read sensor id*/
 	rc = ov8810_probe_read_id(data);
 
 	ov8810_ctrl->sensormode = SENSOR_PREVIEW_MODE ;
 
-	pr_info("%s, initialize_ov8810_registers: %d\n", __func__, __LINE__);
+	pr_info("[CAM]%s, initialize_ov8810_registers: %d\n", __func__, __LINE__);
 	if (rc < 0)
 		goto init_fail;
-	#if 1 /*move to probe up sensor*/
+#ifdef CONFIG_ARCH_QSD8X50
       /* Initialize Sensor registers */
 	rc = initialize_ov8810_registers();
 	if (rc < 0)
 		return rc;
-	pr_info("%s, ov8810_setting preview %d\n", __func__, __LINE__);
+#endif
 
-	if (ov8810_ctrl->curr_res != ov8810_ctrl->prev_res) {
-		rc = ov8810_setting(ov8810_ctrl->prev_res);
-		if (rc < 0)
-			goto init_fail;
-	} else {
-		ov8810_ctrl->curr_res = ov8810_ctrl->prev_res;
-	}
-	#endif
-
-	pr_info("%s, enable AF actuator %d\n", __func__, __LINE__);
+	pr_info("[CAM]%s, enable AF actuator %d\n", __func__, __LINE__);
 
 	/* enable AF actuator */
 	rc = vreg_enable(vreg_af_actuator);
@@ -2096,18 +2104,18 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 		rc = vreg_set_level(vreg_af_actuator, 2800); /*2v8*/
 		if (rc)
 		{
-		pr_err("vreg_af_actuator vreg_set_level 2v8 failed!\n");
+		pr_err("[CAM]vreg_af_actuator vreg_set_level 2v8 failed!\n");
 		goto init_fail;
 		}
 		}
 	else {
-		pr_err("vreg_af_actuator vreg_enable failed!\n");
-		goto init_fail;
+		pr_err("[CAM]vreg_af_actuator vreg_enable failed!\n");
+		goto init_fail;	
 	}
 
 	msleep(20);
 
-	pr_info("%s, set step_position_table %d\n", __func__, __LINE__);
+	pr_info("[CAM]%s, set step_position_table %d\n", __func__, __LINE__);
 
 	ov8810_ctrl->fps = 30*Q8;
 
@@ -2126,16 +2134,14 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 	}
 
 	 /* generate test pattern */
-	pr_info("%s, generate test pattern, %d, rc=%d\n",
+	pr_info("[CAM]%s, generate test pattern, %d, rc=%d\n",
 		__func__, __LINE__, rc);
 
-	if (rc < 0)
-		goto init_fail;
-	else
+	if (rc >= 0)
 		goto init_done;
 	    /* reset the driver state */
 init_fail:
-	pr_err("%s: init_fail\n", __func__);
+	pr_err("[CAM]%s: init_fail\n", __func__);
 	vreg_disable(vreg_af_actuator);
 	if (ov8810_ctrl) {
 		kfree(ov8810_ctrl);
@@ -2143,7 +2149,7 @@ init_fail:
 	}
 init_done:
 	up(&ov8810_sem);
-	pr_info("%s: init_done\n", __func__);
+	pr_info("[CAM]%s: init_done\n", __func__);
 	return rc;
 
 } /*endof ov8810_sensor_open_init*/
@@ -2164,16 +2170,16 @@ static int ov8810_i2c_probe(struct i2c_client *client,
 	const struct i2c_device_id *id)
 {
 	int rc = 0;
-	pr_info("ov8810_probe called!\n");
+	pr_info("[CAM]ov8810_probe called!\n");
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-		pr_err("i2c_check_functionality failed\n");
+		pr_err("[CAM]i2c_check_functionality failed\n");
 		goto probe_failure;
 	}
 
 	ov8810_sensorw = kzalloc(sizeof(struct ov8810_work), GFP_KERNEL);
 	if (!ov8810_sensorw) {
-		pr_err("kzalloc failed.\n");
+		pr_err("[CAM]kzalloc failed.\n");
 		rc = -ENOMEM;
 		goto probe_failure;
 	}
@@ -2184,23 +2190,32 @@ static int ov8810_i2c_probe(struct i2c_client *client,
 
 	msleep(50);
 
-	pr_info("ov8810_probe successed! rc = %d\n", rc);
+	pr_info("[CAM]ov8810_probe successed! rc = %d\n", rc);
 	return 0;
 
 probe_failure:
-	pr_err("ov8810_probe failed! rc = %d\n", rc);
+	pr_err("[CAM]ov8810_probe failed! rc = %d\n", rc);
 	return rc;
 }
 
 static int ov8810_probe_init_done(const struct msm_camera_sensor_info *data)
 {
-	gpio_request(data->sensor_pwd, "ov8810");
-	gpio_direction_output(data->sensor_pwd, 1);
+	int rc;
+	rc = gpio_request(data->sensor_pwd, "ov8810");
+	if (!rc)
+		gpio_direction_output(data->sensor_pwd, 1);
+	else
+		pr_err("[CAM]GPIO (%d) request faile\n", data->sensor_pwd);
 	gpio_free(data->sensor_pwd);
 	mdelay(1);
-	gpio_request(data->sensor_reset, "ov8810");
-	gpio_direction_output(data->sensor_reset, 0);
+#ifdef CONFIG_ARCH_QSD8X50
+	rc = gpio_request(data->sensor_reset, "ov8810");
+	if (!rc)
+		gpio_direction_output(data->sensor_reset, 0);
+	else
+		pr_err("GPIO (%d) request faile\n", data->sensor_reset);
 	gpio_free(data->sensor_reset);
+#endif
 	return 0;
 }
 
@@ -2213,16 +2228,16 @@ static int ov8810_suspend(struct platform_device *pdev, pm_message_t state)
 		return 0;
 	ov8810_event.waked_up = 0;
 
-	pr_info("ov8810: camera suspend\n");
+	pr_info("[CAM]ov8810: camera suspend\n");
 
-	pr_info("%s, vreg_af_actuator vreg_disable\n", __func__);
+	pr_info("[CAM]%s, vreg_af_actuator vreg_disable\n", __func__);
 	vreg_disable(vreg_af_actuator);
 
 	rc = gpio_request(sinfo->sensor_reset, "ov8810");
 	if (!rc)
 		gpio_direction_output(sinfo->sensor_reset, 0);
 	else
-		pr_info("ov8810: request GPIO(sensor_reset) :%d faile\n",
+		pr_info("[CAM]ov8810: request GPIO(sensor_reset) :%d faile\n",
 			sinfo->sensor_reset);
 
 	gpio_free(sinfo->sensor_reset);
@@ -2231,12 +2246,12 @@ static int ov8810_suspend(struct platform_device *pdev, pm_message_t state)
 	if (!rc)
 		gpio_direction_output(sinfo->sensor_pwd, 0);
 	else
-		pr_info("ov8810: request GPIO(sensor_reset) :%d faile\n",
+		pr_info("[CAM]ov8810: request GPIO(sensor_reset) :%d faile\n",
 			sinfo->sensor_pwd);
 
 	gpio_free(sinfo->sensor_pwd);
 
-	pr_info("ov8810:suspend done\n");
+	pr_info("[CAM]ov8810:suspend done\n");
 	return rc;
 }
 
@@ -2244,7 +2259,7 @@ static void ov8810_resume(struct early_suspend *handler)
 {
 	int rc = 0;
 	struct msm_camera_sensor_info *sinfo = ov8810_pdev->dev.platform_data;
-	pr_info("ov8810_resume\n");
+	pr_info("[CAM]ov8810_resume\n");
 
 	/*check whether need resume*/
 	if (!sinfo->need_suspend)
@@ -2252,18 +2267,18 @@ static void ov8810_resume(struct early_suspend *handler)
 
 	/*check whether already suspend*/
 	if (ov8810_event.waked_up == 1) {
-		pr_info("Ov8810: No nesesary to do Resume\n");
+		pr_info("[CAM]Ov8810: No nesesary to do Resume\n");
 		return;
 	}
 
 	mdelay(5);
 	/*power down setup*/
-	pr_info("%s, sensor_pwd 0\n", __func__);
+	pr_info("[CAM]%s, sensor_pwd 0\n", __func__);
 	rc = gpio_request(sinfo->sensor_pwd, "ov8810");
 	if (!rc)
 		gpio_direction_output(sinfo->sensor_pwd, 0);
 	else
-		pr_err("GPIO (%d) request faile\n", sinfo->sensor_pwd);
+		pr_err("[CAM]GPIO (%d) request faile\n", sinfo->sensor_pwd);
 	gpio_free(sinfo->sensor_pwd);
 	mdelay(5);
 	/*reset setup */
@@ -2271,16 +2286,16 @@ static void ov8810_resume(struct early_suspend *handler)
 	if (!rc)
 		gpio_direction_output(sinfo->sensor_reset, 1);
 	else
-		pr_err("GPIO (%d) request faile\n", sinfo->sensor_reset);
+		pr_err("[CAM]GPIO (%d) request faile\n", sinfo->sensor_reset);
 	gpio_free(sinfo->sensor_reset);
 
 	/*init msm,clk ,GPIO,enable*/
-	pr_info("%s, msm_camio_probe_on\n", __func__);
+	pr_info("[CAM]%s, msm_camio_probe_on\n", __func__);
 	msm_camio_probe_on(ov8810_pdev);
 	msm_camio_clk_enable(CAMIO_MDC_CLK);
 
 	/*set MCLK*/
-	pr_info("%s, msm_camio_clk_rate_set = %d\n",
+	pr_info("[CAM]%s, msm_camio_clk_rate_set = %d\n",
 		__func__, OV8810_DEFAULT_CLOCK_RATE);
 	msm_camio_clk_rate_set(OV8810_DEFAULT_CLOCK_RATE);
 	msleep(100);
@@ -2288,7 +2303,7 @@ static void ov8810_resume(struct early_suspend *handler)
 	/*read sensor id*/
 	rc = ov8810_probe_read_id(sinfo);
 	if (rc < 0)
-		pr_err("OV8810 resume faile :can not read sensor ID\n");
+		pr_err("[CAM]OV8810 resume faile :can not read sensor ID\n");
 
 	/* Initialize Sensor registers */
 	rc = initialize_ov8810_registers();
@@ -2302,7 +2317,7 @@ static void ov8810_resume(struct early_suspend *handler)
 	msm_camio_clk_disable(CAMIO_MDC_CLK);
 
 	ov8810_event.waked_up = 1;
-	pr_info("ov8810:resume done\n");
+	pr_info("[CAM]ov8810:resume done\n");
 	wake_up(&ov8810_event.event_wait);
 	return;
 }
@@ -2389,31 +2404,31 @@ static struct kobject *android_ov8810;
 static int ov8810_sysfs_init(void)
 {
 	int ret = 0;
-	pr_info("ov8810:kobject creat and add\n");
+	pr_info("[CAM]ov8810:kobject creat and add\n");
 	android_ov8810 = kobject_create_and_add("android_camera", NULL);
 	if (android_ov8810 == NULL) {
-		pr_info("ov8810_sysfs_init: subsystem_register failed\n");
+		pr_info("[CAM]ov8810_sysfs_init: subsystem_register failed\n");
 		ret = -ENOMEM;
 		return ret ;
 	}
-	pr_info("Ov8810:sysfs_create_file\n");
+	pr_info("[CAM]Ov8810:sysfs_create_file\n");
 	ret = sysfs_create_file(android_ov8810, &dev_attr_sensor.attr);
 	if (ret) {
-		pr_info("ov8810_sysfs_init: sysfs_create_file failed\n");
+		pr_info("[CAM]ov8810_sysfs_init: sysfs_create_file failed\n");
 		ret = -EFAULT;
 		goto error;
 	}
 
 	ret = sysfs_create_file(android_ov8810, &dev_attr_cam_mode.attr);
 	if (ret) {
-		pr_info("ov8810_sysfs_init: dev_attr_cam_mode failed\n");
+		pr_info("[CAM]ov8810_sysfs_init: dev_attr_cam_mode failed\n");
 		ret = -EFAULT;
 		goto error;
 	}
 
 	ret = sysfs_create_file(android_ov8810, &dev_attr_node.attr);
 	if (ret) {
-		pr_info("ov8810_sysfs_init: dev_attr_node failed\n");
+		pr_info("[CAM]ov8810_sysfs_init: dev_attr_node failed\n");
 		ret = -EFAULT;
 		goto error;
 	}
@@ -2425,6 +2440,16 @@ error:
 	return ret;
 }
 
+#ifdef CONFIG_ARCH_MSM7X30
+uint8_t ov8810_preview_skip_frame(void)
+{
+	if (ov8810_ctrl->sensormode == SENSOR_PREVIEW_MODE && preview_frame_count < 2) {
+		preview_frame_count++;
+		return 1;
+	}
+	return 0;
+}
+#endif
 
 int ov8810_sensor_config(void __user *argp)
 {
@@ -2542,12 +2567,12 @@ int ov8810_sensor_config(void __user *argp)
 		case CFG_SET_DEFAULT_FOCUS:
 			rc =
 				ov8810_set_default_focus(
-					cdata.cfg.focus.steps);
+					(uint8_t)cdata.cfg.focus.steps);
 			break;
 
 		case CFG_SET_EFFECT:
 			rc = ov8810_set_default_focus(
-						cdata.cfg.effect);
+					(uint8_t)cdata.cfg.effect);
 			break;
 
 		case CFG_I2C_IOCTL_R_OTP:{
@@ -2587,20 +2612,29 @@ static int ov8810_sensor_release(void)
 	int rc = -EBADF;
 
 	down(&ov8810_sem);
-	/*Pull hi PWD*/
-	gpio_request(ov8810_ctrl->sensordata->sensor_pwd, "ov8810");
-	gpio_direction_output(ov8810_ctrl->sensordata->sensor_pwd, 1);
-	gpio_free(ov8810_ctrl->sensordata->sensor_pwd);
+	msleep(35);
+
+	if (ov8810_ctrl) {
+		rc = gpio_request(ov8810_ctrl->sensordata->sensor_pwd, "ov8810");
+		if (!rc)
+			gpio_direction_output(ov8810_ctrl->sensordata->sensor_pwd, 1);
+		else
+			pr_err("[CAM]GPIO (%d) request faile\n", ov8810_ctrl->sensordata->sensor_pwd);
+		gpio_free(ov8810_ctrl->sensordata->sensor_pwd);
+#ifdef CONFIG_ARCH_QSD8X50
 	/*Pull low RST*/
 	gpio_request(ov8810_ctrl->sensordata->sensor_reset, "ov8810");
 	gpio_direction_output(ov8810_ctrl->sensordata->sensor_reset, 0);
 	gpio_free(ov8810_ctrl->sensordata->sensor_reset);
+#endif
+	}
 
-	pr_info("vreg_af_actuator vreg_disable\n");
+	pr_info("[CAM]vreg_af_actuator vreg_disable\n");
 	vreg_disable(vreg_af_actuator);
 	msleep(20);
-	pr_info("%s, %d\n", __func__, __LINE__);
-	/*MCLK off*/
+
+	pr_info("[CAM]%s, %d\n", __func__, __LINE__);
+
 	msm_camio_probe_off(ov8810_pdev);
 	if (ov8810_ctrl) {
 		kfree(ov8810_ctrl);
@@ -2608,7 +2642,7 @@ static int ov8810_sensor_release(void)
 	}
 	mdelay(3);
 	allow_suspend();
-	pr_info("ov8810_release completed\n");
+	pr_info("[CAM]ov8810_release completed\n");
 	up(&ov8810_sem);
 
 	return rc;
@@ -2624,11 +2658,11 @@ static int ov8810_sensor_probe(struct msm_camera_sensor_info *info,
 		goto probe_fail;
 	}
 
-	pr_info("ov8810 s->node %d\n", s->node);
+	pr_info("[CAM]ov8810 s->node %d\n", s->node);
 	sensor_probe_node = s->node;
 	/*switch pclk and mclk between main cam and 2nd cam*/
 	/*only for supersonic*/
-	pr_info("Ov8810: doing clk switch (ov8810)\n");
+	pr_info("[CAM]Ov8810: doing clk switch (ov8810)\n");
 	if(info->camera_clk_switch != NULL)
 		info->camera_clk_switch();
 	mdelay(5);
@@ -2637,7 +2671,7 @@ static int ov8810_sensor_probe(struct msm_camera_sensor_info *info,
 	if (!rc)
 		gpio_direction_output(info->sensor_pwd, 0);
 	else
-		pr_err("GPIO (%d) request faile\n", info->sensor_pwd);
+		pr_err("[CAM]GPIO (%d) request faile\n", info->sensor_pwd);
 	gpio_free(info->sensor_pwd);
 	mdelay(5);
 	/*reset setup */
@@ -2645,11 +2679,11 @@ static int ov8810_sensor_probe(struct msm_camera_sensor_info *info,
 	if (!rc)
 		gpio_direction_output(info->sensor_reset, 1);
 	else
-		pr_err("GPIO (%d) request faile\n", info->sensor_reset);
+		pr_err("[CAM]GPIO (%d) request faile\n", info->sensor_reset);
 	gpio_free(info->sensor_reset);
 
 	/*set MCLK*/
-	pr_info("%s, msm_camio_clk_rate_set %d\n",
+	pr_info("[CAM]%s, msm_camio_clk_rate_set %d\n",
 		__func__, OV8810_DEFAULT_CLOCK_RATE);
        msm_camio_clk_rate_set(OV8810_DEFAULT_CLOCK_RATE);
 	msleep(100);
@@ -2665,10 +2699,16 @@ static int ov8810_sensor_probe(struct msm_camera_sensor_info *info,
 
 	if (info->camera_main_set_probe != NULL)
 		info->camera_main_set_probe(true);
+
 	init_suspend();
 	s->s_init = ov8810_sensor_open_init;
 	s->s_release = ov8810_sensor_release;
 	s->s_config  = ov8810_sensor_config;
+
+#ifdef CONFIG_ARCH_MSM7X30
+	info->preview_skip_frame = ov8810_preview_skip_frame;
+#endif
+
 	msleep(20);
 	ov8810_probe_init_done(info);
 	/*register late resuem*/
@@ -2679,56 +2719,77 @@ static int ov8810_sensor_probe(struct msm_camera_sensor_info *info,
 	ov8810_event.waked_up = 1;
 	/*write sysfs*/
 	ov8810_sysfs_init();
-	pr_info("%s: ov8810_probe_init_done %d\n",  __func__, __LINE__);
+	pr_info("[CAM]%s: ov8810_probe_init_done %d\n",  __func__, __LINE__);
 	goto probe_done;
 
 probe_fail:
-	pr_err("SENSOR PROBE FAILS!\n");
+	pr_err("[CAM]SENSOR PROBE FAILS!\n");
 probe_done:
 	return rc;
 
 }
 
+#ifndef CONFIG_ARCH_QSD8X50
 static int ov8810_vreg_enable(struct platform_device *pdev)
 {
 	struct msm_camera_sensor_info *sdata = pdev->dev.platform_data;
 	int rc;
-	pr_info("%s camera vreg on\n", __func__);
+	pr_info("[CAM]%s camera vreg on\n", __func__);
 
 	if (sdata->camera_power_on == NULL) {
-		pr_err("sensor platform_data didnt register\n");
+		pr_err("[CAM]sensor platform_data didnt register\n");
 		return -EIO;
 	}
 	rc = sdata->camera_power_on();
 	return rc;
 }
+#endif
 
-
+#if 0
 static int ov8810_vreg_disable(struct platform_device *pdev)
 {
 	struct msm_camera_sensor_info *sdata = pdev->dev.platform_data;
 	int rc;
 	printk(KERN_INFO "%s camera vreg off\n", __func__);
 	if (sdata->camera_power_off == NULL) {
-		pr_err("sensor platform_data didnt register\n");
+		pr_err("[CAM]sensor platform_data didnt register\n");
 		return -EIO;
 	}
 	rc = sdata->camera_power_off();
 	return rc;
 }
-
+#endif
 
 static int __ov8810_probe(struct platform_device *pdev)
 {
 	struct msm_camera_sensor_info *sdata = pdev->dev.platform_data;
-	printk("__ov8810_probe\n");
+	printk("[CAM]__ov8810_probe\n");
 	ov8810_pdev = pdev;
+
 	if (sdata->camera_main_get_probe != NULL) {
 		if (sdata->camera_main_get_probe()) {
-			pr_info("__ov8810_probe camera main get probed already.\n");
+			pr_info("[CAM]__ov8810_probe camera main get probed already.\n");
 			return 0;
 		}
 	}
+
+#ifndef CONFIG_ARCH_QSD8X50
+    {
+    int rc;
+	rc = gpio_request(sdata->sensor_pwd, "ov8810");
+	if (!rc)
+		gpio_direction_output(sdata->sensor_pwd, 1);
+	else
+		pr_err("[CAM]GPIO (%d) request faile\n", sdata->sensor_pwd);
+	gpio_free(sdata->sensor_pwd);
+	udelay(200);
+
+	rc = ov8810_vreg_enable(pdev);
+	if (rc < 0)
+		pr_err("[CAM]__ov8810_probe fail sensor power on error\n");
+	}
+#endif
+
 	return msm_camera_drv_start(pdev, ov8810_sensor_probe);
 }
 
