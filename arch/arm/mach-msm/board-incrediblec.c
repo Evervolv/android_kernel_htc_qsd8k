@@ -26,7 +26,7 @@
 #include <linux/input.h>
 #include <linux/akm8973.h>
 #include <linux/bma150.h>
-#include <linux/capella_cm3602.h>
+#include <linux/capella_cm3602_htc.h>
 #include <linux/regulator/machine.h>
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -897,6 +897,12 @@ static void config_camera_off_gpios(void)
 		ARRAY_SIZE(camera_off_gpio_table));
 }
 
+enum msm_camera_source camera_source;
+static void incrediblec_camera_set_source(enum msm_camera_source source)
+{
+	camera_source = source;
+}
+
 static struct resource msm_camera_resources[] = {
 	{
 		.start	= MSM_VFE_PHYS,
@@ -930,6 +936,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov8810_data = {
 	.sensor_name    = "ov8810",
 	.sensor_reset   = INCREDIBLEC_CAM_RST, /* CAM1_RST */
 	.sensor_pwd     = INCREDIBLEC_CAM_PWD,  /* CAM1_PWDN, enabled in a9 */
+	.camera_set_source = incrediblec_camera_set_source,
 	.pdata		= &msm_camera_device_data,
 	.resource	= msm_camera_resources,
 	.num_resources	= ARRAY_SIZE(msm_camera_resources),
