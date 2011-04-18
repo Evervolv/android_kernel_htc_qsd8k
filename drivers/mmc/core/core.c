@@ -243,8 +243,9 @@ void mmc_wait_for_req(struct mmc_host *host, struct mmc_request *mrq)
 		msmsdcc_request_end(msm_host, mrq); 	
 	}
 #else
-	wait_for_completion(&complete);
+	wait_for_completion_io(&complete);
 #endif		
+
 }
 
 EXPORT_SYMBOL(mmc_wait_for_req);
