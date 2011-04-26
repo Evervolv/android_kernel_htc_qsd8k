@@ -688,7 +688,8 @@ adreno_recover_hang(struct kgsl_device *device)
 				KGSL_DEVICE_MEMSTORE_OFFSET(soptimestamp));
 	kgsl_sharedmem_readl(&device->memstore, &eoptimestamp,
 				KGSL_DEVICE_MEMSTORE_OFFSET(eoptimestamp));
-	rmb();
+	/* Make sure memory is synchronized before restarting the GPU */
+	mb();
 	KGSL_CTXT_ERR(device,
 		"Context that caused a GPU hang: %x\n", bad_context);
 	/* restart device */
@@ -717,6 +718,7 @@ adreno_recover_hang(struct kgsl_device *device)
 			KGSL_DEVICE_MEMSTORE_OFFSET(ts_cmp_enable),
 			enable_ts);
 	}
+	/* Make sure all writes are posted before the GPU reads them */
 	wmb();
 	/* Mark the invalid context so no more commands are accepted from
 	 * that context */

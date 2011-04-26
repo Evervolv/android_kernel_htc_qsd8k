@@ -754,9 +754,13 @@ int adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 
 	GSL_RB_GET_READPTR(rb, &rb->rptr);
 
+/* drewis: still not sure where this struct was changed */
+#if 0
+	retired_timestamp = device->ftbl->readtimestamp(device,
+		KGSL_TIMESTAMP_RETIRED);
+#endif
 	retired_timestamp = device->ftbl.device_readtimestamp(
 				device, KGSL_TIMESTAMP_RETIRED);
-	rmb();
 	KGSL_DRV_ERR(device, "GPU successfully executed till ts: %x\n",
 			retired_timestamp);
 	rb_rptr = (rb->rptr - 4) * sizeof(unsigned int);
@@ -764,7 +768,6 @@ int adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 	 * sucessfully executed command */
 	while ((rb_rptr / sizeof(unsigned int)) != rb->wptr) {
 		kgsl_sharedmem_readl(&rb->buffer_desc, &value, rb_rptr);
-		rmb();
 		if (value == retired_timestamp) {
 			rb_rptr += sizeof(unsigned int);
 			kgsl_sharedmem_readl(&rb->buffer_desc, &val1, rb_rptr);
@@ -772,7 +775,6 @@ int adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 			kgsl_sharedmem_readl(&rb->buffer_desc, &val2, rb_rptr);
 			rb_rptr += sizeof(unsigned int);
 			kgsl_sharedmem_readl(&rb->buffer_desc, &val3, rb_rptr);
-			rmb();
 			/* match the pattern found at the end of a command */
 			if ((val1 == 2 &&
 				val2 == pm4_type3_packet(PM4_INTERRUPT, 1)
@@ -811,7 +813,6 @@ int adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 	kgsl_sharedmem_readl(&rb->buffer_desc, &val1, rb_rptr);
 	kgsl_sharedmem_readl(&rb->buffer_desc, &val2,
 				rb_rptr + sizeof(unsigned int));
-	rmb();
 	if (val1 == pm4_nop_packet(1) && val2 == KGSL_CMD_IDENTIFIER) {
 		KGSL_DRV_ERR(device,
 			"GPU recovery from hang not possible because "
@@ -827,24 +828,20 @@ int adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 		kgsl_sharedmem_readl(&rb->buffer_desc, &value, rb_rptr);
 		rb_rptr = (rb_rptr + sizeof(unsigned int)) %
 				rb->buffer_desc.size;
-		rmb();
 		/* check for context switch indicator */
 		if (value == KGSL_CONTEXT_TO_MEM_IDENTIFIER) {
 			kgsl_sharedmem_readl(&rb->buffer_desc, &value, rb_rptr);
 			rb_rptr = (rb_rptr + sizeof(unsigned int)) %
 					rb->buffer_desc.size;
-			rmb();
 			BUG_ON(value != pm4_type3_packet(PM4_MEM_WRITE, 2));
 			kgsl_sharedmem_readl(&rb->buffer_desc, &val1, rb_rptr);
 			rb_rptr = (rb_rptr + sizeof(unsigned int)) %
 					rb->buffer_desc.size;
-			rmb();
 			BUG_ON(val1 != (device->memstore.gpuaddr +
 				KGSL_DEVICE_MEMSTORE_OFFSET(current_context)));
 			kgsl_sharedmem_readl(&rb->buffer_desc, &value, rb_rptr);
 			rb_rptr = (rb_rptr + sizeof(unsigned int)) %
 					rb->buffer_desc.size;
-			rmb();
 			BUG_ON((copy_rb_contents == 0) &&
 				(value == cur_context));
 			/* if context switches to a context that did not cause
