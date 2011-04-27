@@ -946,3 +946,24 @@ struct timespec get_monotonic_coarse(void)
 				now.tv_nsec + mono.tv_nsec);
 	return now;
 }
+
+/**
+  * get_xtime_and_monotonic_and_sleep_offset() - get xtime, wall_to_monotonic,
+      and sleep offsets.
+  * @xtim:       pointer to timespec to be set with xtime
+  * @wtom:       pointer to timespec to be set with wall_to_monotonic
+  * @sleep:      pointer to timespec to be set with time in suspend
+  */
+
+void get_xtime_and_monotonic_and_sleep_offset(struct timespec *xtim,
+				struct timespec *wtom, struct timespec *sleep)
+{
+	unsigned long seq;
+
+	do {
+		seq = read_seqbegin(&xtime_lock);
+		*xtim = xtime;
+		*wtom = wall_to_monotonic;
+		*sleep = total_sleep_time;
+	} while (read_seqretry(&xtime_lock, seq));
+}
