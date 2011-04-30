@@ -1132,9 +1132,6 @@ static void composite_disconnect(struct usb_gadget *gadget)
 	if (cdev->config)
 		reset_config(cdev);
 
-	if (composite->disconnect)
-		composite->disconnect(cdev);
-
 	cdev->connected = 0;
 	schedule_work(&cdev->switch_work);
 	spin_unlock_irqrestore(&cdev->lock, flags);
@@ -1200,7 +1197,6 @@ composite_unbind(struct usb_gadget *gadget)
 	}
 	switch_dev_unregister(&cdev->sw_connected);
 	switch_dev_unregister(&cdev->sw_config);
-	device_remove_file(&gadget->dev, &dev_attr_suspended);
 	kfree(cdev);
 	set_gadget_data(gadget, NULL);
 	composite = NULL;

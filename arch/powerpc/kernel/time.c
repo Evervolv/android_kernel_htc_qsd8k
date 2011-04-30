@@ -229,6 +229,9 @@ static u64 scan_dispatch_log(u64 stop_tb)
 	u64 stolen = 0;
 	u64 dtb;
 
+	if (!dtl)
+		return 0;
+
 	if (i == vpa->dtl_idx)
 		return 0;
 	while (i < vpa->dtl_idx) {
@@ -356,7 +359,7 @@ void account_system_vtime(struct task_struct *tsk)
 	}
 	get_paca()->user_time_scaled += user_scaled;
 
-	if (in_irq() || idle_task(smp_processor_id()) != tsk) {
+	if (in_interrupt() || idle_task(smp_processor_id()) != tsk) {
 		account_system_time(tsk, 0, delta, sys_scaled);
 		if (stolen)
 			account_steal_time(stolen);

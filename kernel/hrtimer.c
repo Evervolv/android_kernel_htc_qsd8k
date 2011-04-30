@@ -84,7 +84,7 @@ DEFINE_PER_CPU(struct hrtimer_cpu_base, hrtimer_bases) =
 static void hrtimer_get_softirq_time(struct hrtimer_cpu_base *base)
 {
 	ktime_t xtim, tomono;
-	struct timespec xts, tom;
+	struct timespec xts, tom, slp;
 	unsigned long seq;
 
 	do {
@@ -92,6 +92,8 @@ static void hrtimer_get_softirq_time(struct hrtimer_cpu_base *base)
 		xts = __current_kernel_time();
 		tom = __get_wall_to_monotonic();
 	} while (read_seqretry(&xtime_lock, seq));
+
+	get_xtime_and_monotonic_and_sleep_offset(&xts, &tom, &slp);
 
 	xtim = timespec_to_ktime(xts);
 	tomono = timespec_to_ktime(tom);
@@ -611,7 +613,7 @@ static int hrtimer_reprogram(struct hrtimer *timer,
 static void retrigger_next_event(void *arg)
 {
 	struct hrtimer_cpu_base *base;
-	struct timespec realtime_offset, wtm;
+	struct timespec realtime_offset, wtm, sleep;
 	unsigned long seq;
 
 	if (!hrtimer_hres_active())
@@ -621,6 +623,8 @@ static void retrigger_next_event(void *arg)
 		seq = read_seqbegin(&xtime_lock);
 		wtm = __get_wall_to_monotonic();
 	} while (read_seqretry(&xtime_lock, seq));
+	get_xtime_and_monotonic_and_sleep_offset(&realtime_offset, &wtm,
+							&sleep);
 	set_normalized_timespec(&realtime_offset, -wtm.tv_sec, -wtm.tv_nsec);
 
 	base = &__get_cpu_var(hrtimer_bases);
