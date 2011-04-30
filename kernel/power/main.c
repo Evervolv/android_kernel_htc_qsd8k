@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2003 Patrick Mochel
  * Copyright (c) 2003 Open Source Development Lab
- * 
+ *
  * This file is released under the GPLv2
  *
  */
@@ -144,7 +144,7 @@ struct kobject *power_kobj;
  *	'standby' (Power-On Suspend), 'mem' (Suspend-to-RAM), and
  *	'disk' (Suspend-to-Disk).
  *
- *	store() accepts one of those strings, translates it into the 
+ *	store() accepts one of those strings, translates it into the
  *	proper enumerated value, and initiates a suspend transition.
  */
 static ssize_t state_show(struct kobject *kobj, struct kobj_attribute *attr,
@@ -316,6 +316,46 @@ power_attr(wake_lock);
 power_attr(wake_unlock);
 #endif
 
+#ifdef CONFIG_HTC_ONMODE_CHARGING
+static ssize_t state_onchg_show(struct kobject *kobj, struct kobj_attribute *attr,
+           char *buf)
+{
+  char *s = buf;
+  if (get_onchg_state())
+    s += sprintf(s, "chgoff ");
+  else
+    s += sprintf(s, "chgon ");
+
+  if (s != buf)
+    /* convert the last space to a newline */
+    *(s-1) = '\n';
+
+  return (s - buf);
+}
+
+static ssize_t
+state_onchg_store(struct kobject *kobj, struct kobj_attribute *attr,
+         const char *buf, size_t n)
+{
+  char *p;
+  int len;
+
+  p = memchr(buf, '\n', n);
+  len = p ? p - buf : n;
+
+  if (len == 5 || len == 6 || len == 7) {
+    if (!strncmp(buf, "chgon", len))
+      request_onchg_state(1);
+    else if (!strncmp(buf, "chgoff", len))
+      request_onchg_state(0);
+  }
+
+  return 0;
+}
+
+power_attr(state_onchg);
+#endif
+
 static struct attribute * g[] = {
 	&state_attr.attr,
 #ifdef CONFIG_PM_TRACE
@@ -331,6 +371,9 @@ static struct attribute * g[] = {
 #ifdef CONFIG_USER_WAKELOCK
 	&wake_lock_attr.attr,
 	&wake_unlock_attr.attr,
+#endif
+#ifdef CONFIG_HTC_ONMODE_CHARGING
+  &state_onchg_attr.attr,
 #endif
 #endif
 	NULL,

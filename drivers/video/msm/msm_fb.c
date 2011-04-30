@@ -35,6 +35,10 @@
 #include <linux/android_pmem.h>
 #include "mdp_hw.h"
 
+extern void start_drawing_late_resume(struct early_suspend *h);
+static void msmfb_resume_handler(struct early_suspend *h);
+static void msmfb_resume(struct work_struct *work);
+
 #define MSMFB_DEBUG 1
 #ifdef CONFIG_FB_MSM_LOGO
 #define INIT_IMAGE_FILE "/logo.rle"
@@ -63,7 +67,7 @@ extern wait_queue_head_t panel_update_wait_queue;
 
 #define DLOG(mask, fmt, args...) \
 do { \
-	if (msmfb_debug_mask & mask) \
+	if ((msmfb_debug_mask | SUSPEND_RESUME) & mask) \
 		printk(KERN_INFO "msmfb: "fmt, ##args); \
 } while (0)
 
@@ -94,14 +98,12 @@ struct msmfb_info {
 		int ebottom; /* exclusive */
 	} update_info;
 	char *black;
-
-	struct early_suspend earlier_suspend;
-	struct early_suspend early_suspend;
-
 #ifdef CONFIG_HTC_ONMODE_CHARGING
 	struct early_suspend onchg_earlier_suspend;
 	struct early_suspend onchg_suspend;
 #endif
+	struct early_suspend earlier_suspend;
+	struct early_suspend early_suspend;
 
 	struct wake_lock idle_lock;
 	spinlock_t update_lock;
@@ -109,10 +111,12 @@ struct msmfb_info {
 	wait_queue_head_t frame_wq;
 	struct workqueue_struct *resume_workqueue;
 	struct work_struct resume_work;
+	struct work_struct msmfb_resume_work;
 	struct msmfb_callback dma_callback;
 	struct msmfb_callback vsync_callback;
 	struct hrtimer fake_vsync;
 	ktime_t vsync_request_time;
+	unsigned fb_resumed;
 };
 
 #ifdef CONFIG_FB_MSM_OVERLAY
@@ -318,7 +322,10 @@ static void msmfb_pan_update(struct fb_info *info, uint32_t left, uint32_t top,
 	/* Jay, 8/1/09' */
 	msmfb_set_var(msmfb->fb->screen_base, yoffset);
 #endif
+        if (msmfb->sleeping != AWAKE)
+                DLOG(SUSPEND_RESUME, "pan_update in state(%d)\n", msmfb->sleeping);
 
+restart:
 	spin_lock_irqsave(&msmfb->update_lock, irq_flags);
 
 	/* if we are sleeping, on a pan_display wait 10ms (to throttle back
@@ -454,36 +461,32 @@ error:
 	mutex_unlock(&msmfb->panel_init_lock);
 }
 
-
-static BLOCKING_NOTIFIER_HEAD(display_chain_head);                               
-int register_display_notifier(struct notifier_block *nb)                  
-{                                                                                
-	return blocking_notifier_chain_register(&display_chain_head, nb);        
-} 
-                                                                               
-static int display_notifier_callback(struct notifier_block *nfb,                 
-		unsigned long action,                       
-		void *ignored)                              
-{                                                                                
+static BLOCKING_NOTIFIER_HEAD(display_chain_head);
+int register_display_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&display_chain_head, nb);
+}
+static int display_notifier_callback(struct notifier_block *nfb,
+	  unsigned long action,
+	  void *ignored)
+{
 	//struct msmfb_info *msm_fb = (struct msmfb_info *)ignored;
-	
+
 	switch (action) {
 	case NOTIFY_MSM_FB:
-		printk(KERN_DEBUG "NOTIFY_MSM_FB\n");
-		//msmfb_resume(&msm_fb->early_suspend);
-		break;
+	  printk(KERN_DEBUG "NOTIFY_MSM_FB\n");
+	  //msmfb_resume(&msm_fb->early_suspend);
+	  break;
 	case NOTIFY_POWER:
-		/* nothing to do */
-		break;
+	  /* nothing to do */
+	  break;
 	default:
-		printk(KERN_ERR "%s: unknown action in 0x%lx\n",
-				__func__, action);
-		return NOTIFY_BAD;
+	  printk(KERN_ERR "%s: unknown action in 0x%lx\n",
+	      __func__, action);
+	  return NOTIFY_BAD;
 	}
 	return NOTIFY_OK;
-}                                                                                
-
-/* -------------------------------------------------------------------------- */ 
+}
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 /* turn off the panel */
@@ -528,17 +531,18 @@ static void msmfb_suspend(struct early_suspend *h)
 	pr_info("wait event : %X\n", overlay_event.waked_up);
 #endif
 	panel->suspend(panel);
+	msmfb->fb_resumed = 0;
 	mutex_unlock(&msmfb->panel_init_lock);
 }
 
 static void msmfb_resume_handler(struct early_suspend *h)
 {
 	struct msmfb_info *msmfb = container_of(h, struct msmfb_info,
-					early_suspend);
+	        early_suspend);
 #ifdef CONFIG_HTC_ONMODE_CHARGING
 	if (msmfb->fb_resumed == 1) {
-		DLOG(SUSPEND_RESUME, "fb is resumed by onchg. skip resume\n");
-		return;
+	  DLOG(SUSPEND_RESUME, "fb is resumed by onchg. skip resume\n");
+	  return;
 	}
 #endif
 	queue_work(msmfb->resume_workqueue, &msmfb->msmfb_resume_work);
@@ -549,30 +553,26 @@ static void msmfb_resume_handler(struct early_suspend *h)
 static void msmfb_onchg_earlier_suspend(struct early_suspend *h)
 {
 	struct msmfb_info *msmfb = container_of(h, struct msmfb_info,
-						onchg_earlier_suspend);
+	          onchg_earlier_suspend);
 
 	struct msm_panel_data *panel = msmfb->panel;
-	unsigned long irq_flags;
+	unsigned long irq_flags=0;
 
-	if (panel->resume(panel)) {
-		printk(KERN_INFO "msmfb: panel resume failed, not resuming "
-		       "fb\n");
-		return;
-	}
+	mutex_lock(&msmfb->panel_init_lock);
+	msmfb->sleeping = SLEEPING;
+	wake_up(&msmfb->frame_wq);
 	spin_lock_irqsave(&msmfb->update_lock, irq_flags);
-	msmfb->frame_requested = msmfb->frame_done = msmfb->update_frame = 0;
-	msmfb->sleeping = WAKING;
-	DLOG(SUSPEND_RESUME, "ready, waiting for full update\n");
 	spin_unlock_irqrestore(&msmfb->update_lock, irq_flags);
 
-	wait_event_timeout(msmfb->frame_wq,
-			   msmfb->frame_requested == msmfb->frame_done, HZ/10);
 #ifndef CONFIG_MSM_MDP40
 	mdp->dma(mdp, virt_to_phys(msmfb->black), 0,
 		 msmfb->fb->var.xres, msmfb->fb->var.yres, 0, 0,
 		 NULL, panel->interface_type);
 	mdp->dma_wait(mdp, panel->interface_type);
 #endif
+	wait_event_timeout(msmfb->frame_wq,
+	       msmfb->frame_requested == msmfb->frame_done, HZ/10);
+
 	/* turn off the panel */
 	panel->blank(panel);
 }
@@ -1116,14 +1116,25 @@ static int msmfb_probe(struct platform_device *pdev)
 	wake_lock_init(&msmfb->idle_lock, WAKE_LOCK_IDLE, "msmfb_idle_lock");
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
+	INIT_WORK(&msmfb->msmfb_resume_work, msmfb_resume);
 	msmfb->early_suspend.suspend = msmfb_suspend;
-	msmfb->early_suspend.resume = msmfb_resume;
+	msmfb->early_suspend.resume = msmfb_resume_handler;
 	msmfb->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
 	register_early_suspend(&msmfb->early_suspend);
 
 	msmfb->earlier_suspend.suspend = msmfb_earlier_suspend;
 	msmfb->earlier_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN;
 	register_early_suspend(&msmfb->earlier_suspend);
+#ifdef CONFIG_HTC_ONMODE_CHARGING
+	msmfb->onchg_suspend.suspend = msmfb_onchg_suspend;
+	msmfb->onchg_suspend.resume = msmfb_onchg_resume_handler;
+	msmfb->onchg_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
+	register_onchg_suspend(&msmfb->onchg_suspend);
+
+	msmfb->onchg_earlier_suspend.suspend = msmfb_onchg_earlier_suspend;
+	msmfb->onchg_earlier_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN;
+	register_onchg_suspend(&msmfb->onchg_earlier_suspend);
+#endif
 #endif
 
 #if MSMFB_DEBUG
@@ -1165,6 +1176,8 @@ static int msmfb_probe(struct platform_device *pdev)
 				 fb->var.yres, 0, 1);
 	}
 #endif
+	/* Jay, 29/12/08' */
+	display_notifier(display_notifier_callback, NOTIFY_MSM_FB);
 	return 0;
 
 error_register_framebuffer:
@@ -1205,6 +1218,7 @@ static void msmfb_shutdown(struct platform_device *pdev)
 static struct platform_driver msm_panel_driver = {
 	/* need to write remove */
 	.probe = msmfb_probe,
+	.shutdown = msmfb_shutdown,
 	.driver = {.name = "msm_panel"},
 };
 

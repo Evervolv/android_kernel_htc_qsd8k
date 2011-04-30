@@ -29,6 +29,9 @@
 #include <mach/msm_iomap.h>
 #include <mach/system.h>
 #include <asm/io.h>
+#ifdef CONFIG_VFP
+#include <asm/vfp.h>
+#endif
 
 #include "smd_private.h"
 #include "acpuclock.h"
@@ -130,6 +133,7 @@ void msm_timer_exit_idle(int low_power);
 int msm_irq_idle_sleep_allowed(void);
 int msm_irq_pending(void);
 int clks_print_running(void);
+extern int board_mfg_mode(void);
 
 #ifdef CONFIG_AXI_SCREEN_POLICY
 static int axi_rate;
@@ -198,7 +202,7 @@ msm_pm_wait_state(uint32_t wait_all_set, uint32_t wait_all_clear,
 
 	for (i = 0; i < 100000; i++) {
 		state = smsm_get_state(PM_SMSM_READ_STATE);
-		if (((wait_all_set || wait_all_clear) && 
+		if (((wait_all_set || wait_all_clear) &&
 		     !(~state & wait_all_set) && !(state & wait_all_clear)) ||
 		    (state & wait_any_set) || (~state & wait_any_clear))
 			return 0;
@@ -209,23 +213,37 @@ msm_pm_wait_state(uint32_t wait_all_set, uint32_t wait_all_clear,
 	return -ETIMEDOUT;
 }
 
+/*
+ * For speeding up boot time:
+ * During booting up, disable entering arch_idle() by disable_hlt()
+ * Enable it after booting up BOOT_LOCK_TIMEOUT sec.
+ */
+#define BOOT_LOCK_TIMEOUT_NORMAL      (60 * HZ)
+#define BOOT_LOCK_TIMEOUT_SHORT      (10 * HZ)
+static void do_expire_boot_lock(struct work_struct *work)
+{
+  enable_hlt();
+  pr_info("Release 'boot-time' no_halt_lock\n");
+}
+static DECLARE_DELAYED_WORK(work_expire_boot_lock, do_expire_boot_lock);
+
 static void
 msm_pm_enter_prep_hw(void)
 {
 #if defined(CONFIG_ARCH_MSM7X30)
-	writel(1, A11S_PWRDOWN);
-	writel(4, A11S_SECOP);
+  writel(1, A11S_PWRDOWN);
+  writel(4, A11S_SECOP);
 #else
 #if defined(CONFIG_ARCH_QSD8X50)
-	writel(0x1b, A11S_CLK_SLEEP_EN);
+  writel(0x1b, A11S_CLK_SLEEP_EN);
 #else
-	writel(0x1f, A11S_CLK_SLEEP_EN);
+  writel(0x1f, A11S_CLK_SLEEP_EN);
 #endif
-	writel(1, A11S_PWRDOWN);
-	writel(0, A11S_STANDBY_CTL);
+  writel(1, A11S_PWRDOWN);
+  writel(0, A11S_STANDBY_CTL);
 
 #if defined(CONFIG_ARCH_MSM_ARM11)
-	writel(0, A11RAMBACKBIAS);
+  writel(0, A11RAMBACKBIAS);
 #endif
 #endif
 }
@@ -246,6 +264,13 @@ msm_pm_exit_restore_hw(void)
 void msm_fiq_exit_sleep(void);
 #else
 static inline void msm_fiq_exit_sleep(void) { }
+#endif
+
+#ifdef CONFIG_HTC_POWER_COLLAPSE_MAGIC
+/* Set magic number in SMEM for power collapse state */
+#define HTC_POWER_COLLAPSE_ADD  (MSM_SHARED_RAM_BASE + 0x000F8000 + 0x000007F8)
+#define HTC_POWER_COLLAPSE_MAGIC_NUM  (HTC_POWER_COLLAPSE_ADD - 0x04)
+unsigned int magic_num;
 #endif
 
 static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
@@ -389,6 +414,10 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 			clk_set_rate(axi_clk, sleep_axi_rate);
 #endif
 	}
+#ifdef CONFIG_HTC_POWER_COLLAPSE_MAGIC
+  magic_num = 0xAAAA1111;
+  writel(magic_num, HTC_POWER_COLLAPSE_MAGIC_NUM);
+#endif
 	if (sleep_mode < MSM_PM_SLEEP_MODE_APPS_SLEEP) {
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_SMSM_STATE)
 			smsm_print_sleep_info();
@@ -400,10 +429,23 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 			printk(KERN_INFO "msm_sleep(): vector %x %x -> "
 			       "%x %x\n", saved_vector[0], saved_vector[1],
 			       msm_pm_reset_vector[0], msm_pm_reset_vector[1]);
+#ifdef CONFIG_VFP
+    if (from_idle)
+      vfp_flush_context();
+#endif
+
+    if (!from_idle) printk(KERN_INFO "[R] suspend end\n");
+    /* reset idle sleep mode when suspend. */
+    if (!from_idle) msm_pm_idle_sleep_mode = CONFIG_MSM7X00A_IDLE_SLEEP_MODE;
 		collapsed = msm_pm_collapse();
+    if (!from_idle) printk(KERN_INFO "[R] resume start\n");
 		msm_pm_reset_vector[0] = saved_vector[0];
 		msm_pm_reset_vector[1] = saved_vector[1];
 		if (collapsed) {
+#ifdef CONFIG_VFP
+      if (from_idle)
+        vfp_reinit();
+#endif
 			cpu_init();
 			__asm__("cpsie   a");
 			msm_fiq_exit_sleep();
@@ -419,7 +461,10 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 		msm_arch_idle();
 		rv = 0;
 	}
-
+#ifdef CONFIG_HTC_POWER_COLLAPSE_MAGIC
+  magic_num = 0xBBBB9999;
+  writel(magic_num, HTC_POWER_COLLAPSE_MAGIC_NUM);
+#endif
 	if (sleep_mode <= MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT) {
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_CLOCK)
 			printk(KERN_INFO "msm_sleep(): exit power collapse %ld"
@@ -740,8 +785,8 @@ void msm_pm_set_max_sleep_time(int64_t max_sleep_time_ns)
 
 	if (msm_pm_debug_mask & MSM_PM_DEBUG_SUSPEND)
 		printk("%s: Requested %lldns (%lldbs), Giving %ubs\n",
-		       __func__, max_sleep_time_ns, 
-		       max_sleep_time_bs, 
+		       __func__, max_sleep_time_ns,
+		       max_sleep_time_bs,
 		       msm_pm_max_sleep_time);
 }
 EXPORT_SYMBOL(msm_pm_set_max_sleep_time);
@@ -787,6 +832,29 @@ static void __init msm_pm_axi_init(void)
 }
 #endif
 
+static void __init boot_lock_nohalt(void)
+{
+  int nohalt_timeout;
+
+  /* normal/factory2/recovery */
+  switch (board_mfg_mode()) {
+  case 0: /* normal */
+  case 1: /* factory2 */
+  case 2: /* recovery */
+    nohalt_timeout = BOOT_LOCK_TIMEOUT_NORMAL;
+    break;
+  case 3: /* charge */
+  case 4: /* power_test */
+  case 5: /* offmode_charge */
+  default:
+    nohalt_timeout = BOOT_LOCK_TIMEOUT_SHORT;
+    break;
+  }
+  disable_hlt();
+  schedule_delayed_work(&work_expire_boot_lock, nohalt_timeout);
+  pr_info("Acquire 'boot-time' no_halt_lock %ds\n", nohalt_timeout / HZ);
+}
+
 static int __init msm_pm_init(void)
 {
 	pm_power_off = msm_pm_power_off;
@@ -809,6 +877,8 @@ static int __init msm_pm_init(void)
 	create_proc_read_entry("msm_pm_stats", S_IRUGO,
 				NULL, msm_pm_read_proc, NULL);
 #endif
+
+  boot_lock_nohalt();
 	return 0;
 }
 

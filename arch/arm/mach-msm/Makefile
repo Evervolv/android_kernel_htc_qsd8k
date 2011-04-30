@@ -1,9 +1,9 @@
+obj-y += proc_comm.o
 obj-y += io.o timer.o
 obj-y += memory.o
 ifndef CONFIG_ARCH_MSM8X60
 obj-y += dma.o
 endif
-
 obj-y += nand_partitions.o
 obj-y += pmic.o
 obj-y += drv_callback.o
@@ -16,6 +16,13 @@ obj-$(CONFIG_ARCH_MSM_SCORPION) += arch-init-scorpion.o
 obj-$(CONFIG_ARCH_QSD8X50) += acpuclock-qsd8x50.o
 obj-$(CONFIG_ARCH_MSM7X30) += acpuclock-7x30.o
 
+ifndef CONFIG_ARCH_MSM8X60
+obj-y += irq.o
+endif
+
+obj-$(CONFIG_ARCH_MSM8X60) += clock-dummy.o iommu.o iommu_dev.o devices-msm8x60-iommu.o
+obj-$(CONFIG_MSM_PROC_COMM) += proc_comm.o clock-pcom.o vreg.o
+obj-$(CONFIG_MSM_PROC_COMM) += clock.o
 obj-$(CONFIG_ARCH_QSD8X50) += sirc.o
 obj-$(CONFIG_MSM_FIQ_SUPPORT) += fiq_glue.o
 obj-$(CONFIG_MSM_SMD) += smd.o smd_debug.o
@@ -101,7 +108,9 @@ obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-tpa2018d1.o
 obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-tpa6130.o
 obj-$(CONFIG_MACH_SUPERSONIC) += htc_wifi_nvs.o htc_bluetooth.o
 obj-$(CONFIG_MACH_SUPERSONIC) += htc_acoustic_qsd.o
+obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-flashlight.o
 
+obj-$(CONFIG_HTC_BATTCHG) += htc_battery.o
 obj-$(CONFIG_HTC_PWRSINK) += htc_pwrsink.o
 obj-$(CONFIG_HTC_PWRSPLY) += htc_power_supply.o
 obj-$(CONFIG_HTC_HEADSET) += htc_headset.o
@@ -111,6 +120,8 @@ obj-$(CONFIG_MICROP_COMMON) += atmega_microp_common.o
 obj-$(CONFIG_HTC_HEADSET_MGR) += htc_headset_mgr.o
 obj-$(CONFIG_HTC_HEADSET_GPIO) += htc_headset_gpio.o
 obj-$(CONFIG_HTC_HEADSET_MICROP) += htc_headset_microp.o
+obj-$(CONFIG_PERFLOCK) += perflock.o
+obj-$(CONFIG_PERFLOCK) += htc_set_perflock.o
 
 obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-tpa2018d1.o
 obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-smb329.o
