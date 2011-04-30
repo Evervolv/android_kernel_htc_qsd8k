@@ -322,7 +322,7 @@ static void msmsdcc_reset_and_restore(struct msmsdcc_host *host)
 				mmc_hostname(host->mmc), host->clk_rate, ret);
 }
 
-static void
+void
 msmsdcc_request_end(struct msmsdcc_host *host, struct mmc_request *mrq)
 {
 	BUG_ON(host->curr.data);
