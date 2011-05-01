@@ -476,4 +476,9 @@ config INPUT_CAPELLA_CM3602
 	  Say Y here to enable the Capella CM3602 Short Distance Proximity
 	  Sensor with Ambient Light Sensor.
 
+config LIGHTSENSOR_MICROP
+        tristate "LIGHTSENSOR MICROP Driver"
+        help
+          HTC LIGHTSENSOR Microp support.
+
 endif
