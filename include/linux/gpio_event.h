@@ -37,6 +37,9 @@ struct gpio_event_info {
 		     void **data, unsigned int dev, unsigned int type,
 		     unsigned int code, int value); /* out events */
 	bool no_suspend;
+#ifdef CONFIG_OPTICALJOYSTICK_CRUCIAL
+	bool oj_btn;
+#endif
 };
 
 struct gpio_event_platform_data {

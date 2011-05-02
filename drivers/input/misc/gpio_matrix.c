@@ -21,6 +21,11 @@
 #include <linux/slab.h>
 #include <linux/wakelock.h>
 
+#ifdef CONFIG_OPTICALJOYSTICK_CRUCIAL
+#include <asm/mach-types.h>
+#include <linux/curcial_oj.h>
+#endif
+
 struct gpio_kp {
 	struct gpio_event_input_devs *input_devs;
 	struct gpio_event_matrix_info *keypad_info;
@@ -111,6 +116,9 @@ static void report_key(struct gpio_kp *kp, int key_index, int out, int in)
 	unsigned short keyentry = mi->keymap[key_index];
 	unsigned short keycode = keyentry & MATRIX_KEY_MASK;
 	unsigned short dev = keyentry >> MATRIX_CODE_BITS;
+#ifdef CONFIG_OPTICALJOYSTICK_CRUCIAL
+	static unsigned need_send_spec_key = 1;
+#endif
 
 	if (pressed != test_bit(keycode, kp->input_devs->dev[dev]->key)) {
 		if (keycode == KEY_RESERVED) {
@@ -125,9 +133,24 @@ static void report_key(struct gpio_kp *kp, int key_index, int out, int in)
 					"changed to %d\n", keycode,
 					out, in, mi->output_gpios[out],
 					mi->input_gpios[in], pressed);
+#ifdef CONFIG_OPTICALJOYSTICK_CRUCIAL
+			if (mi->info.oj_btn && keycode == BTN_MOUSE)
+				;
+			else
+#endif
 			input_report_key(kp->input_devs->dev[dev], keycode, pressed);
 		}
 	}
+#ifdef CONFIG_OPTICALJOYSTICK_CRUCIAL
+	if (mi->info.oj_btn && keycode == BTN_MOUSE) {
+		if (need_send_spec_key == pressed) {
+			curcial_oj_send_key(keycode, pressed);
+			need_send_spec_key = !pressed;
+			printk(KERN_INFO "%s: send OJ action key, pressed: %d\n",
+					__func__, need_send_spec_key);
+		}
+	}
+#endif
 }
 
 static enum hrtimer_restart gpio_keypad_timer_func(struct hrtimer *timer)
