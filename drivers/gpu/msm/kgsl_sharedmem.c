@@ -320,8 +320,6 @@ static void _outer_cache_range_op(int op, unsigned long addr, size_t size)
 		outer_inv_range(addr, addr + size);
 		break;
 	}
-
-	mb();
 }
 #endif
 
