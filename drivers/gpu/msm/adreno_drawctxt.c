@@ -458,7 +458,7 @@ static unsigned int *build_chicken_restore_cmds(
 /* save h/w regs, alu constants, texture contants, etc. ...
 *  requires: bool_shadow_gpuaddr, loop_shadow_gpuaddr
 */
-static void build_regsave_cmds(struct kgsl_device *device,
+static void build_regsave_cmds(struct adreno_device *adreno_dev,
 			       struct adreno_context *drawctxt,
 			       struct tmp_ctx *ctx)
 {
@@ -485,7 +485,7 @@ static void build_regsave_cmds(struct kgsl_device *device,
 	build_reg_to_mem_range(REG_PA_SC_WINDOW_OFFSET,
 				REG_PA_SC_WINDOW_SCISSOR_BR,
 				&cmd, drawctxt);
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470) {
+	if (!adreno_is_a220(adreno_dev)) {
 		build_reg_to_mem_range(REG_VGT_MAX_VTX_INDX, REG_RB_FOG_COLOR,
 				&cmd, drawctxt);
 	} else {
@@ -501,7 +501,7 @@ static void build_regsave_cmds(struct kgsl_device *device,
 				&cmd, drawctxt);
 	build_reg_to_mem_range(REG_SQ_PROGRAM_CNTL, REG_SQ_WRAPPING_1,
 				&cmd, drawctxt);
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470) {
+	if (!adreno_is_a220(adreno_dev)) {
 		build_reg_to_mem_range(REG_RB_DEPTHCONTROL, REG_RB_MODECONTROL,
 				&cmd, drawctxt);
 		build_reg_to_mem_range(REG_PA_SU_POINT_SIZE,
@@ -527,7 +527,7 @@ static void build_regsave_cmds(struct kgsl_device *device,
 				&cmd, drawctxt);
 	build_reg_to_mem_range(REG_PA_SC_AA_MASK, REG_PA_SC_AA_MASK,
 				&cmd, drawctxt);
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470) {
+	if (!adreno_is_a220(adreno_dev)) {
 		build_reg_to_mem_range(REG_VGT_VERTEX_REUSE_BLOCK_CNTL,
 				REG_RB_DEPTH_CLEAR,
 				&cmd, drawctxt);
@@ -605,7 +605,7 @@ static void build_regsave_cmds(struct kgsl_device *device,
 	*cmd++ = REG_RBBM_PM_OVERRIDE2;
 	*cmd++ = ctx->reg_values[2];
 
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470) {
+	if (adreno_is_a220(adreno_dev)) {
 		unsigned int i;
 		unsigned int j = 3;
 		for (i = REG_LEIA_VSC_BIN_SIZE; i <=
@@ -631,7 +631,7 @@ static void build_regsave_cmds(struct kgsl_device *device,
 }
 
 /*copy colour, depth, & stencil buffers from graphics memory to system memory*/
-static unsigned int *build_gmem2sys_cmds(struct kgsl_device *device,
+static unsigned int *build_gmem2sys_cmds(struct adreno_device *adreno_dev,
 					 struct adreno_context *drawctxt,
 					 struct tmp_ctx *ctx,
 					 struct gmem_shadow_t *shadow)
@@ -697,7 +697,7 @@ static unsigned int *build_gmem2sys_cmds(struct kgsl_device *device,
 	/* SQ_PROGRAM_CNTL / SQ_CONTEXT_MISC */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
 	*cmds++ = PM4_REG(REG_SQ_PROGRAM_CNTL);
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470)
+	if (adreno_is_a220(adreno_dev))
 		*cmds++ = 0x10018001;
 	else
 		*cmds++ = 0x10010001;
@@ -735,7 +735,7 @@ static unsigned int *build_gmem2sys_cmds(struct kgsl_device *device,
 	/* disable Z */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
 	*cmds++ = PM4_REG(REG_RB_DEPTHCONTROL);
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470)
+	if (adreno_is_a220(adreno_dev))
 		*cmds++ = 0x08;
 	else
 		*cmds++ = 0;
@@ -792,7 +792,7 @@ static unsigned int *build_gmem2sys_cmds(struct kgsl_device *device,
 	*cmds++ = PM4_REG(REG_RB_MODECONTROL);
 	*cmds++ = 0x6;		/* EDRAM copy */
 
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470) {
+	if (adreno_is_a220(adreno_dev)) {
 		*cmds++ = 0xc0043600; /* packet 3 3D_DRAW_INDX_2 */
 		*cmds++ = 0x0;
 		*cmds++ = 0x00004046; /* tristrip */
@@ -816,7 +816,7 @@ static unsigned int *build_gmem2sys_cmds(struct kgsl_device *device,
 /* context restore */
 
 /*copy colour, depth, & stencil buffers from system memory to graphics memory*/
-static unsigned int *build_sys2gmem_cmds(struct kgsl_device *device,
+static unsigned int *build_sys2gmem_cmds(struct adreno_device *adreno_dev,
 					 struct adreno_context *drawctxt,
 					 struct tmp_ctx *ctx,
 					 struct gmem_shadow_t *shadow)
@@ -879,7 +879,7 @@ static unsigned int *build_sys2gmem_cmds(struct kgsl_device *device,
 	*cmds++ = PM4_REG(REG_PA_SC_AA_MASK);
 	*cmds++ = 0x0000ffff;	/* REG_PA_SC_AA_MASK */
 
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470) {
+	if (!adreno_is_a220(adreno_dev)) {
 		/* PA_SC_VIZ_QUERY */
 		*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
 		*cmds++ = PM4_REG(REG_PA_SC_VIZ_QUERY);
@@ -953,7 +953,7 @@ static unsigned int *build_sys2gmem_cmds(struct kgsl_device *device,
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
 	*cmds++ = PM4_REG(REG_RB_DEPTHCONTROL);
 
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470)
+	if (adreno_is_a220(adreno_dev))
 		*cmds++ = 8;		/* disable Z */
 	else
 		*cmds++ = 0;		/* disable Z */
@@ -1001,7 +1001,7 @@ static unsigned int *build_sys2gmem_cmds(struct kgsl_device *device,
 	/* draw pixels with color and depth/stencil component */
 	*cmds++ = 0x4;
 
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470) {
+	if (adreno_is_a220(adreno_dev)) {
 		*cmds++ = 0xc0043600; /* packet 3 3D_DRAW_INDX_2 */
 		*cmds++ = 0x0;
 		*cmds++ = 0x00004046; /* tristrip */
@@ -1031,7 +1031,7 @@ static unsigned *reg_range(unsigned int *cmd, unsigned int start,
 	return cmd;
 }
 
-static void build_regrestore_cmds(struct kgsl_device *device,
+static void build_regrestore_cmds(struct adreno_device *adreno_dev,
 				  struct adreno_context *drawctxt,
 				  struct tmp_ctx *ctx)
 {
@@ -1051,7 +1051,7 @@ static void build_regrestore_cmds(struct kgsl_device *device,
 	*cmd++ = (drawctxt->gpustate.gpuaddr + REG_OFFSET) & 0xFFFFE000;
 #endif
 
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470) {
+	if (!adreno_is_a220(adreno_dev)) {
 		cmd = reg_range(cmd, REG_RB_SURFACE_INFO,
 				REG_PA_SC_SCREEN_SCISSOR_BR);
 	} else {
@@ -1061,7 +1061,7 @@ static void build_regrestore_cmds(struct kgsl_device *device,
 	}
 	cmd = reg_range(cmd, REG_PA_SC_WINDOW_OFFSET,
 				REG_PA_SC_WINDOW_SCISSOR_BR);
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470) {
+	if (!adreno_is_a220(adreno_dev)) {
 		cmd = reg_range(cmd, REG_VGT_MAX_VTX_INDX,
 				REG_PA_CL_VPORT_ZOFFSET);
 	} else {
@@ -1072,7 +1072,7 @@ static void build_regrestore_cmds(struct kgsl_device *device,
 				REG_PA_CL_VPORT_ZOFFSET);
 	}
 	cmd = reg_range(cmd, REG_SQ_PROGRAM_CNTL, REG_SQ_WRAPPING_1);
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470) {
+	if (!adreno_is_a220(adreno_dev)) {
 		cmd = reg_range(cmd, REG_RB_DEPTHCONTROL, REG_RB_MODECONTROL);
 		cmd = reg_range(cmd, REG_PA_SU_POINT_SIZE,
 				REG_PA_SC_VIZ_QUERY); /*REG_VGT_ENHANCE */
@@ -1119,12 +1119,12 @@ static void build_regrestore_cmds(struct kgsl_device *device,
 
 	*cmd++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE2, 1);
 	ctx->reg_values[2] = gpuaddr(cmd, &drawctxt->gpustate);
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470)
+	if (!adreno_is_a220(adreno_dev))
 		*cmd++ = 0x00000000;
 	else
 		*cmd++ = 0x80;
 
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470) {
+	if (adreno_is_a220(adreno_dev)) {
 		unsigned int i;
 		unsigned int j = 3;
 		for (i = REG_LEIA_VSC_BIN_SIZE; i <=
@@ -1371,6 +1371,7 @@ create_gpustate_shadow(struct kgsl_device *device,
 		       struct adreno_context *drawctxt,
 		       struct tmp_ctx *ctx)
 {
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int result;
 
 	/* Allocate vmalloc memory to store the gpustate */
@@ -1391,8 +1392,8 @@ create_gpustate_shadow(struct kgsl_device *device,
 
 	/* build indirect command buffers to save & restore regs/constants */
 	adreno_idle(device, KGSL_TIMEOUT_DEFAULT);
-	build_regrestore_cmds(device, drawctxt, ctx);
-	build_regsave_cmds(device, drawctxt, ctx);
+	build_regrestore_cmds(adreno_dev, drawctxt, ctx);
+	build_regsave_cmds(adreno_dev, drawctxt, ctx);
 
 	build_shader_save_restore_cmds(drawctxt, ctx);
 
@@ -1441,11 +1442,11 @@ create_gmem_shadow(struct adreno_device *adreno_dev,
 	adreno_idle(device, KGSL_TIMEOUT_DEFAULT);
 	drawctxt->context_gmem_shadow.gmem_save_commands = ctx->cmd;
 	ctx->cmd =
-	    build_gmem2sys_cmds(device, drawctxt, ctx,
+	    build_gmem2sys_cmds(adreno_dev, drawctxt, ctx,
 				&drawctxt->context_gmem_shadow);
 	drawctxt->context_gmem_shadow.gmem_restore_commands = ctx->cmd;
 	ctx->cmd =
-	    build_sys2gmem_cmds(device, drawctxt, ctx,
+	    build_sys2gmem_cmds(adreno_dev, drawctxt, ctx,
 				&drawctxt->context_gmem_shadow);
 
 	kgsl_cache_range_op(&drawctxt->context_gmem_shadow.gmemshadow,
@@ -1672,7 +1673,7 @@ adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 
 		cmds[0] = pm4_type3_packet(PM4_SET_BIN_BASE_OFFSET, 1);
 		cmds[1] = drawctxt->bin_base_offset;
-		if (device->chip_id != KGSL_CHIPID_LEIA_REV470)
+		if (!adreno_is_a220(adreno_dev))
 			adreno_ringbuffer_issuecmds(device, 0, cmds, 2);
 
 	} else

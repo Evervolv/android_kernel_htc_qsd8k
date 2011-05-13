@@ -269,7 +269,7 @@ static int adreno_ringbuffer_load_pm4_ucode(struct kgsl_device *device)
 	const char *fwfile;
 	int i, ret = 0;
 
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470)
+	if (adreno_is_a220(adreno_dev))
 		fwfile =  A220_PM4_470_FW;
 	else
 		fwfile =  A200_PM4_FW;
@@ -312,7 +312,7 @@ static int adreno_ringbuffer_load_pfp_ucode(struct kgsl_device *device)
 	const char *fwfile;
 	int i, ret = 0;
 
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470)
+	if (adreno_is_a220(adreno_dev))
 		fwfile =  A220_PFP_470_FW;
 	else
 		fwfile = A200_PFP_FW;

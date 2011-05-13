@@ -16,6 +16,8 @@
 #include <linux/ioctl.h>
 #include <linux/sched.h>
 
+#include <mach/socinfo.h>
+
 #include "kgsl.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_cffdump.h"
@@ -137,7 +139,7 @@ static int adreno_gmeminit(struct adreno_device *adreno_dev)
 	rb_edram_info.val = 0;
 
 	rb_edram_info.f.edram_size = edram_value;
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470)
+	if (!adreno_is_a220(adreno_dev))
 		rb_edram_info.f.edram_mapping_mode = 0; /* EDRAM_MAP_UPPER */
 
 	/* must be aligned to size */
@@ -335,7 +337,7 @@ static int adreno_setstate(struct kgsl_device *device, uint32_t flags)
 		}
 
 		if (flags & KGSL_MMUFLAGS_PTUPDATE &&
-			device->chip_id != KGSL_CHIPID_LEIA_REV470) {
+			!adreno_is_a220(adreno_dev)) {
 			/* HW workaround: to resolve MMU page fault interrupts
 			* caused by the VGT.It prevents the CP PFP from filling
 			* the VGT DMA request fifo too early,thereby ensuring
@@ -401,38 +403,78 @@ static int adreno_setstate(struct kgsl_device *device, uint32_t flags)
 static unsigned int
 adreno_getchipid(struct kgsl_device *device)
 {
-	unsigned int chipid;
+	unsigned int chipid = 0;
 	unsigned int coreid, majorid, minorid, patchid, revid;
 
-	/* YDX */
 	adreno_regread(device, REG_RBBM_PERIPHID1, &coreid);
-	coreid &= 0xF;
-
 	adreno_regread(device, REG_RBBM_PERIPHID2, &majorid);
-	majorid = (majorid >> 4) & 0xF;
-
 	adreno_regread(device, REG_RBBM_PATCH_RELEASE, &revid);
-	/* this is a 16bit field, but extremely unlikely it would ever get
-	* this high
-	*/
-	minorid = ((revid >> 0)  & 0xFF);
 
+	/*
+	* adreno 22x gpus are indicated by coreid 2,
+	* but REG_RBBM_PERIPHID1 always contains 0 for this field
+	*/
+	if (cpu_is_msm8960() || cpu_is_msm8x60())
+		chipid = 2 << 24;
+	else
+		chipid = (coreid & 0xF) << 24;
+
+	chipid |= ((majorid >> 4) & 0xF) << 16;
+
+	minorid = ((revid >> 0)  & 0xFF);
 
 	patchid = ((revid >> 16) & 0xFF);
 
-	chipid  = ((coreid << 24) | (majorid << 16) |
-			(minorid << 8) | (patchid << 0));
+	/* 8x50 returns 0 for patch release, but it should be 1 */
+	if (cpu_is_qsd8x50())
+		patchid = 1;
+	/* userspace isn't prepared to deal with patch id for these chips yet */
+	else if (cpu_is_msm8960() || cpu_is_msm8x60())
+		patchid = 0;
 
-	/* Hardware revision 211 (8650) returns the wrong chip ID */
-	if (chipid == KGSL_CHIPID_YAMATODX_REV21)
-		chipid = KGSL_CHIPID_YAMATODX_REV211;
-
-	/* Workaround Hardware revision issue of Z470 */
-	if (chipid == KGSL_CHIPID_LEIA_REV470_TEMP)
-		chipid = KGSL_CHIPID_LEIA_REV470;
-
+	chipid |= (minorid << 8) | patchid;
 
 	return chipid;
+}
+
+/* all chipid fields are 8 bits wide so 256 won't occur in a real chipid */
+#define DONT_CARE 256
+static const struct {
+	unsigned int core;
+	unsigned int major;
+	unsigned int minor;
+	enum adreno_gpurev gpurev;
+} gpurev_table[] = {
+	/* major and minor may be DONT_CARE, but core must not be */
+	{0, 2, DONT_CARE, ADRENO_REV_A200},
+	{0, 1, 0, ADRENO_REV_A205},
+	{2, 1, DONT_CARE, ADRENO_REV_A220},
+	{2, 2, DONT_CARE, ADRENO_REV_A225},
+};
+
+static inline bool _rev_match(unsigned int id, unsigned int entry)
+{
+	return (entry == DONT_CARE || entry == id);
+}
+#undef DONT_CARE
+
+enum adreno_gpurev adreno_get_rev(struct adreno_device *adreno_dev)
+{
+	enum adreno_gpurev gpurev = ADRENO_REV_UNKNOWN;
+	unsigned int i, core, major, minor;
+	core = (adreno_dev->chip_id >> 24) & 0xff;
+	major = (adreno_dev->chip_id >> 16) & 0xff;
+	minor = (adreno_dev->chip_id >> 8) & 0xff;
+
+	for (i = 0; i < ARRAY_SIZE(gpurev_table); i++) {
+		if (core == gpurev_table[i].core &&
+		    _rev_match(major, gpurev_table[i].major) &&
+		    _rev_match(minor, gpurev_table[i].minor)) {
+			gpurev = gpurev_table[i].gpurev;
+			break;
+		}
+	}
+	return gpurev;
 }
 
 static int __devinit
@@ -499,20 +541,20 @@ static int adreno_start(struct kgsl_device *device, unsigned int init_ram)
 	if (kgsl_mmu_start(device))
 		goto error_clk_off;
 
+	adreno_dev->chip_id = adreno_getchipid(device);
+
 	/*We need to make sure all blocks are powered up and clocked before
 	*issuing a soft reset.  The overrides will then be turned off (set to 0)
 	*/
 	adreno_regwrite(device, REG_RBBM_PM_OVERRIDE1, 0xfffffffe);
-	device->chip_id = adreno_getchipid(device);
-
-	if (device->chip_id == CHIP_REV_251)
+	if (adreno_dev->chip_id == CHIP_REV_251)
 		adreno_regwrite(device, REG_RBBM_PM_OVERRIDE2, 0x000000ff);
 	else
 		adreno_regwrite(device, REG_RBBM_PM_OVERRIDE2, 0xffffffff);
 
 	/* Only reset CP block if all blocks have previously been reset */
 	if (!(device->flags & KGSL_FLAGS_SOFT_RESET) ||
-		(device->chip_id != KGSL_CHIPID_LEIA_REV470)) {
+		!adreno_is_a220(adreno_dev)) {
 		adreno_regwrite(device, REG_RBBM_SOFT_RESET, 0xFFFFFFFF);
 		device->flags |= KGSL_FLAGS_SOFT_RESET;
 	} else
@@ -530,7 +572,7 @@ static int adreno_start(struct kgsl_device *device, unsigned int init_ram)
 	adreno_regwrite(device, REG_MH_ARBITER_CONFIG,
 				adreno_dev->mharb);
 
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470) {
+	if (!adreno_is_a220(adreno_dev)) {
 		adreno_regwrite(device,
 			 REG_MH_CLNT_INTF_CTRL_CONFIG1, 0x00030f27);
 		adreno_regwrite(device,
@@ -539,7 +581,7 @@ static int adreno_start(struct kgsl_device *device, unsigned int init_ram)
 
 	/* Remove 1k boundary check in z470 to avoid GPU hang.
 	   Notice that, this solution won't work if both EBI and SMI are used */
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470) {
+	if (adreno_is_a220(adreno_dev)) {
 		adreno_regwrite(device, REG_MH_CLNT_INTF_CTRL_CONFIG1,
 				 0x00032f07);
 	}
@@ -548,7 +590,7 @@ static int adreno_start(struct kgsl_device *device, unsigned int init_ram)
 	adreno_regwrite(device, REG_SQ_PS_PROGRAM, 0x00000000);
 
 	adreno_regwrite(device, REG_RBBM_PM_OVERRIDE1, 0);
-	if (device->chip_id != KGSL_CHIPID_LEIA_REV470)
+	if (!adreno_is_a220(adreno_dev))
 		adreno_regwrite(device, REG_RBBM_PM_OVERRIDE2, 0);
 	else
 		adreno_regwrite(device, REG_RBBM_PM_OVERRIDE2, 0x80);
@@ -564,7 +606,7 @@ static int adreno_start(struct kgsl_device *device, unsigned int init_ram)
 	/* make sure SQ interrupts are disabled */
 	adreno_regwrite(device, REG_SQ_INT_CNTL, 0);
 
-	if (device->chip_id == KGSL_CHIPID_LEIA_REV470)
+	if (adreno_is_a220(adreno_dev))
 		adreno_dev->gmemspace.sizebytes = SZ_512K;
 	else
 		adreno_dev->gmemspace.sizebytes = SZ_256K;
@@ -757,7 +799,7 @@ static int adreno_getproperty(struct kgsl_device *device,
 
 			memset(&devinfo, 0, sizeof(devinfo));
 			devinfo.device_id = device->id+1;
-			devinfo.chip_id = device->chip_id;
+			devinfo.chip_id = adreno_dev->chip_id;
 			devinfo.mmu_enabled = kgsl_mmu_enabled();
 			devinfo.gmem_hostbaseaddr = (unsigned int)
 					adreno_dev->gmemspace.mmio_virt_base;
