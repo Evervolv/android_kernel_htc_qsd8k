@@ -7851,6 +7851,15 @@ wl_iw_event(struct net_device *dev, wl_event_msg_t *e, void* data)
 		cmd = IWEVREGISTERED;
 		break;
 	case WLC_E_ROAM:
+                if (status != WLC_E_STATUS_SUCCESS) {
+                        WL_ERROR(("ROAMING did not succeeded, keep status Quo\n"));
+                        goto wl_iw_event_end;
+                }
+
+                memcpy(wrqu.addr.sa_data, &e->addr.octet, ETHER_ADDR_LEN);
+                wrqu.addr.sa_family = ARPHRD_ETHER;
+                cmd = SIOCGIWAP;
+
 		if (status == WLC_E_STATUS_SUCCESS) {
 			memcpy(wrqu.addr.sa_data, &e->addr.octet, ETHER_ADDR_LEN);
 			wrqu.addr.sa_family = ARPHRD_ETHER;
