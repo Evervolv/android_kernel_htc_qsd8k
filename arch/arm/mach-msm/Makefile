@@ -48,6 +48,8 @@ obj-$(CONFIG_PM) += pm.o
 obj-$(CONFIG_CPU_FREQ) += cpufreq.o
 obj-$(CONFIG_MSM_REMOTE_SPINLOCK) += remote_spinlock.o
 obj-$(CONFIG_MSM_SSBI) += ssbi.o
+obj-$(CONFIG_HTC_ACOUSTIC) += htc_acoustic.o
+obj-$(CONFIG_HTC_ACOUSTIC_QSD) += htc_acoustic_qsd.o
 
 obj-$(CONFIG_MACH_TROUT) += board-trout-rfkill.o
 obj-$(CONFIG_MACH_TROUT) += board-trout-wifi.o
