@@ -223,7 +223,7 @@ static short avs_get_target_voltage(int freq_idx, bool update_table)
  */
 static int avs_set_target_voltage(int freq_idx, bool update_table)
 {
-	int rc = 0, new_voltage;
+	int ctr = 5, rc = 0, new_voltage;
 
 	if (freq_idx < 0 || freq_idx >= avs_state.freq_cnt) {
 		AVSDEBUG("Out of range :%d\n", freq_idx);
@@ -235,6 +235,12 @@ static int avs_set_target_voltage(int freq_idx, bool update_table)
 		/*AVSDEBUG*/pr_info("AVS setting V to %d mV @%d MHz\n",
 			new_voltage, acpu_vdd_tbl[freq_idx].acpu_khz / 1000);
 		rc = avs_state.set_vdd(new_voltage);
+		while(rc && ctr) {
+			rc = avs_state.set_vdd(new_voltage);
+	 		ctr--;
+			if(rc)
+				mdelay(1);
+	 	}
 		if (rc)
 			return rc;
 		avs_state.vdd = new_voltage;
