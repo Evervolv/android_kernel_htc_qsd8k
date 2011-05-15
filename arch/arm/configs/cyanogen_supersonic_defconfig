@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
-# Linux/arm 2.6.38.4 Kernel Configuration
-# Sun May  1 20:26:43 2011
+# Linux/arm 2.6.38.6 Kernel Configuration
+# Sun May 15 15:49:12 2011
 #
 CONFIG_ARM=y
 CONFIG_SYS_SUPPORTS_APM_EMULATION=y
@@ -297,6 +297,11 @@ CONFIG_MSM_DEBUG_UART_NONE=y
 # CONFIG_MSM_DEBUG_UART3 is not set
 CONFIG_MSM_PROC_COMM=y
 # CONFIG_MACH_MAHIMAHI is not set
+CONFIG_MACH_BRAVO_NONE=y
+# CONFIG_MACH_BRAVO is not set
+# CONFIG_MACH_BRAVOC is not set
+# CONFIG_MACH_INCREDIBLE is not set
+# CONFIG_MACH_INCREDIBLEC is not set
 CONFIG_MACH_SUPERSONIC=y
 # CONFIG_MACH_QSD8X50_FFA is not set
 # CONFIG_HTC_HEADSET is not set
@@ -1158,7 +1163,9 @@ CONFIG_INPUT_GPIO=y
 # CONFIG_INPUT_ADXL34X is not set
 # CONFIG_INPUT_CMA3000 is not set
 # CONFIG_INPUT_CAPELLA_CM3602 is not set
+# CONFIG_INPUT_CAPELLA_CM3602_HTC is not set
 CONFIG_LIGHTSENSOR_MICROP=y
+# CONFIG_INPUT_OPTICALJOYSTICK is not set
 
 #
 # Hardware I/O ports
