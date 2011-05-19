@@ -33,10 +33,6 @@
 	 (RBBM_INT_CNTL__RDERR_INT_MASK |  \
 	  RBBM_INT_CNTL__DISPLAY_UPDATE_INT_MASK)
 
-#define GSL_SQ_INT_MASK \
-	(SQ_INT_CNTL__PS_WATCHDOG_MASK | \
-	 SQ_INT_CNTL__VS_WATCHDOG_MASK)
-
 /* Adreno MH arbiter config*/
 #define ADRENO_CFG_MHARB \
 	(0x10 \
@@ -190,25 +186,6 @@ static void adreno_rbbm_intrcallback(struct kgsl_device *device)
 	adreno_regwrite_isr(device, REG_RBBM_INT_ACK, status);
 }
 
-static void adreno_sq_intrcallback(struct kgsl_device *device)
-{
-	unsigned int status = 0;
-
-	adreno_regread_isr(device, REG_SQ_INT_STATUS, &status);
-
-	if (status & SQ_INT_CNTL__PS_WATCHDOG_MASK)
-		KGSL_DRV_INFO(device, "sq ps watchdog interrupt\n");
-	else if (status & SQ_INT_CNTL__VS_WATCHDOG_MASK)
-		KGSL_DRV_INFO(device, "sq vs watchdog interrupt\n");
-	else
-		KGSL_DRV_WARN(device,
-			"bad bits in REG_SQ_INT_STATUS %08x\n", status);
-
-
-	status &= GSL_SQ_INT_MASK;
-	adreno_regwrite_isr(device, REG_SQ_INT_ACK, status);
-}
-
 irqreturn_t adreno_isr(int irq, void *data)
 {
 	irqreturn_t result = IRQ_NONE;
@@ -235,11 +212,6 @@ irqreturn_t adreno_isr(int irq, void *data)
 
 	if (status & MASTER_INT_SIGNAL__RBBM_INT_STAT) {
 		adreno_rbbm_intrcallback(device);
-		result = IRQ_HANDLED;
-	}
-
-	if (status & MASTER_INT_SIGNAL__SQ_INT_STAT) {
-		adreno_sq_intrcallback(device);
 		result = IRQ_HANDLED;
 	}
 
@@ -625,8 +597,6 @@ static int adreno_stop(struct kgsl_device *device)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	del_timer(&device->idle_timer);
 	adreno_regwrite(device, REG_RBBM_INT_CNTL, 0);
-
-	adreno_regwrite(device, REG_SQ_INT_CNTL, 0);
 
 	adreno_dev->drawctxt_active = NULL;
 
