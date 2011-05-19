@@ -242,12 +242,15 @@ irqreturn_t adreno_isr(int irq, void *data)
 		result = IRQ_HANDLED;
 	}
 
-	if (device->pwrctrl.nap_allowed == true) {
-		device->requested_state = KGSL_STATE_NAP;
-		schedule_work(&device->idle_check_ws);
-	} else if (device->pwrctrl.idle_pass == true) {
-		schedule_work(&device->idle_check_ws);
+	if (device->requested_state == KGSL_STATE_NONE) {
+		if (device->pwrctrl.nap_allowed == true) {
+			device->requested_state = KGSL_STATE_NAP;
+			queue_work(device->work_queue, &device->idle_check_ws);
+		} else if (device->pwrctrl.idle_pass == true) {
+			queue_work(device->work_queue, &device->idle_check_ws);
+		}
 	}
+
 	/* Reset the time-out in our idle timer */
 	mod_timer(&device->idle_timer,
 		jiffies + device->pwrctrl.interval_timeout);
