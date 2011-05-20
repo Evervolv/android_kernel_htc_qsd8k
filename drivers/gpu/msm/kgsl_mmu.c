@@ -577,6 +577,7 @@ void kgsl_mh_intrcallback(struct kgsl_device *device)
 	* caused them, but we don't have enough info to figure that out yet.
 	*/
 }
+EXPORT_SYMBOL(kgsl_mh_intrcallback);
 
 static int kgsl_setup_pt(struct kgsl_pagetable *pt)
 {
@@ -789,6 +790,7 @@ int kgsl_mmu_setstate(struct kgsl_device *device,
 
 	return status;
 }
+EXPORT_SYMBOL(kgsl_mmu_setstate);
 
 int kgsl_mmu_init(struct kgsl_device *device)
 {
@@ -899,6 +901,7 @@ error:
 	kgsl_regwrite(device, device->mmu.reg.config, 0x00000000);
 	return status;
 }
+EXPORT_SYMBOL(kgsl_mmu_start);
 
 unsigned int kgsl_virtaddr_to_physaddr(void *virtaddr)
 {
@@ -1061,6 +1064,7 @@ kgsl_mmu_unmap(struct kgsl_pagetable *pagetable,
 
 	return 0;
 }
+EXPORT_SYMBOL(kgsl_mmu_unmap);
 
 int kgsl_mmu_map_global(struct kgsl_pagetable *pagetable,
 			struct kgsl_memdesc *memdesc, unsigned int protflags)
@@ -1092,6 +1096,7 @@ error_unmap:
 error:
 	return result;
 }
+EXPORT_SYMBOL(kgsl_mmu_map_global);
 
 int kgsl_mmu_stop(struct kgsl_device *device)
 {
@@ -1113,6 +1118,7 @@ int kgsl_mmu_stop(struct kgsl_device *device)
 
 	return 0;
 }
+EXPORT_SYMBOL(kgsl_mmu_stop);
 
 int kgsl_mmu_close(struct kgsl_device *device)
 {

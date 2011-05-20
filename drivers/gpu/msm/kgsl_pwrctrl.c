@@ -232,15 +232,6 @@ int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device)
 	return ret;
 }
 
-unsigned long kgsl_get_clkrate(struct clk *clk)
-{
-	if (clk != NULL)  {
-		return clk_get_rate(clk);
-	}  else   {
-		return 0;
-	}
-}
-
 void kgsl_pwrctrl_uninit_sysfs(struct kgsl_device *device)
 {
 	device_remove_file(device->dev, &gpuclk_attr);
@@ -318,6 +309,7 @@ void kgsl_pwrctrl_clk(struct kgsl_device *device, unsigned int pwrflag)
 		return;
 	}
 }
+EXPORT_SYMBOL(kgsl_pwrctrl_clk);
 
 void kgsl_pwrctrl_axi(struct kgsl_device *device, unsigned int pwrflag)
 {
@@ -357,6 +349,7 @@ void kgsl_pwrctrl_axi(struct kgsl_device *device, unsigned int pwrflag)
 		return;
 	}
 }
+EXPORT_SYMBOL(kgsl_pwrctrl_axi);
 
 
 void kgsl_pwrctrl_pwrrail(struct kgsl_device *device, unsigned int pwrflag)
@@ -403,7 +396,7 @@ void kgsl_pwrctrl_pwrrail(struct kgsl_device *device, unsigned int pwrflag)
 		return;
 	}
 }
-
+EXPORT_SYMBOL(kgsl_pwrctrl_pwrrail);
 
 void kgsl_pwrctrl_irq(struct kgsl_device *device, unsigned int pwrflag)
 {
@@ -433,6 +426,7 @@ void kgsl_pwrctrl_irq(struct kgsl_device *device, unsigned int pwrflag)
 		return;
 	}
 }
+EXPORT_SYMBOL(kgsl_pwrctrl_irq);
 
 int kgsl_pwrctrl_init(struct kgsl_device *device)
 {
@@ -625,6 +619,7 @@ void kgsl_pre_hwaccess(struct kgsl_device *device)
 	if (device->state & (KGSL_STATE_SLEEP | KGSL_STATE_NAP))
 		kgsl_pwrctrl_wake(device);
 }
+EXPORT_SYMBOL(kgsl_pre_hwaccess);
 
 void kgsl_check_suspended(struct kgsl_device *device)
 {
@@ -691,7 +686,7 @@ end:
 
 	return 0;
 }
-
+EXPORT_SYMBOL(kgsl_pwrctrl_sleep);
 
 /******************************************************************/
 /* Caller must hold the device mutex. */
@@ -721,4 +716,4 @@ void kgsl_pwrctrl_wake(struct kgsl_device *device)
 	wake_lock(&device->idle_wakelock);
 	KGSL_PWR_INFO(device, "wake return for device %d\n", device->id);
 }
-
+EXPORT_SYMBOL(kgsl_pwrctrl_wake);

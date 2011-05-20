@@ -57,7 +57,7 @@ config MSM_KGSL_PSTMRTMDMP_RB_HEX
 	  of the human readable version.
 
 config MSM_KGSL_2D
-	bool "Enable the 2D core. Required for OpenVG"
+	tristate "MSM 2D graphics driver. Required for OpenVG"
 	default n
 	depends on MSM_KGSL && !ARCH_MSM7X27
 
