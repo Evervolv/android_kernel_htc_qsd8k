@@ -2053,10 +2053,6 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 	pr_info("[CAM]doing clk switch (ov8810)\n");
 	if(data->camera_clk_switch != NULL)
 		data->camera_clk_switch();
-	
-	/* enable mclk first */
-	msm_camio_clk_rate_set(OV8810_DEFAULT_CLOCK_RATE);
-	msleep(20);
 
 	msm_camio_camif_pad_reg_reset();
 	msleep(20);
@@ -2071,6 +2067,11 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 	gpio_free(data->sensor_pwd);
 	msleep(5);
 
+	/* enable mclk first */
+	msm_camio_clk_rate_set(OV8810_DEFAULT_CLOCK_RATE);
+	msm_camio_camif_pad_reg_reset();
+	msleep(3);
+	/*Pull reset*/
 	rc = gpio_request(data->sensor_reset, "ov8810");
 	if (!rc)
 		gpio_direction_output(data->sensor_reset, 1);
