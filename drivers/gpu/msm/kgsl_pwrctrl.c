@@ -658,9 +658,6 @@ int kgsl_pwrctrl_sleep(struct kgsl_device *device)
 
 sleep:
 	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_IRQ_OFF);
-	/*In 7x27a, do not turn off axi and gpu clocks*/
-	if (cpu_is_msm7x27a())
-		goto end;
 	kgsl_pwrctrl_axi(device, KGSL_PWRFLAGS_AXI_OFF);
 	if (pwr->pwrlevels[0].gpu_freq > 0)
 		clk_set_rate(pwr->grp_clks[0],
@@ -676,7 +673,6 @@ nap:
 clk_off:
 	kgsl_pwrctrl_clk(device, KGSL_PWRFLAGS_CLK_OFF);
 
-end:
 	device->state = device->requested_state;
 	device->requested_state = KGSL_STATE_NONE;
 	wake_unlock(&device->idle_wakelock);
