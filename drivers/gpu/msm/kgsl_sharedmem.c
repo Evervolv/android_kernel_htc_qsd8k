@@ -40,134 +40,51 @@ _get_priv_from_kobj(struct kobject *kobj)
 /* sharedmem / memory sysfs files */
 
 static ssize_t
-process_show_vmalloc(struct kobject *kobj,
-		   struct kobj_attribute *attr,
-		   char *buf)
+process_show(struct kobject *kobj,
+	     struct kobj_attribute *attr,
+	     char *buf)
 {
-
 	struct kgsl_process_private *priv;
-	int ret = 0;
+	unsigned int val = 0;
 
 	mutex_lock(&kgsl_driver.process_mutex);
 	priv = _get_priv_from_kobj(kobj);
 
-	if (priv)
-		ret += sprintf(buf, "%d\n", priv->stats.vmalloc);
+	if (priv == NULL) {
+		mutex_unlock(&kgsl_driver.process_mutex);
+		return 0;
+	}
+
+	if (!strncmp(attr->attr.name, "user", 4))
+		val = priv->stats.user;
+	if (!strncmp(attr->attr.name, "user_max", 8))
+		val = priv->stats.user_max;
+	if (!strncmp(attr->attr.name, "mapped", 6))
+		val = priv->stats.mapped;
+	if (!strncmp(attr->attr.name, "mapped_max", 10))
+		val = priv->stats.mapped_max;
+	if (!strncmp(attr->attr.name, "flushes", 7))
+		val = priv->stats.flushes;
 
 	mutex_unlock(&kgsl_driver.process_mutex);
-	return ret;
+	return snprintf(buf, PAGE_SIZE, "%u\n", val);
 }
 
-static ssize_t
-process_show_vmalloc_max(struct kobject *kobj,
-		       struct kobj_attribute *attr,
-		       char *buf)
-{
+#define KGSL_MEMSTAT_ATTR(_name, _show) \
+	static struct kobj_attribute attr_##_name = \
+	__ATTR(_name, 0444, _show, NULL)
 
-	struct kgsl_process_private *priv;
-	int ret = 0;
-
-	mutex_lock(&kgsl_driver.process_mutex);
-	priv = _get_priv_from_kobj(kobj);
-
-	if (priv)
-		ret += sprintf(buf, "%d\n", priv->stats.vmalloc_max);
-
-	mutex_unlock(&kgsl_driver.process_mutex);
-	return ret;
-}
-
-static ssize_t
-process_show_exmem(struct kobject *kobj,
-		 struct kobj_attribute *attr,
-		 char *buf)
-{
-
-	struct kgsl_process_private *priv;
-	int ret = 0;
-
-	mutex_lock(&kgsl_driver.process_mutex);
-	priv = _get_priv_from_kobj(kobj);
-
-	if (priv)
-		ret += sprintf(buf, "%d\n", priv->stats.exmem);
-
-	mutex_unlock(&kgsl_driver.process_mutex);
-	return ret;
-}
-
-static ssize_t
-process_show_exmem_max(struct kobject *kobj,
-		     struct kobj_attribute *attr,
-		     char *buf)
-{
-
-	struct kgsl_process_private *priv;
-	int ret = 0;
-
-	mutex_lock(&kgsl_driver.process_mutex);
-	priv = _get_priv_from_kobj(kobj);
-
-	if (priv)
-		ret += sprintf(buf, "%d\n", priv->stats.exmem_max);
-
-	mutex_unlock(&kgsl_driver.process_mutex);
-	return ret;
-}
-
-static ssize_t
-process_show_flushes(struct kobject *kobj,
-		   struct kobj_attribute *attr,
-		   char *buf)
-{
-	struct kgsl_process_private *priv;
-	int ret = 0;
-
-	mutex_lock(&kgsl_driver.process_mutex);
-	priv = _get_priv_from_kobj(kobj);
-
-	if (priv)
-		ret += sprintf(buf, "%d\n", priv->stats.flushes);
-
-	mutex_unlock(&kgsl_driver.process_mutex);
-	return ret;
-}
-
-static struct kobj_attribute attr_vmalloc = {
-	.attr = { .name = "vmalloc", .mode = 0444 },
-	.show = process_show_vmalloc,
-	.store = NULL,
-};
-
-static struct kobj_attribute attr_vmalloc_max = {
-	.attr = { .name = "vmalloc_max", .mode = 0444 },
-	.show = process_show_vmalloc_max,
-	.store = NULL,
-};
-
-static struct kobj_attribute attr_exmem = {
-	.attr = { .name = "exmem", .mode = 0444 },
-	.show = process_show_exmem,
-	.store = NULL,
-};
-
-static struct kobj_attribute attr_exmem_max = {
-	.attr = { .name = "exmem_max", .mode = 0444 },
-	.show = process_show_exmem_max,
-	.store = NULL,
-};
-
-static struct kobj_attribute attr_flushes = {
-	.attr = { .name = "flushes", .mode = 0444 },
-	.show = process_show_flushes,
-	.store = NULL,
-};
+KGSL_MEMSTAT_ATTR(user, process_show);
+KGSL_MEMSTAT_ATTR(user_max, process_show);
+KGSL_MEMSTAT_ATTR(mapped, process_show);
+KGSL_MEMSTAT_ATTR(mapped_max, process_show);
+KGSL_MEMSTAT_ATTR(flushes, process_show);
 
 static struct attribute *process_attrs[] = {
-	&attr_vmalloc.attr,
-	&attr_vmalloc_max.attr,
-	&attr_exmem.attr,
-	&attr_exmem_max.attr,
+	&attr_user.attr,
+	&attr_user_max.attr,
+	&attr_mapped.attr,
+	&attr_mapped_max.attr,
 	&attr_flushes.attr,
 	NULL
 };
@@ -204,32 +121,26 @@ kgsl_process_init_sysfs(struct kgsl_process_private *private)
 	}
 }
 
-static int kgsl_drv_vmalloc_show(struct device *dev,
+static int kgsl_drv_memstat_show(struct device *dev,
 				 struct device_attribute *attr,
 				 char *buf)
 {
-	return sprintf(buf, "%d\n", kgsl_driver.stats.vmalloc);
-}
+	unsigned int val = 0;
 
-static int kgsl_drv_vmalloc_max_show(struct device *dev,
-				     struct device_attribute *attr,
-				     char *buf)
-{
-	return sprintf(buf, "%d\n", kgsl_driver.stats.vmalloc_max);
-}
+	if (!strncmp(attr->attr.name, "vmalloc", 7))
+		val = kgsl_driver.stats.vmalloc;
+	else if (!strncmp(attr->attr.name, "vmalloc_max", 11))
+		val = kgsl_driver.stats.vmalloc_max;
+	else if (!strncmp(attr->attr.name, "coherent", 8))
+		val = kgsl_driver.stats.coherent;
+	else if (!strncmp(attr->attr.name, "coherent_max", 12))
+		val = kgsl_driver.stats.coherent_max;
+	else if (!strncmp(attr->attr.name, "mapped", 6))
+		val = kgsl_driver.stats.mapped;
+	else if (!strncmp(attr->attr.name, "mapped_max", 10))
+		val = kgsl_driver.stats.mapped_max;
 
-static int kgsl_drv_coherent_show(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
-{
-	return sprintf(buf, "%d\n", kgsl_driver.stats.coherent);
-}
-
-static int kgsl_drv_coherent_max_show(struct device *dev,
-				      struct device_attribute *attr,
-				      char *buf)
-{
-	return sprintf(buf, "%d\n", kgsl_driver.stats.coherent_max);
+	return snprintf(buf, PAGE_SIZE, "%u\n", val);
 }
 
 static int kgsl_drv_histogram_show(struct device *dev,
@@ -247,61 +158,40 @@ static int kgsl_drv_histogram_show(struct device *dev,
 	return len;
 }
 
-static struct device_attribute drv_vmalloc_attr = {
-	.attr = { .name = "vmalloc", .mode = 0444, },
-	.show = kgsl_drv_vmalloc_show,
-	.store = NULL,
-};
+DEVICE_ATTR(vmalloc, 0444, kgsl_drv_memstat_show, NULL);
+DEVICE_ATTR(vmalloc_max, 0444, kgsl_drv_memstat_show, NULL);
+DEVICE_ATTR(coherent, 0444, kgsl_drv_memstat_show, NULL);
+DEVICE_ATTR(coherent_max, 0444, kgsl_drv_memstat_show, NULL);
+DEVICE_ATTR(mapped, 0444, kgsl_drv_memstat_show, NULL);
+DEVICE_ATTR(mapped_max, 0444, kgsl_drv_memstat_show, NULL);
+DEVICE_ATTR(histogram, 0444, kgsl_drv_histogram_show, NULL);
 
-static struct device_attribute drv_vmalloc_max_attr = {
-	.attr = { .name = "vmalloc_max", .mode = 0444, },
-	.show = kgsl_drv_vmalloc_max_show,
-	.store = NULL,
-};
-
-static struct device_attribute drv_coherent_attr = {
-	.attr = { .name = "coherent", .mode = 0444, },
-	.show = kgsl_drv_coherent_show,
-	.store = NULL,
-};
-
-static struct device_attribute drv_coherent_max_attr = {
-	.attr = { .name = "coherent_max", .mode = 0444, },
-	.show = kgsl_drv_coherent_max_show,
-	.store = NULL,
-};
-
-static struct device_attribute drv_histogram_attr = {
-	.attr = { .name = "histogram", .mode = 0444, },
-	.show = kgsl_drv_histogram_show,
-	.store = NULL,
+static const struct device_attribute *drv_attr_list[] = {
+	&dev_attr_vmalloc,
+	&dev_attr_vmalloc_max,
+	&dev_attr_coherent,
+	&dev_attr_coherent_max,
+	&dev_attr_mapped,
+	&dev_attr_mapped_max,
+	&dev_attr_histogram,
 };
 
 void
 kgsl_sharedmem_uninit_sysfs(void)
 {
-	device_remove_file(&kgsl_driver.virtdev, &drv_vmalloc_attr);
-	device_remove_file(&kgsl_driver.virtdev, &drv_vmalloc_max_attr);
-	device_remove_file(&kgsl_driver.virtdev, &drv_coherent_attr);
-	device_remove_file(&kgsl_driver.virtdev, &drv_coherent_max_attr);
-	device_remove_file(&kgsl_driver.virtdev, &drv_histogram_attr);
+	int i;
+	for (i = 0; i < ARRAY_SIZE(drv_attr_list); i++)
+		device_remove_file(&kgsl_driver.virtdev, drv_attr_list[i]);
 }
 
 int
 kgsl_sharedmem_init_sysfs(void)
 {
-	int ret;
+	int ret = 0, i;
 
-	ret  = device_create_file(&kgsl_driver.virtdev,
-				  &drv_vmalloc_attr);
-	ret |= device_create_file(&kgsl_driver.virtdev,
-				  &drv_vmalloc_max_attr);
-	ret |= device_create_file(&kgsl_driver.virtdev,
-				  &drv_coherent_attr);
-	ret |= device_create_file(&kgsl_driver.virtdev,
-				  &drv_coherent_max_attr);
-	ret |= device_create_file(&kgsl_driver.virtdev,
-				  &drv_histogram_attr);
+	for (i = 0; i < ARRAY_SIZE(drv_attr_list); i++)
+		ret |= device_create_file(&kgsl_driver.virtdev,
+			drv_attr_list[i]);
 
 	return ret;
 }

@@ -198,10 +198,10 @@ struct kgsl_process_private {
 	struct kobject *kobj;
 
 	struct {
-		unsigned int vmalloc;
-		unsigned int vmalloc_max;
-		unsigned int exmem;
-		unsigned int exmem_max;
+		unsigned int user;
+		unsigned int user_max;
+		unsigned int mapped;
+		unsigned int mapped_max;
 		unsigned int flushes;
 	} stats;
 };
