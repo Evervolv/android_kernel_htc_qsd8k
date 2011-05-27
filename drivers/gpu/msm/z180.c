@@ -999,9 +999,11 @@ static long z180_ioctl(struct kgsl_device_private *dev_priv,
 
 }
 
-static unsigned int z180_idle_calc(struct kgsl_device *device)
+static void z180_power_stats(struct kgsl_device *device,
+			    struct kgsl_power_stats *stats)
 {
-	return device->pwrctrl.time;
+	stats->total_time = 0;
+	stats->busy_time = 0;
 }
 
 static void __devinit z180_getfunctable(struct kgsl_functable *ftbl)
@@ -1028,7 +1030,7 @@ static void __devinit z180_getfunctable(struct kgsl_functable *ftbl)
 	ftbl->device_ioctl = z180_ioctl;
 	ftbl->device_setup_pt = z180_setup_pt;
 	ftbl->device_cleanup_pt = z180_cleanup_pt;
-	ftbl->device_idle_calc = z180_idle_calc;
+	ftbl->device_power_stats = z180_power_stats,
 }
 
 static struct platform_device_id z180_id_table[] = {
