@@ -32,7 +32,6 @@ modules.builtin
 *.lzo
 *.patch
 *.gcno
-vmlinux
 
 #
 # Top-level generic files
