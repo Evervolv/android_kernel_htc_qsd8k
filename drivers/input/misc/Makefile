@@ -51,5 +51,5 @@ obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
 ifdef CONFIG_MICROP_COMMON
   obj-$(CONFIG_LIGHTSENSOR_MICROP)	+= cm3602_lightsensor_microp_htc.o
 else
-  obj-$(CONFIG_INPUT_CAPELLA_CM3602)	+= capella_cm3602.o
+  obj-$(CONFIG_LIGHTSENSOR_MICROP)	+= cm3602_lightsensor_microp.o
 endif
