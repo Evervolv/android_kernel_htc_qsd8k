@@ -79,7 +79,4 @@ struct edid_info_struct {
 #define HDMI_SIGNATURE_LEN		0x03
 
 #define CEC_PHYS_ADDR_LEN		0x02
-
-#define EDID_BIT(b)             (1 << b)
-
 #endif
