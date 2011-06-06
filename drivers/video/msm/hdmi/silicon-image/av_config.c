@@ -90,6 +90,12 @@ int hdmi_active9022(struct i2c_client *client)
 		/* HDMI Output */
 		ReadModifyWriteTPI(info, TPI_SYSTEM_CONTROL,
 			OUTPUT_MODE_MASK, OUTPUT_MODE_HDMI);
+    } else {
+        ReadModifyWriteTPI(info, TPI_SYSTEM_CONTROL,
+            OUTPUT_MODE_MASK, OUTPUT_MODE_DVI);
+    }
+
+    if (edid_check_audio_support(info)) {
 		/* audio configuration */
 		ret = hdmi_write_byte(client, 0x26, 0x91);
 		ret = hdmi_write_byte(client, 0x25, 0x03);
@@ -109,8 +115,6 @@ int hdmi_active9022(struct i2c_client *client)
 		ret = hdmi_write_byte(client, 0xbe, 0);
 		ret = hdmi_write_byte(client, 0x26, 0x81);
 	} else {
-		ReadModifyWriteTPI(info, TPI_SYSTEM_CONTROL,
-			OUTPUT_MODE_MASK, OUTPUT_MODE_DVI);
 		SetAudioMute(info, AUDIO_MUTE_MUTED);
 	}
 	ret = hdmi_write_byte(client, HDMI_PIXEL_DATA, 0x60);
@@ -172,6 +176,12 @@ int hdmi_active9022_dup(struct i2c_client *client)
 		/* HDMI Output */
 		ReadModifyWriteTPI(info, TPI_SYSTEM_CONTROL,
 			OUTPUT_MODE_MASK, OUTPUT_MODE_HDMI);
+    } else {
+        ReadModifyWriteTPI(info, TPI_SYSTEM_CONTROL,
+            OUTPUT_MODE_MASK, OUTPUT_MODE_DVI);
+    }
+
+    if (edid_check_audio_support(info)) {
 		/* audio configuration */
 		ret = hdmi_write_byte(client, 0x26, 0x91);
 		ret = hdmi_write_byte(client, 0x25, 0x03);
@@ -191,8 +201,6 @@ int hdmi_active9022_dup(struct i2c_client *client)
 		ret = hdmi_write_byte(client, 0xbe, 0);
 		ret = hdmi_write_byte(client, 0x26, 0x81);
 	} else {
-		ReadModifyWriteTPI(info, TPI_SYSTEM_CONTROL,
-			OUTPUT_MODE_MASK, OUTPUT_MODE_DVI);
 		SetAudioMute(info, AUDIO_MUTE_MUTED);
 	}
 	ret = hdmi_write_byte(client, HDMI_PIXEL_DATA, 0x60);

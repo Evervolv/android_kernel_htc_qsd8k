@@ -364,7 +364,7 @@ int tpi_read_edid(struct hdmi_info *hdmi)
 
 	msg.addr = 0x50;
 	msg.flags = I2C_M_RD;
-	msg.len = 128;
+	msg.len = 256;
 	msg.buf = hdmi->edid_buf;
 	ret = i2c_transfer(hdmi->client->adapter, &msg, 1);
 	if (ret < 0) {
@@ -374,24 +374,7 @@ int tpi_read_edid(struct hdmi_info *hdmi)
 		if (hdmi->edid_buf[0x7e] <= 3)
 			edid_blocks = hdmi->edid_buf[0x7e] ;
 
-                dev_info(&hdmi->client->dev, "EDID blocks = %d\n", edid_blocks);
-
-		if (edid_blocks == 0 ) {
-                        goto end_read_edid;
-                }
-		// Block-1
-		msg.addr = 0x50;
-		msg.flags = 0;
-		msg.len = 1;
-		i2c_buff[0] = 128;
-		msg.buf = i2c_buff;
-		ret = i2c_transfer(hdmi->client->adapter, &msg, 1);
-
-		msg.addr = 0x50;
-		msg.flags = I2C_M_RD;
-		msg.len = 128;
-		msg.buf = &hdmi->edid_buf[128];
-		ret = i2c_transfer(hdmi->client->adapter, &msg, 1);
+        dev_info(&hdmi->client->dev, "EDID blocks = %d\n", edid_blocks);
 	}
 
 	if (edid_blocks > 1) {
@@ -460,7 +443,7 @@ void HotPlugService (struct hdmi_info *hdmi)
 		EnableTMDS(hdmi);
 	}
 
-	if (edid_check_sink_type(hdmi))
+	if (edid_check_audio_support(hdmi))
 		avc_set_basic_audio(hdmi);
 	else
 		SetAudioMute(hdmi, AUDIO_MUTE_MUTED);
@@ -565,8 +548,10 @@ void tpi_cable_conn(struct hdmi_info *hdmi)
 
 	tpi_read_edid(hdmi);
 	memset(edid_hex_buff, 0, 2048);
-	edid_dump_hex(hdmi->edid_buf, 256, edid_hex_buff, 2048);
-	printk("EDID data:\n%s\n=====", edid_hex_buff);
+	edid_dump_hex(hdmi->edid_buf, 128, edid_hex_buff, 2048);
+	printk("Base EDID:\n%s\n=====\n", edid_hex_buff);
+    edid_dump_hex(hdmi->edid_buf + 128, 256, edid_hex_buff, 2048);
+    printk("Extended EDID blocks:\n%s\n=====\n", edid_hex_buff);
 	/* select output mode (HDMI/DVI) according to sink capabilty */
 	if (edid_check_sink_type(hdmi))
 		ReadModifyWriteTPI(hdmi, TPI_SYSTEM_CONTROL, OUTPUT_MODE_MASK, OUTPUT_MODE_HDMI);
@@ -587,11 +572,14 @@ void tpi_cable_disconn(struct hdmi_info *hdmi, bool into_d3)
 {
 	HDMI_DBG("%s, into_d3=%d\n", __func__, into_d3);
 
+#if 0
 	hdmi->cable_connected = false;
 	dsRxPoweredUp = false;
 	edidDataValid = false;
 	hdcp_off(hdmi);
 	DisableTMDS(hdmi);
+#endif
+
 #if 1
         /* wait for debounce */
         msleep(20);
@@ -601,7 +589,9 @@ void tpi_cable_disconn(struct hdmi_info *hdmi, bool into_d3)
 	if (!(reg & 0x0c))
 		tpi_clear_pending_event(hdmi);
 #endif
-	if (into_d3) {
+
+#if 0
+    if (into_d3) {
 		mutex_lock(&hdmi->lock);
 		HDMI_DBG("%s, playing=%d\n", __func__, hdmi->user_playing);
 		if (false == hdmi->user_playing)
@@ -615,6 +605,7 @@ void tpi_cable_disconn(struct hdmi_info *hdmi, bool into_d3)
 #ifdef CONFIG_HTC_HEADSET_MGR
 	HDMI_DBG("Cable unplugged.\n");
 	switch_send_event(BIT_HDMI_CABLE, 0);
+#endif
 #endif
 }
 
@@ -674,13 +665,13 @@ static void tpi_poll(struct hdmi_info *hdmi)
 		ReadSetWriteTPI(hdmi, TPI_INTERRUPT_ENABLE_REG, HOT_PLUG_EVENT);
 		// Repeat this loop while cable is bouncing:
 		do {
-			//DLOG(DBG_POLLING, "TPI: Interrupt status image - 2= %02x\n", status);
+			DLOG(DBG_POLLING, "TPI: Interrupt status image - 2= %02x\n", status);
 			hdmi_write_byte(hdmi->client, TPI_INTERRUPT_STATUS_REG, HOT_PLUG_EVENT);
 			// Delay for metastability protection and to help filter out connection bouncing
 			mdelay(T_HPD_DELAY);
 			// Read Interrupt status register
 			status = hdmi_read(hdmi->client, TPI_INTERRUPT_STATUS_REG);
-			//DLOG(DBG_POLLING, "TPI: Interrupt status image - 3= %02x\n", status);
+			DLOG(DBG_POLLING, "TPI: Interrupt status image - 3= %02x\n", status);
 			if (!retry--) { 
 				HDMI_DBG("%s: retry failed\n", __func__);
 				break;
@@ -690,11 +681,11 @@ static void tpi_poll(struct hdmi_info *hdmi)
 		DLOG(DBG_POLLING, "int status: %02x, after debouncing: %02x\n",
 			orig_status, status);
 
-		//DLOG(DBG_POLLING, "TPI->hdmiCableConnected = %d\n", hdmi->cable_connected);
+		DLOG(DBG_POLLING, "TPI->hdmiCableConnected = %d\n", hdmi->cable_connected);
 		if (((status & HOT_PLUG_STATE) >> 2) != hdmi->cable_connected) {
 			DLOG(DBG_POLLING, "cable status changed: from %d to %d\n",
 				hdmi->cable_connected, !!(status & HOT_PLUG_STATE));
-			//DLOG(DBG_POLLING, "TPI-> CONDITION\n");
+			DLOG(DBG_POLLING, "TPI-> CONDITION\n");
 			if (hdmi->cable_connected == true)
 				tpi_cable_disconn(hdmi, status & 0x8 ? false : true);
 			else {
@@ -705,9 +696,10 @@ static void tpi_poll(struct hdmi_info *hdmi)
 				mutex_unlock(&hdmi->polling_lock);
 				return;
 			}
-		} else if ( false == hdmi->cable_connected)
+		} else if ( false == hdmi->cable_connected) {
 			/* only occur while booting without cable attached. */
 			tpi_cable_disconn(hdmi, true);
+        }
 	}
 
 	// Check rx power

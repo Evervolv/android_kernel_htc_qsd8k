@@ -361,6 +361,7 @@ int edid_dump_hex(u8 *src, int src_size, char *output, int output_size);
 bool edid_is_video_mode_supported(struct video_mode *vmode);
 int edid_debugfs_init(struct hdmi_info *hdmi);
 bool edid_check_sink_type(struct hdmi_info *hdmi);
+bool edid_check_audio_support(struct hdmi_info *hdmi);
 int HotPlugServiceLoop(struct hdmi_info *hdmi);
 int tpi_prepare(struct hdmi_info *hdmi);
 
