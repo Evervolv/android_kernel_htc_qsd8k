@@ -724,8 +724,8 @@ uint8_t *kgsl_gpuaddr_to_vaddr(const struct kgsl_memdesc *memdesc,
 		gpuaddr >= memdesc->gpuaddr + memdesc->size))
 		return NULL;
 
-	*size = memdesc->size - (memdesc->gpuaddr - gpuaddr);
-	return memdesc->hostptr + (memdesc->gpuaddr - gpuaddr);
+	*size = memdesc->size - (gpuaddr - memdesc->gpuaddr);
+	return memdesc->hostptr + (gpuaddr - memdesc->gpuaddr);
 }
 EXPORT_SYMBOL(kgsl_gpuaddr_to_vaddr);
 
