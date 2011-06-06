@@ -82,36 +82,68 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 }
 EXPORT_SYMBOL(kgsl_pwrctrl_pwrlevel_change);
 
-static int kgsl_pwrctrl_gpuclk_store(struct device *dev,
-				     struct device_attribute *attr,
-				     const char *buf, size_t count)
-{
-	char temp[20];
-	int rc, i, delta = 5000000;
+static int __gpuclk_store(int max, struct device *dev,
+						  struct device_attribute *attr,
+						  const char *buf, size_t count)
+{	int ret, i, delta = 5000000;
 	unsigned long val;
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 
-	snprintf(temp, sizeof(temp), "%.*s",
-			 (int)min(count, sizeof(temp) - 1), buf);
-	rc = strict_strtoul(temp, 0, &val);
-	if (rc)
-		return rc;
+	ret = sscanf(buf, "%ld", &val);
+	if (ret != 1)
+		return count;
 
 	mutex_lock(&device->mutex);
-	/* Find the best match for the requested freq, if it exists */
-
-	for (i = 0; i < pwr->num_pwrlevels; i++)
+	for (i = 0; i < pwr->num_pwrlevels; i++) {
 		if (abs(pwr->pwrlevels[i].gpu_freq - val) < delta) {
-			pwr->thermal_pwrlevel = i;
+			if (max)
+				pwr->thermal_pwrlevel = i;
 			break;
 		}
+	}
 
-	kgsl_pwrctrl_pwrlevel_change(device, i);
+	if (i == pwr->num_pwrlevels)
+		goto done;
 
+	/*
+	 * If the current or requested clock speed is greater than the
+	 * thermal limit, bump down immediately.
+	 */
+
+	if (pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq >
+	    pwr->pwrlevels[pwr->thermal_pwrlevel].gpu_freq)
+		kgsl_pwrctrl_pwrlevel_change(device, pwr->thermal_pwrlevel);
+	else if (!max)
+		kgsl_pwrctrl_pwrlevel_change(device, i);
+
+done:
 	mutex_unlock(&device->mutex);
-
 	return count;
+}
+
+static int kgsl_pwrctrl_max_gpuclk_store(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t count)
+{
+	return __gpuclk_store(1, dev, attr, buf, count);
+}
+
+static int kgsl_pwrctrl_max_gpuclk_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct kgsl_device *device = kgsl_device_from_dev(dev);
+	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+			pwr->pwrlevels[pwr->thermal_pwrlevel].gpu_freq);
+}
+
+static int kgsl_pwrctrl_gpuclk_store(struct device *dev,
+				     struct device_attribute *attr,
+				     const char *buf, size_t count)
+{
+	return __gpuclk_store(0, dev, attr, buf, count);
 }
 
 static int kgsl_pwrctrl_gpuclk_show(struct device *dev,
@@ -120,7 +152,7 @@ static int kgsl_pwrctrl_gpuclk_show(struct device *dev,
 {
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	return sprintf(buf, "%d\n",
+	return snprintf(buf, PAGE_SIZE, "%d\n",
 			pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq);
 }
 
@@ -242,6 +274,8 @@ static int kgsl_pwrctrl_scaling_governor_show(struct device *dev,
 }
 
 DEVICE_ATTR(gpuclk, 0644, kgsl_pwrctrl_gpuclk_show, kgsl_pwrctrl_gpuclk_store);
+DEVICE_ATTR(max_gpuclk, 0644, kgsl_pwrctrl_max_gpuclk_show,
+	kgsl_pwrctrl_max_gpuclk_store);
 DEVICE_ATTR(pwrnap, 0644, kgsl_pwrctrl_pwrnap_show, kgsl_pwrctrl_pwrnap_store);
 DEVICE_ATTR(idle_timer, 0644, kgsl_pwrctrl_idle_timer_show,
 	kgsl_pwrctrl_idle_timer_store);
@@ -250,6 +284,7 @@ DEVICE_ATTR(scaling_governor, 0644, kgsl_pwrctrl_scaling_governor_show,
 
 static const struct device_attribute *pwrctrl_attr_list[] = {
 	&dev_attr_gpuclk,
+	&dev_attr_max_gpuclk,
 	&dev_attr_pwrnap,
 	&dev_attr_idle_timer,
 	&dev_attr_scaling_governor,
