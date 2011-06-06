@@ -174,26 +174,20 @@ static const struct device_attribute *drv_attr_list[] = {
 	&dev_attr_mapped,
 	&dev_attr_mapped_max,
 	&dev_attr_histogram,
+	NULL
 };
 
 void
 kgsl_sharedmem_uninit_sysfs(void)
 {
-	int i;
-	for (i = 0; i < ARRAY_SIZE(drv_attr_list); i++)
-		device_remove_file(&kgsl_driver.virtdev, drv_attr_list[i]);
+	kgsl_remove_device_sysfs_files(&kgsl_driver.virtdev, drv_attr_list);
 }
 
 int
 kgsl_sharedmem_init_sysfs(void)
 {
-	int ret = 0, i;
-
-	for (i = 0; i < ARRAY_SIZE(drv_attr_list); i++)
-		ret |= device_create_file(&kgsl_driver.virtdev,
-			drv_attr_list[i]);
-
-	return ret;
+	return kgsl_create_device_sysfs_files(&kgsl_driver.virtdev,
+		drv_attr_list);
 }
 
 #ifdef CONFIG_OUTER_CACHE
