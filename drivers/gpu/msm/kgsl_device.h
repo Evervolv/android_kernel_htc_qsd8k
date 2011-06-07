@@ -35,6 +35,7 @@
 #include "kgsl_mmu.h"
 #include "kgsl_pwrctrl.h"
 #include "kgsl_log.h"
+#include "kgsl_pwrscale.h"
 
 #define KGSL_TIMEOUT_NONE       0
 #define KGSL_TIMEOUT_DEFAULT    0xFFFFFFFF
@@ -173,6 +174,8 @@ struct kgsl_device {
 	int mem_log;
 	int pwr_log;
 	struct wake_lock idle_wakelock;
+	struct kgsl_pwrscale pwrscale;
+	struct kobject pwrscale_kobj;
 };
 
 struct kgsl_context {

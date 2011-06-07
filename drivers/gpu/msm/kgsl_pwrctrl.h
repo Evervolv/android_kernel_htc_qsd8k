@@ -85,7 +85,8 @@ void kgsl_pre_hwaccess(struct kgsl_device *device);
 void kgsl_check_suspended(struct kgsl_device *device);
 int kgsl_pwrctrl_sleep(struct kgsl_device *device);
 void kgsl_pwrctrl_wake(struct kgsl_device *device);
-
+void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
+	unsigned int level);
 int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device);
 void kgsl_pwrctrl_uninit_sysfs(struct kgsl_device *device);
 

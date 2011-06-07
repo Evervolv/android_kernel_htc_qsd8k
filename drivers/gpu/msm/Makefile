@@ -3,7 +3,8 @@ ccflags-y := -Iinclude/drm
 msm_kgsl_core-y = \
 	kgsl.o \
 	kgsl_sharedmem.o \
-	kgsl_pwrctrl.o
+	kgsl_pwrctrl.o \
+	kgsl_pwrscale.o
 
 msm_kgsl_core-$(CONFIG_DEBUG_FS) += kgsl_debugfs.o
 msm_kgsl_core-$(CONFIG_MSM_KGSL_MMU) += kgsl_mmu.o
