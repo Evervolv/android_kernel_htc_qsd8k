@@ -1629,6 +1629,13 @@ adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 
 		KGSL_CTXT_INFO(device,
 			"drawctxt flags %08x\n", drawctxt->flags);
+		cmds[0] = pm4_nop_packet(1);
+		cmds[1] = KGSL_CONTEXT_TO_MEM_IDENTIFIER;
+		cmds[2] = pm4_type3_packet(PM4_MEM_WRITE, 2);
+		cmds[3] = device->memstore.gpuaddr +
+				KGSL_DEVICE_MEMSTORE_OFFSET(current_context);
+		cmds[4] = (unsigned int)adreno_dev->drawctxt_active;
+		adreno_ringbuffer_issuecmds(device, 0, cmds, 5);
 		kgsl_mmu_setstate(device, drawctxt->pagetable);
 
 #ifndef CONFIG_MSM_KGSL_CFF_DUMP_NO_CONTEXT_MEM_DUMP
@@ -1637,13 +1644,6 @@ adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 			REG_SHADOW_SIZE + CMD_BUFFER_SIZE + TEX_SHADOW_SIZE,
 			false);
 #endif
-		cmds[0] = pm4_nop_packet(1);
-		cmds[1] = KGSL_CONTEXT_TO_MEM_IDENTIFIER;
-		cmds[2] = pm4_type3_packet(PM4_MEM_WRITE, 2);
-		cmds[3] = device->memstore.gpuaddr +
-				KGSL_DEVICE_MEMSTORE_OFFSET(current_context);
-		cmds[4] = (unsigned int)adreno_dev->drawctxt_active;
-		adreno_ringbuffer_issuecmds(device, 0, cmds, 5);
 
 		/* restore gmem.
 		 *  (note: changes shader. shader must not already be restored.)
