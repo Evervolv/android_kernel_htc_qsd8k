@@ -763,17 +763,29 @@ int adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 				device, KGSL_TIMESTAMP_RETIRED);
 	KGSL_DRV_ERR(device, "GPU successfully executed till ts: %x\n",
 			retired_timestamp);
-	rb_rptr = (rb->rptr - 4) * sizeof(unsigned int);
+	/*
+	 * We need to go back in history by 4 dwords from the current location
+	 * of read pointer as 4 dwords are read to match the end of a command.
+	 * Also, take care of wrap around when moving back
+	 */
+	if (rb->rptr >= 4)
+		rb_rptr = (rb->rptr - 4) * sizeof(unsigned int);
+	else
+		rb_rptr = rb->buffer_desc.size -
+			((4 - rb->rptr) * sizeof(unsigned int));
 	/* Read the rb contents going backwards to locate end of last
 	 * sucessfully executed command */
 	while ((rb_rptr / sizeof(unsigned int)) != rb->wptr) {
 		kgsl_sharedmem_readl(&rb->buffer_desc, &value, rb_rptr);
 		if (value == retired_timestamp) {
-			rb_rptr += sizeof(unsigned int);
+			rb_rptr = adreno_ringbuffer_inc_wrapped(rb_rptr,
+							rb->buffer_desc.size);
 			kgsl_sharedmem_readl(&rb->buffer_desc, &val1, rb_rptr);
-			rb_rptr += sizeof(unsigned int);
+			rb_rptr = adreno_ringbuffer_inc_wrapped(rb_rptr,
+							rb->buffer_desc.size);
 			kgsl_sharedmem_readl(&rb->buffer_desc, &val2, rb_rptr);
-			rb_rptr += sizeof(unsigned int);
+			rb_rptr = adreno_ringbuffer_inc_wrapped(rb_rptr,
+							rb->buffer_desc.size);
 			kgsl_sharedmem_readl(&rb->buffer_desc, &val3, rb_rptr);
 			/* match the pattern found at the end of a command */
 			if ((val1 == 2 &&
@@ -783,20 +795,27 @@ int adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 				&& val2 == CACHE_FLUSH_TS &&
 				val3 == (rb->device->memstore.gpuaddr +
 				KGSL_DEVICE_MEMSTORE_OFFSET(eoptimestamp)))) {
-				rb_rptr += sizeof(unsigned int);
+				rb_rptr = adreno_ringbuffer_inc_wrapped(rb_rptr,
+							rb->buffer_desc.size);
 				KGSL_DRV_ERR(device,
 					"Found end of last executed "
 					"command at offset: %x\n",
 					rb_rptr / sizeof(unsigned int));
 				break;
 			} else {
-				rb_rptr -= (3 * sizeof(unsigned int));
+				if (rb_rptr < (3 * sizeof(unsigned int)))
+					rb_rptr = rb->buffer_desc.size -
+						(3 * sizeof(unsigned int))
+							+ rb_rptr;
+				else
+					rb_rptr -= (3 * sizeof(unsigned int));
 			}
 		}
 
-		rb_rptr -= sizeof(unsigned int);
-		if (rb_rptr < 0)
+		if (rb_rptr == 0)
 			rb_rptr = rb->buffer_desc.size - sizeof(unsigned int);
+		else
+			rb_rptr -= sizeof(unsigned int);
 	}
 
 	if ((rb_rptr / sizeof(unsigned int)) == rb->wptr) {
@@ -812,7 +831,8 @@ int adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 	 * itself */
 	kgsl_sharedmem_readl(&rb->buffer_desc, &val1, rb_rptr);
 	kgsl_sharedmem_readl(&rb->buffer_desc, &val2,
-				rb_rptr + sizeof(unsigned int));
+				adreno_ringbuffer_inc_wrapped(rb_rptr,
+							rb->buffer_desc.size));
 	if (val1 == pm4_nop_packet(1) && val2 == KGSL_CMD_IDENTIFIER) {
 		KGSL_DRV_ERR(device,
 			"GPU recovery from hang not possible because "
@@ -826,22 +846,22 @@ int adreno_ringbuffer_extract(struct adreno_ringbuffer *rb,
 		KGSL_DEVICE_MEMSTORE_OFFSET(current_context));
 	while ((rb_rptr / sizeof(unsigned int)) != rb->wptr) {
 		kgsl_sharedmem_readl(&rb->buffer_desc, &value, rb_rptr);
-		rb_rptr = (rb_rptr + sizeof(unsigned int)) %
-				rb->buffer_desc.size;
+		rb_rptr = adreno_ringbuffer_inc_wrapped(rb_rptr,
+						rb->buffer_desc.size);
 		/* check for context switch indicator */
 		if (value == KGSL_CONTEXT_TO_MEM_IDENTIFIER) {
 			kgsl_sharedmem_readl(&rb->buffer_desc, &value, rb_rptr);
-			rb_rptr = (rb_rptr + sizeof(unsigned int)) %
-					rb->buffer_desc.size;
+			rb_rptr = adreno_ringbuffer_inc_wrapped(rb_rptr,
+							rb->buffer_desc.size);
 			BUG_ON(value != pm4_type3_packet(PM4_MEM_WRITE, 2));
 			kgsl_sharedmem_readl(&rb->buffer_desc, &val1, rb_rptr);
-			rb_rptr = (rb_rptr + sizeof(unsigned int)) %
-					rb->buffer_desc.size;
+			rb_rptr = adreno_ringbuffer_inc_wrapped(rb_rptr,
+							rb->buffer_desc.size);
 			BUG_ON(val1 != (device->memstore.gpuaddr +
 				KGSL_DEVICE_MEMSTORE_OFFSET(current_context)));
 			kgsl_sharedmem_readl(&rb->buffer_desc, &value, rb_rptr);
-			rb_rptr = (rb_rptr + sizeof(unsigned int)) %
-					rb->buffer_desc.size;
+			rb_rptr = adreno_ringbuffer_inc_wrapped(rb_rptr,
+							rb->buffer_desc.size);
 			BUG_ON((copy_rb_contents == 0) &&
 				(value == cur_context));
 			/* if context switches to a context that did not cause
