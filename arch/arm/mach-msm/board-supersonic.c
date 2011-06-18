@@ -485,7 +485,7 @@ XB : GPIO33 = 0 -> USB
 */
 
 
-static int __init board_serialno_setup(char *serialno)
+static int __init supersonic_board_serialno_setup(char *serialno)
 {
 #ifdef CONFIG_USB_ANDROID_RNDIS
 	int i;
@@ -502,9 +502,10 @@ static int __init board_serialno_setup(char *serialno)
 #endif
 
 	android_usb_pdata.serial_number = serialno;
+	msm_hsusb_pdata.serial_number = serialno;
 	return 1;
 }
-__setup("androidboot.serialno=", board_serialno_setup);
+__setup("androidboot.serialno=", supersonic_board_serialno_setup);
 
 
 static struct platform_device supersonic_rfkill = {
@@ -1119,21 +1120,29 @@ static struct i2c_board_info i2c_devices[] = {
 	},
 };
 
-#ifdef CONFIG_ARCH_QSD8X50
-static char bdaddress[20];
+#define ATAG_BDADDR 0x43294329
+#define ATAG_BDADDR_SIZE 4
+#define BDADDR_STR_SIZE 18
 
-static void bt_export_bd_address(void)
- {
-	unsigned char cTemp[6];
+static char bdaddr[BDADDR_STR_SIZE];
 
-	memcpy(cTemp, get_bt_bd_ram(), 6);
-	sprintf(bdaddress, "%02x:%02x:%02x:%02x:%02x:%02x", cTemp[0], cTemp[1], cTemp[2], cTemp[3], cTemp[4], cTemp[5]);
-	printk(KERN_INFO "YoYo--BD_ADDRESS=%s\n", bdaddress);
+module_param_string(bdaddr, bdaddr, sizeof(bdaddr), 0400);
+MODULE_PARM_DESC(bdaddr, "bluetooth address");
+
+static int __init parse_tag_bdaddr(const struct tag *tag)
+{
+        unsigned char *b = (unsigned char *)&tag->u;
+
+        if (tag->hdr.size != ATAG_BDADDR_SIZE)
+                return -EINVAL;
+
+        snprintf(bdaddr, BDADDR_STR_SIZE, "%02X:%02X:%02X:%02X:%02X:%02X",
+                         b[0], b[1], b[2], b[3], b[4], b[5]);
+
+        return 0;
 }
 
-module_param_string(bdaddress, bdaddress, sizeof(bdaddress), S_IWUSR | S_IRUGO);
-MODULE_PARM_DESC(bdaddress, "BT MAC ADDRESS");
-#endif
+__tagtable(ATAG_BDADDR, parse_tag_bdaddr);
 
 static uint32_t camera_off_gpio_table[] = {
 	/* CAMERA SUSPEND*/
@@ -1559,6 +1568,8 @@ static void __init supersonic_init(void)
 
 	msm_hw_reset_hook = supersonic_reset;
 
+	supersonic_board_serialno_setup(board_serialno());
+
 	OJ_BMA_power();
 
 	msm_acpu_clock_init(&supersonic_clock_data);
@@ -1566,10 +1577,6 @@ static void __init supersonic_init(void)
 #if defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	msm_serial_debug_init(MSM_UART1_PHYS, INT_UART1,
 				  &msm_device_uart1.dev, 1, MSM_GPIO_TO_INT(SUPERSONIC_GPIO_UART1_RX));
-#endif
-
-#ifdef CONFIG_ARCH_QSD8X50
-	bt_export_bd_address();
 #endif
 
 	/* set the gpu power rail to manual mode so clk en/dis will not
