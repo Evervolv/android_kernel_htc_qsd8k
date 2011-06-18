@@ -944,7 +944,7 @@ static int __init parse_tag_bdaddr(const struct tag *tag)
 
 __tagtable(ATAG_BDADDR, parse_tag_bdaddr);
 
-static int __init board_serialno_setup(char *serialno)
+static int __init mahimahi_board_serialno_setup(char *serialno)
 {
 #ifdef CONFIG_USB_ANDROID_RNDIS
 	int i;
@@ -961,9 +961,10 @@ static int __init board_serialno_setup(char *serialno)
 #endif
 
 	android_usb_pdata.serial_number = serialno;
+	msm_hsusb_pdata.serial_number = serialno;
 	return 1;
 }
-__setup("androidboot.serialno=", board_serialno_setup);
+__setup("androidboot.serialno=", mahimahi_board_serialno_setup);
 
 static struct msm_acpu_clock_platform_data mahimahi_clock_data = {
 	.acpu_switch_time_us	= 20,
@@ -1060,6 +1061,8 @@ static void __init mahimahi_init(void)
 					ARRAY_SIZE(smd_cdma_default_channels));
 
 	msm_hw_reset_hook = mahimahi_reset;
+
+	mahimahi_board_serialno_setup(board_serialno());
 
 	if (is_cdma_version(system_rev))
 		msm_acpu_clock_init(&mahimahi_cdma_clock_data);
