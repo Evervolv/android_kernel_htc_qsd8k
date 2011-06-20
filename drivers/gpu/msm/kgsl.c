@@ -590,7 +590,7 @@ static int kgsl_release(struct inode *inodep, struct file *filep)
 
 	kgsl_put_process_private(device, private);
 
-	pm_runtime_put(&device->pdev->dev);
+	pm_runtime_put(device->parentdev);
 	return result;
 }
 
@@ -600,7 +600,6 @@ static int kgsl_open(struct inode *inodep, struct file *filep)
 	struct kgsl_device_private *dev_priv;
 	struct kgsl_device *device;
 	unsigned int minor = iminor(inodep);
-	struct device *dev;
 
 	device = kgsl_get_minor(minor);
 	BUG_ON(device == NULL);
@@ -610,9 +609,7 @@ static int kgsl_open(struct inode *inodep, struct file *filep)
 		return -EBUSY;
 	}
 
-	dev = &device->pdev->dev;
-
-	result = pm_runtime_get_sync(dev);
+	result = pm_runtime_get_sync(device->parentdev);
 	if (result < 0) {
 		KGSL_DRV_ERR(device,
 			"Runtime PM: Unable to wake up the device, rc = %d\n",
@@ -668,7 +665,7 @@ err_freedevpriv:
 	filep->private_data = NULL;
 	kfree(dev_priv);
 err_pmruntime:
-	pm_runtime_put(&device->pdev->dev);
+	pm_runtime_put(device->parentdev);
 	return result;
 }
 
@@ -1826,7 +1823,7 @@ kgsl_register_device(struct kgsl_device *device)
 	/* Create the device */
 	dev = MKDEV(MAJOR(kgsl_driver.major), minor);
 	device->dev = device_create(kgsl_driver.class,
-				    &device->pdev->dev,
+				    device->parentdev,
 				    dev, device,
 				    device->name);
 
@@ -1836,7 +1833,7 @@ kgsl_register_device(struct kgsl_device *device)
 		goto err_devlist;
 	}
 
-	dev_set_drvdata(&device->pdev->dev, device);
+	dev_set_drvdata(device->parentdev, device);
 
 	/* Generic device initialization */
 	atomic_inc(&kgsl_driver.device_count);
@@ -1904,9 +1901,10 @@ int kgsl_device_platform_probe(struct kgsl_device *device,
 	int status = -EINVAL;
 	struct kgsl_memregion *regspace = NULL;
 	struct resource *res;
-	struct platform_device *pdev = device->pdev;
+	struct platform_device *pdev =
+		container_of(device->parentdev, struct platform_device, dev);
 
-	pm_runtime_enable(&pdev->dev);
+	pm_runtime_enable(device->parentdev);
 
 	status = kgsl_pwrctrl_init(device);
 	if (status)
@@ -1993,7 +1991,7 @@ void kgsl_device_platform_remove(struct kgsl_device *device)
 	}
 	kgsl_pwrctrl_close(device);
 
-	pm_runtime_disable(&device->pdev->dev);
+	pm_runtime_disable(device->parentdev);
 }
 EXPORT_SYMBOL(kgsl_device_platform_remove);
 

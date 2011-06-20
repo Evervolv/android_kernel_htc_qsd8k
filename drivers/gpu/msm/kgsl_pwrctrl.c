@@ -450,7 +450,8 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 {
 	int i, result = 0;
 	struct clk *clk;
-	struct platform_device *pdev = device->pdev;
+	struct platform_device *pdev =
+		container_of(device->parentdev, struct platform_device, dev);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct kgsl_device_platform_data *pdata_dev = pdev->dev.platform_data;
 	struct kgsl_device_pwr_data *pdata_pwr = &pdata_dev->pwr_data;

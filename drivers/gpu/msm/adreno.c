@@ -442,7 +442,7 @@ adreno_probe(struct platform_device *pdev)
 
 	device = (struct kgsl_device *)pdev->id_entry->driver_data;
 	adreno_dev = ADRENO_DEVICE(device);
-	device->pdev = pdev;
+	device->parentdev = &pdev->dev;
 
 	init_completion(&device->recovery_gate);
 
@@ -464,7 +464,7 @@ adreno_probe(struct platform_device *pdev)
 error_close_rb:
 	adreno_ringbuffer_close(&adreno_dev->ringbuffer);
 error:
-	device->pdev = NULL;
+	device->parentdev = NULL;
 	return status;
 }
 
