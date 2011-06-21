@@ -97,7 +97,6 @@ static struct adreno_device device_3d0 = {
 			},
 		},
 		.pwrctrl = {
-			.pwr_rail = PWR_RAIL_GRP_CLK,
 			.regulator_name = "fs_gfx3d",
 			.irq_name = KGSL_3D0_IRQ,
 			.src_clk_name = "grp_src_clk",
@@ -491,13 +490,10 @@ static int adreno_start(struct kgsl_device *device, unsigned int init_ram)
 
 	device->state = KGSL_STATE_INIT;
 	device->requested_state = KGSL_STATE_NONE;
-	/* Order pwrrail/clk sequence based upon platform. */
-	if (device->pwrctrl.pwrrail_first)
-		kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_ON);
+	/* Enable the power rail before the clocks. */
+	kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_ON);
 	kgsl_pwrctrl_clk(device, KGSL_PWRFLAGS_CLK_ON);
 	kgsl_pwrctrl_axi(device, KGSL_PWRFLAGS_AXI_ON);
-	if (!device->pwrctrl.pwrrail_first)
-		kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_ON);
 
 	if (kgsl_mmu_start(device))
 		goto error_clk_off;
@@ -606,13 +602,11 @@ static int adreno_stop(struct kgsl_device *device)
 
 	kgsl_mmu_stop(device);
 
+	/* Disable the clocks before the power rail. */
 	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_IRQ_OFF);
-	if (!device->pwrctrl.pwrrail_first)
-		kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_OFF);
 	kgsl_pwrctrl_axi(device, KGSL_PWRFLAGS_AXI_OFF);
 	kgsl_pwrctrl_clk(device, KGSL_PWRFLAGS_CLK_OFF);
-	if (device->pwrctrl.pwrrail_first)
-		kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_OFF);
+	kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_OFF);
 
 	return 0;
 }

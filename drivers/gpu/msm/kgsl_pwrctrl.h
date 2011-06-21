@@ -29,8 +29,6 @@
 #ifndef __KGSL_PWRCTRL_H
 #define __KGSL_PWRCTRL_H
 
-#include <mach/internal_power_rail.h>
-
 /*****************************************************************************
 ** power flags
 *****************************************************************************/
@@ -51,7 +49,6 @@ struct platform_device;
 struct kgsl_pwrctrl {
 	int interrupt_num;
 	int have_irq;
-	unsigned int pwr_rail;
 	struct clk *ebi1_clk;
 	struct clk *grp_clks[KGSL_MAX_CLKS];
 	unsigned int power_flags;
@@ -67,7 +64,6 @@ struct kgsl_pwrctrl {
 	const char *regulator_name;
 	const char *irq_name;
 	const char *src_clk_name;
-	bool pwrrail_first;
 	s64 time;
 	unsigned int no_switch_cnt;
 	unsigned int idle_pass;

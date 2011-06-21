@@ -362,11 +362,6 @@ void kgsl_pwrctrl_pwrrail(struct kgsl_device *device, unsigned int pwrflag)
 		if (pwr->power_flags & KGSL_PWRFLAGS_POWER_ON) {
 			KGSL_PWR_INFO(device,
 				"power off, device %d\n", device->id);
-			if (internal_pwr_rail_ctl(pwr->pwr_rail, false)) {
-				KGSL_DRV_ERR(device,
-					"call internal_pwr_rail_ctl failed\n");
-				return;
-			}
 			if (pwr->gpu_reg)
 				regulator_disable(pwr->gpu_reg);
 			pwr->power_flags &=
@@ -379,12 +374,6 @@ void kgsl_pwrctrl_pwrrail(struct kgsl_device *device, unsigned int pwrflag)
 		if (pwr->power_flags & KGSL_PWRFLAGS_POWER_OFF) {
 			KGSL_PWR_INFO(device,
 				"power on, device %d\n", device->id);
-			if (internal_pwr_rail_ctl(pwr->pwr_rail, true)) {
-				KGSL_PWR_ERR(device,
-					"call internal_pwr_rail_ctl failed\n");
-				return;
-			}
-
 			if (pwr->gpu_reg)
 				regulator_enable(pwr->gpu_reg);
 			pwr->power_flags &=
@@ -485,19 +474,14 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 	pwr->gpu_reg = regulator_get(NULL, pwr->regulator_name);
 	if (IS_ERR(pwr->gpu_reg))
 		pwr->gpu_reg = NULL;
-	if (internal_pwr_rail_mode(device->pwrctrl.pwr_rail,
-						PWR_RAIL_CTL_MANUAL)) {
-		KGSL_PWR_ERR(device, "internal_pwr_rail_mode failed\n");
-		result = -EINVAL;
-		goto done;
-	}
 
 	pwr->power_flags = KGSL_PWRFLAGS_CLK_OFF |
 			KGSL_PWRFLAGS_AXI_OFF | KGSL_PWRFLAGS_POWER_OFF |
 			KGSL_PWRFLAGS_IRQ_OFF;
 	pwr->nap_allowed = pdata_pwr->nap_allowed;
-	pwr->pwrrail_first = pdata_pwr->pwrrail_first;
+/* drewis: below was removed at some point before i cherry-picked the below commit */
 	pwr->idle_pass = pdata_pwr->idle_pass;
+/*dc14311... msm: kgsl: Replace internal_power_rail API calls with regulator APIs*/
 	pwr->interval_timeout = pdata_pwr->idle_timeout;
 	pwr->ebi1_clk = clk_get(NULL, "ebi1_kgsl_clk");
 	if (IS_ERR(pwr->ebi1_clk))

@@ -157,7 +157,6 @@ static struct z180_device device_2d0 = {
 			},
 		},
 		.pwrctrl = {
-			.pwr_rail = PWR_RAIL_GRP_2D_CLK,
 			.regulator_name = "fs_gfx2d0",
 			.irq_name = KGSL_2D0_IRQ,
 		},
@@ -197,7 +196,6 @@ static struct z180_device device_2d1 = {
 			},
 		},
 		.pwrctrl = {
-			.pwr_rail = PWR_RAIL_GRP_2D_CLK,
 			.regulator_name = "fs_gfx2d1",
 			.irq_name = KGSL_2D1_IRQ,
 		},
@@ -604,13 +602,10 @@ static int z180_start(struct kgsl_device *device, unsigned int init_ram)
 	device->requested_state = KGSL_STATE_NONE;
 	KGSL_PWR_WARN(device, "state -> INIT, device %d\n", device->id);
 
-	/* Order pwrrail/clk sequence based upon platform. */
-	if (device->pwrctrl.pwrrail_first)
-		kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_ON);
+	/* Enable the power rail before the clocks. */
+	kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_ON);
 	kgsl_pwrctrl_clk(device, KGSL_PWRFLAGS_CLK_ON);
 	kgsl_pwrctrl_axi(device, KGSL_PWRFLAGS_AXI_ON);
-	if (!device->pwrctrl.pwrrail_first)
-		kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_ON);
 
 	/* Set up MH arbiter.  MH offsets are considered to be dword
 	 * based, therefore no down shift. */
@@ -649,13 +644,11 @@ static int z180_stop(struct kgsl_device *device)
 
 	kgsl_mmu_stop(device);
 
+	/* Disable the clocks before the power rail. */
 	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_IRQ_OFF);
-	if (!device->pwrctrl.pwrrail_first)
-		kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_OFF);
 	kgsl_pwrctrl_axi(device, KGSL_PWRFLAGS_AXI_OFF);
 	kgsl_pwrctrl_clk(device, KGSL_PWRFLAGS_CLK_OFF);
-	if (device->pwrctrl.pwrrail_first)
-		kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_OFF);
+	kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_OFF);
 
 	return 0;
 }
