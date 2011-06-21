@@ -148,7 +148,6 @@ struct kgsl_version {
 };
 
 #ifdef __KERNEL__
-#include <mach/msm_bus.h>
 
 #define KGSL_3D0_REG_MEMORY	"kgsl_3d0_reg_memory"
 #define KGSL_3D0_IRQ		"kgsl_3d0_irq"

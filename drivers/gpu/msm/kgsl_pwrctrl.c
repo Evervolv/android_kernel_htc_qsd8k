@@ -12,6 +12,7 @@
  */
 #include <linux/interrupt.h>
 #include <mach/msm_iomap.h>
+#include <mach/msm_bus.h>
 
 #include "kgsl.h"
 
