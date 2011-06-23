@@ -113,6 +113,7 @@ static struct adreno_device device_3d0 = {
 	},
 	.pfp_fw = NULL,
 	.pm4_fw = NULL,
+	.mharb  = ADRENO_CFG_MHARB,
 };
 
 static void __devinit adreno_getfunctable(struct kgsl_functable *ftbl);
@@ -528,7 +529,7 @@ static int adreno_start(struct kgsl_device *device, unsigned int init_ram)
 	adreno_regwrite(device, REG_RBBM_CNTL, 0x00004442);
 
 	adreno_regwrite(device, REG_MH_ARBITER_CONFIG,
-				ADRENO_CFG_MHARB);
+				adreno_dev->mharb);
 
 	if (device->chip_id != KGSL_CHIPID_LEIA_REV470) {
 		adreno_regwrite(device,

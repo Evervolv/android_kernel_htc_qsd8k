@@ -57,6 +57,7 @@ struct adreno_device {
 	unsigned int *pm4_fw;
 	size_t pm4_fw_size;
 	struct adreno_ringbuffer ringbuffer;
+	unsigned int mharb;
 };
 
 int adreno_idle(struct kgsl_device *device, unsigned int timeout);
