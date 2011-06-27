@@ -13,6 +13,7 @@
 #include <linux/firmware.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
+#include <linux/log2.h>
 
 #include "kgsl.h"
 
@@ -51,19 +52,6 @@
 #define A200_PM4_FW "yamato_pm4.fw"
 #define A220_PFP_470_FW "leia_pfp_470.fw"
 #define A220_PM4_470_FW "leia_pm4_470.fw"
-
-/*  ringbuffer size log2 quadwords equivalent */
-inline unsigned int adreno_ringbuffer_sizelog2quadwords(unsigned int sizedwords)
-{
-	unsigned int sizelog2quadwords = 0;
-	int i = sizedwords >> 1;
-
-	while (i >>= 1)
-		sizelog2quadwords++;
-
-	return sizelog2quadwords;
-}
-
 
 /* functions */
 void kgsl_cp_intrcallback(struct kgsl_device *device)
@@ -166,8 +154,6 @@ static void adreno_ringbuffer_submit(struct adreno_ringbuffer *rb)
 	mb();
 
 	adreno_regwrite(rb->device, REG_CP_RB_WPTR, rb->wptr);
-
-	rb->flags |= KGSL_FLAGS_ACTIVE;
 }
 
 static int
@@ -393,11 +379,20 @@ int adreno_ringbuffer_start(struct adreno_ringbuffer *rb, unsigned int init_ram)
 	/*setup REG_CP_RB_CNTL */
 	adreno_regread(device, REG_CP_RB_CNTL, &rb_cntl);
 	cp_rb_cntl.val = rb_cntl;
-	/* size of ringbuffer */
-	cp_rb_cntl.f.rb_bufsz =
-		adreno_ringbuffer_sizelog2quadwords(rb->sizedwords);
-	/* quadwords to read before updating mem RPTR */
-	cp_rb_cntl.f.rb_blksz = rb->blksizequadwords;
+
+	/*
+	 * The size of the ringbuffer in the hardware is the log2
+	 * representation of the size in quadwords (sizedwords / 2)
+	 */
+	cp_rb_cntl.f.rb_bufsz = ilog2(rb->sizedwords >> 1);
+
+	/*
+	 * Specify the quadwords to read before updating mem RPTR.
+	 * Like above, pass the log2 representation of the blocksize
+	 * in quadwords.
+	*/
+	cp_rb_cntl.f.rb_blksz = ilog2(KGSL_RB_BLKSIZE >> 3);
+
 	cp_rb_cntl.f.rb_poll_en = GSL_RB_CNTL_POLL_EN; /* WPTR polling */
 	/* mem RPTR writebacks */
 	cp_rb_cntl.f.rb_no_update =  GSL_RB_CNTL_NO_UPDATE;
@@ -520,8 +515,12 @@ int adreno_ringbuffer_init(struct kgsl_device *device)
 	struct adreno_ringbuffer *rb = &adreno_dev->ringbuffer;
 
 	rb->device = device;
-	rb->sizedwords = (2 << kgsl_cfg_rb_sizelog2quadwords);
-	rb->blksizequadwords = kgsl_cfg_rb_blksizequadwords;
+	/*
+	 * It is silly to convert this to words and then back to bytes
+	 * immediately below, but most of the rest of the code deals
+	 * in words, so we might as well only do the math once
+	 */
+	rb->sizedwords = KGSL_RB_SIZE >> 2;
 
 	/* allocate memory for ringbuffer */
 	status = kgsl_allocate_contig(&rb->buffer_desc, (rb->sizedwords << 2));
@@ -552,16 +551,12 @@ int adreno_ringbuffer_close(struct adreno_ringbuffer *rb)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(rb->device);
 
-	if (rb->buffer_desc.hostptr)
-		kgsl_sharedmem_free(&rb->buffer_desc);
+	kgsl_sharedmem_free(&rb->buffer_desc);
+	kgsl_sharedmem_free(&rb->memptrs_desc);
 
-	if (rb->memptrs_desc.hostptr)
-		kgsl_sharedmem_free(&rb->memptrs_desc);
+	kfree(adreno_dev->pfp_fw);
+	kfree(adreno_dev->pm4_fw);
 
-	if (adreno_dev->pfp_fw != NULL)
-		kfree(adreno_dev->pfp_fw);
-	if (adreno_dev->pm4_fw != NULL)
-		kfree(adreno_dev->pm4_fw);
 	adreno_dev->pfp_fw = NULL;
 	adreno_dev->pm4_fw = NULL;
 
