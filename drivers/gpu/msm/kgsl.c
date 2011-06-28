@@ -1161,7 +1161,7 @@ error:
 static inline int _check_region(unsigned long start, unsigned long size,
 				uint64_t len)
 {
-	uint64_t end = start + size;
+	uint64_t end = ((uint64_t) start) + size;
 	return (end > len);
 }
 
@@ -1215,6 +1215,11 @@ static int kgsl_setup_phys_file(struct kgsl_mem_entry *entry,
 	if (ret)
 		return ret;
 
+	if (offset >= len) {
+		ret = -EINVAL;
+		goto err;
+	}
+
 	if (size == 0)
 		size = len;
 
@@ -1227,8 +1232,9 @@ static int kgsl_setup_phys_file(struct kgsl_mem_entry *entry,
 		KGSL_CORE_ERR("Offset (%ld) + size (%d) is larger"
 			      "than pmem region length %ld\n",
 			      offset & PAGE_MASK, size, len);
-		put_pmem_file(filep);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err;
+
 	}
 
 	entry->file_ptr = filep;
@@ -1240,6 +1246,9 @@ static int kgsl_setup_phys_file(struct kgsl_mem_entry *entry,
 	entry->memdesc.ops = &kgsl_contig_ops;
 
 	return 0;
+err:
+	put_pmem_file(filep);
+	return ret;
 }
 #else
 static int kgsl_setup_phys_file(struct kgsl_mem_entry *entry,
@@ -1270,6 +1279,9 @@ static int kgsl_setup_hostptr(struct kgsl_mem_entry *entry,
 
 	/* We don't necessarily start at vma->vm_start */
 	len = vma->vm_end - (unsigned long) hostptr;
+
+	if (offset >= len)
+		return -EINVAL;
 
 	if (!KGSL_IS_PAGE_ALIGNED((unsigned long) hostptr) ||
 	    !KGSL_IS_PAGE_ALIGNED(len)) {
