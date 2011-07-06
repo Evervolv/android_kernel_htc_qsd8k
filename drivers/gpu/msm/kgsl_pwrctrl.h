@@ -32,14 +32,13 @@
 /*****************************************************************************
 ** power flags
 *****************************************************************************/
-#define KGSL_PWRFLAGS_POWER_OFF		0x00000001
-#define KGSL_PWRFLAGS_POWER_ON		0x00000002
-#define KGSL_PWRFLAGS_CLK_ON		0x00000004
-#define KGSL_PWRFLAGS_CLK_OFF		0x00000008
-#define KGSL_PWRFLAGS_AXI_ON		0x00000010
-#define KGSL_PWRFLAGS_AXI_OFF		0x00000020
-#define KGSL_PWRFLAGS_IRQ_ON		0x00000040
-#define KGSL_PWRFLAGS_IRQ_OFF		0x00000080
+#define KGSL_PWRFLAGS_POWER_ON 0
+#define KGSL_PWRFLAGS_CLK_ON   1
+#define KGSL_PWRFLAGS_AXI_ON   2
+#define KGSL_PWRFLAGS_IRQ_ON   3
+
+#define KGSL_PWRFLAGS_ON   1
+#define KGSL_PWRFLAGS_OFF  0
 
 #define KGSL_DEFAULT_PWRLEVEL 1
 #define KGSL_MAX_CLKS 5
@@ -51,7 +50,7 @@ struct kgsl_pwrctrl {
 	int have_irq;
 	struct clk *ebi1_clk;
 	struct clk *grp_clks[KGSL_MAX_CLKS];
-	unsigned int power_flags;
+	unsigned long power_flags;
 	struct kgsl_pwrlevel pwrlevels[KGSL_MAX_PWRLEVELS];
 	unsigned int active_pwrlevel;
 	int thermal_pwrlevel;
@@ -69,10 +68,10 @@ struct kgsl_pwrctrl {
 	unsigned int idle_pass;
 };
 
-void kgsl_pwrctrl_clk(struct kgsl_device *device, unsigned int pwrflag);
-void kgsl_pwrctrl_axi(struct kgsl_device *device, unsigned int pwrflag);
-void kgsl_pwrctrl_pwrrail(struct kgsl_device *device, unsigned int pwrflag);
-void kgsl_pwrctrl_irq(struct kgsl_device *device, unsigned int pwrflag);
+void kgsl_pwrctrl_clk(struct kgsl_device *device, int state);
+void kgsl_pwrctrl_axi(struct kgsl_device *device, int state);
+void kgsl_pwrctrl_pwrrail(struct kgsl_device *device, int state);
+void kgsl_pwrctrl_irq(struct kgsl_device *device, int state);
 int kgsl_pwrctrl_init(struct kgsl_device *device);
 void kgsl_pwrctrl_close(struct kgsl_device *device);
 void kgsl_timer(unsigned long data);

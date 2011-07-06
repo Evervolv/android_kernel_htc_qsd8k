@@ -641,7 +641,7 @@ static int z180_stop(struct kgsl_device *device)
 	kgsl_mmu_stop(device);
 
 	/* Disable the clocks before the power rail. */
-	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_IRQ_OFF);
+	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_OFF);
 
 	kgsl_pwrctrl_disable(device);
 

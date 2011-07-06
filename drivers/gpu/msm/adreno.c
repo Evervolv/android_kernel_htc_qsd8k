@@ -570,7 +570,7 @@ static int adreno_start(struct kgsl_device *device, unsigned int init_ram)
 		adreno_dev->gmemspace.sizebytes = SZ_256K;
 	adreno_gmeminit(adreno_dev);
 
-	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_IRQ_ON);
+	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_ON);
 
 	status = adreno_ringbuffer_start(&adreno_dev->ringbuffer, init_ram);
 	if (status != 0)
@@ -580,7 +580,7 @@ static int adreno_start(struct kgsl_device *device, unsigned int init_ram)
 	return status;
 
 error_irq_off:
-	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_IRQ_OFF);
+	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_OFF);
 error_clk_off:
 	kgsl_pwrctrl_disable(device);
 	kgsl_mmu_stop(device);
@@ -603,7 +603,7 @@ static int adreno_stop(struct kgsl_device *device)
 	kgsl_mmu_stop(device);
 
 	/* Disable the clocks before the power rail. */
-	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_IRQ_OFF);
+	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_OFF);
 
 	/* Power down the device */
 	kgsl_pwrctrl_disable(device);

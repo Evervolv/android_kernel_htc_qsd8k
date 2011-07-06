@@ -487,7 +487,7 @@ static int adreno_dump(struct kgsl_device *device)
 
 	mb();
 
-	KGSL_LOG_DUMP(device, "POWER: FLAGS = %08X | ACTIVE POWERLEVEL = %08X",
+	KGSL_LOG_DUMP(device, "POWER: FLAGS = %08lX | ACTIVE POWERLEVEL = %08X",
 			pwr->power_flags, pwr->active_pwrlevel);
 
 	KGSL_LOG_DUMP(device, "POWER: INTERVAL TIMEOUT = %08X ",
@@ -824,7 +824,7 @@ int adreno_postmortem_dump(struct kgsl_device *device, int manual)
 	kgsl_pwrctrl_wake(device);
 
 	/* Disable the irq */
-	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_IRQ_OFF);
+	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_OFF);
 
 	/* If this is not a manual trigger, then set up the
 	   state to try to recover */
@@ -852,7 +852,7 @@ int adreno_postmortem_dump(struct kgsl_device *device, int manual)
 	   are until recovery kicks in. */
 
 	if (manual) {
-		kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_IRQ_ON);
+		kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_ON);
 
 		/* try to go into a sleep mode until the next event */
 		device->requested_state = KGSL_STATE_SLEEP;
