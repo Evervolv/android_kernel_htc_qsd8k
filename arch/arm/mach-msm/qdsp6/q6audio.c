@@ -394,6 +394,7 @@ static int audio_out_open(struct audio_client *ac, uint32_t bufsz,
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
 
+#if 0 
 static int audio_in_open(struct audio_client *ac, uint32_t bufsz,
 			 uint32_t rate, uint32_t channels)
 {
@@ -416,6 +417,34 @@ static int audio_in_open(struct audio_client *ac, uint32_t bufsz,
 	TRACE("%p: open in\n", ac);
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
+#else
+static int audio_in_open(struct audio_client *ac, uint32_t bufsz,
+                         uint32_t flags, uint32_t rate, uint32_t channels)
+{
+        struct adsp_open_command rpc;
+
+        memset(&rpc, 0, sizeof(rpc));
+
+        rpc.format.standard.format = ADSP_AUDIO_FORMAT_PCM;
+        rpc.format.standard.channels = channels;
+        rpc.format.standard.bits_per_sample = 16;
+        rpc.format.standard.sampling_rate = rate;
+        rpc.format.standard.is_signed = 1;
+        rpc.format.standard.is_interleaved = 1;
+
+        rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_READ;
+        rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
+        if (flags == AUDIO_FLAG_READ)
+                rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
+        else
+                rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_MIXED_RECORD;
+
+        rpc.buf_max_size = bufsz;
+
+        TRACE("%p: open in\n", ac);
+        return audio_ioctl(ac, &rpc, sizeof(rpc));
+}
+#endif
 
 static int audio_mp3_open(struct audio_client *ac, uint32_t bufsz,
 			  uint32_t rate, uint32_t channels)
@@ -1419,6 +1448,31 @@ done:
 	return 0;
 }
 
+static void adie_rx_path_enable(uint32_t acdb_id)
+{
+        if (audio_rx_path_id) {
+                adie_enable();
+                adie_set_path(adie, audio_rx_path_id, ADIE_PATH_RX);
+                adie_set_path_freq_plan(adie, ADIE_PATH_RX, 48000);
+
+                adie_proceed_to_stage(adie, ADIE_PATH_RX,
+                                ADIE_STAGE_DIGITAL_READY);
+                adie_proceed_to_stage(adie, ADIE_PATH_RX,
+                                ADIE_STAGE_DIGITAL_ANALOG_READY);
+        }
+}
+
+static void q6_rx_path_enable(int reconf, uint32_t acdb_id)
+{
+        audio_update_acdb(audio_rx_device_id, acdb_id);
+        if (!reconf)
+                qdsp6_devchg_notify(ac_control, ADSP_AUDIO_RX_DEVICE, audio_rx_device_id);
+        qdsp6_standby(ac_control);
+        qdsp6_start(ac_control);
+}
+
+
+
 struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 				      uint32_t channels, uint32_t flags, uint32_t acdb_id)
 {
@@ -1435,7 +1489,7 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 	ac->flags = flags;
 
 	mutex_lock(&audio_path_lock);
-
+#if  0
 	if (ac->flags & AUDIO_FLAG_WRITE) {
 		audio_rx_path_refcount++;
 		if (audio_rx_path_refcount == 1) {
@@ -1480,7 +1534,47 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 			audio_rx_analog_enable(1);
 		}
 	}
+#else
+        if (ac->flags & AUDIO_FLAG_WRITE) {
+                audio_rx_path_refcount++;
+                if (audio_rx_path_refcount == 1) {
+                        _audio_rx_clk_enable();
+                        q6_rx_path_enable(0, acdb_id);
+                        adie_rx_path_enable(acdb_id);
+                }
+        } else {
+                /* TODO: consider concurrency with voice call */
+                if (audio_tx_path_refcount > 0) {
+                        tx_clk_freq = 8000;
+                } else {
+                        tx_clk_freq = rate;
+                }
+                audio_tx_path_refcount++;
+                if (audio_tx_path_refcount == 1) {
+                        tx_clk_freq = rate;
+                        _audio_tx_clk_enable();
+                        _audio_tx_path_enable(0, acdb_id);
+                }
+        }
 
+        for (retry = 5;;retry--) {
+                if (ac->flags & AUDIO_FLAG_WRITE)
+                        rc = audio_out_open(ac, bufsz, rate, channels);
+                else
+                        rc = audio_in_open(ac, bufsz, flags, rate, channels);
+                if (rc == 0)
+                        break;
+                if (retry == 0)
+                        BUG();
+                pr_err("q6audio: open pcm error %d, retrying\n", rc);
+                msleep(1);
+        }
+
+        if (ac->flags & AUDIO_FLAG_WRITE) {
+                if (audio_rx_path_refcount == 1)
+                        audio_rx_analog_enable(1);
+        }
+#endif
 	mutex_unlock(&audio_path_lock);
 
 	for (retry = 5;;retry--) {
