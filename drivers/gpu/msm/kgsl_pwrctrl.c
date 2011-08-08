@@ -88,7 +88,11 @@ static int __gpuclk_store(int max, struct device *dev,
 {	int ret, i, delta = 5000000;
 	unsigned long val;
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_pwrctrl *pwr;
+
+	if (device == NULL)
+		return 0;
+	pwr = &device->pwrctrl;
 
 	ret = sscanf(buf, "%ld", &val);
 	if (ret != 1)
@@ -134,7 +138,10 @@ static int kgsl_pwrctrl_max_gpuclk_show(struct device *dev,
 					char *buf)
 {
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_pwrctrl *pwr;
+	if (device == NULL)
+		return 0;
+	pwr = &device->pwrctrl;
 	return snprintf(buf, PAGE_SIZE, "%d\n",
 			pwr->pwrlevels[pwr->thermal_pwrlevel].gpu_freq);
 }
@@ -151,7 +158,10 @@ static int kgsl_pwrctrl_gpuclk_show(struct device *dev,
 				    char *buf)
 {
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_pwrctrl *pwr;
+	if (device == NULL)
+		return 0;
+	pwr = &device->pwrctrl;
 	return snprintf(buf, PAGE_SIZE, "%d\n",
 			pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq);
 }
@@ -163,8 +173,12 @@ static int kgsl_pwrctrl_pwrnap_store(struct device *dev,
 	char temp[20];
 	unsigned long val;
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_pwrctrl *pwr;
 	int rc;
+
+	if (device == NULL)
+		return 0;
+	pwr = &device->pwrctrl;
 
 	snprintf(temp, sizeof(temp), "%.*s",
 			 (int)min(count, sizeof(temp) - 1), buf);
@@ -189,8 +203,9 @@ static int kgsl_pwrctrl_pwrnap_show(struct device *dev,
 				    char *buf)
 {
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	return snprintf(buf, PAGE_SIZE, "%d\n", pwr->nap_allowed);
+	if (device == NULL)
+		return 0;
+	return snprintf(buf, PAGE_SIZE, "%d\n", device->pwrctrl.nap_allowed);
 }
 
 
@@ -201,10 +216,14 @@ static int kgsl_pwrctrl_idle_timer_store(struct device *dev,
 	char temp[20];
 	unsigned long val;
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	struct kgsl_pwrctrl *pwr;
 	const long div = 1000/HZ;
 	static unsigned int org_interval_timeout = 1;
 	int rc;
+
+	if (device == NULL)
+		return 0;
+	pwr = &device->pwrctrl;
 
 	snprintf(temp, sizeof(temp), "%.*s",
 			 (int)min(count, sizeof(temp) - 1), buf);
@@ -232,8 +251,10 @@ static int kgsl_pwrctrl_idle_timer_show(struct device *dev,
 					char *buf)
 {
 	struct kgsl_device *device = kgsl_device_from_dev(dev);
-	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
-	return snprintf(buf, PAGE_SIZE, "%d\n", pwr->interval_timeout);
+	if (device == NULL)
+		return 0;
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+		device->pwrctrl.interval_timeout);
 }
 
 static int kgsl_pwrctrl_scaling_governor_store(struct device *dev,
