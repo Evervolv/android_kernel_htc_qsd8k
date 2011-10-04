@@ -215,7 +215,6 @@ enum A1026_NS_states {
 #define A1026_SLEEP		0
 #define A1026_ACTIVE		1
 #define A1026_CMD_FIFO_DEPTH	64
-#define ERROR			0xffffffff
 
 enum A1026_config_mode {
 	A1026_CONFIG_FULL,
