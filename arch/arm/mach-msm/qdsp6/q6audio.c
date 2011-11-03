@@ -1450,16 +1450,14 @@ done:
 
 static void adie_rx_path_enable(uint32_t acdb_id)
 {
-        if (audio_rx_path_id) {
-                adie_enable();
-                adie_set_path(adie, audio_rx_path_id, ADIE_PATH_RX);
-                adie_set_path_freq_plan(adie, ADIE_PATH_RX, 48000);
+	adie_enable();
+	adie_set_path(adie, audio_rx_path_id, ADIE_PATH_RX);
+	adie_set_path_freq_plan(adie, ADIE_PATH_RX, 48000);
 
-                adie_proceed_to_stage(adie, ADIE_PATH_RX,
-                                ADIE_STAGE_DIGITAL_READY);
-                adie_proceed_to_stage(adie, ADIE_PATH_RX,
-                                ADIE_STAGE_DIGITAL_ANALOG_READY);
-        }
+	adie_proceed_to_stage(adie, ADIE_PATH_RX,
+			ADIE_STAGE_DIGITAL_READY);
+	adie_proceed_to_stage(adie, ADIE_PATH_RX,
+			ADIE_STAGE_DIGITAL_ANALOG_READY);
 }
 
 static void q6_rx_path_enable(int reconf, uint32_t acdb_id)
