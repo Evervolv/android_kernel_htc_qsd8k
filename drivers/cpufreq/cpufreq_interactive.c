@@ -63,7 +63,7 @@ static struct mutex set_speed_lock;
 static u64 hispeed_freq;
 
 /* Go to hi speed when CPU load at or above this value. */
-#define DEFAULT_GO_HISPEED_LOAD 95
+#define DEFAULT_GO_HISPEED_LOAD 85
 static unsigned long go_hispeed_load;
 
 /*
@@ -88,7 +88,7 @@ struct cpufreq_governor cpufreq_gov_interactive = {
 	.name = "interactive",
 	.governor = cpufreq_governor_interactive,
 #if defined(CONFIG_ARCH_MSM_SCORPION)
-        .max_transition_latency = 8000000,
+        .max_transition_latency = 9500000,
 #else
 	.max_transition_latency = 10000000,
 #endif
