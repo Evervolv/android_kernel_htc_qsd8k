@@ -372,12 +372,12 @@ static void remove_35mm_do_work(struct work_struct *work)
 
 	if (hi->usb_dev_type == USB_HEADSET) {
 		hi->usb_dev_status = STATUS_CONNECTED_ENABLED;
-		state &= ~(BIT_35MM_HEADSET | BIT_HEADSET);
+		state &= ~BIT_HEADSET;
 		state |= BIT_HEADSET_NO_MIC;
 		switch_set_state(&hi->sdev, state);
 		mutex_unlock(&hi->mutex_lock);
 	} else if (hi->usb_dev_type == H2W_TVOUT) {
-		state &= ~(BIT_HEADSET | BIT_35MM_HEADSET);
+		state &= ~BIT_HEADSET;
 		state |= BIT_HEADSET_NO_MIC;
 		switch_set_state(&hi->sdev, state);
 #if 0
@@ -388,8 +388,7 @@ static void remove_35mm_do_work(struct work_struct *work)
 				   HS_DELAY_ZERO_JIFFIES);
 #endif
 	} else {
-		state &= ~(BIT_HEADSET | BIT_HEADSET_NO_MIC |
-			BIT_35MM_HEADSET);
+		state &= ~(BIT_HEADSET | BIT_HEADSET_NO_MIC);
 		switch_set_state(&hi->sdev, state);
 	}
 
@@ -452,7 +451,7 @@ static void insert_35mm_do_work(struct work_struct *work)
 			printk(KERN_INFO "3.5mm_headset with microphone\n");
 		}
 
-		state |= BIT_35MM_HEADSET;
+		
 		switch_set_state(&hi->sdev, state);
 		if (state & BIT_HEADSET_NO_MIC)
 			hi->ext_35mm_status = HTC_35MM_NO_MIC;
