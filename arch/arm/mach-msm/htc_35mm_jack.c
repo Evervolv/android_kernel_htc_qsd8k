@@ -221,7 +221,6 @@ static void insert_35mm_do_work(struct work_struct *work)
 			pr_info("3.5mm without microphone\n");
 			hi->ext_35mm_status = BIT_HEADSET_NO_MIC;
 		}
-		hi->ext_35mm_status |= BIT_35MM_HEADSET;
 
 		/* Notify framework via switch class */
 		mutex_lock(&hi->mutex_lock);
