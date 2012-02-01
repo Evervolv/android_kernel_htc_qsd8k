@@ -40,6 +40,12 @@
 
 #define HAS_ARCH_IO_REMAP_PFN_RANGE
 
+#ifndef __ASSEMBLY__
+void clean_and_invalidate_caches(unsigned long, unsigned long, unsigned long);
+void clean_caches(unsigned long, unsigned long, unsigned long);
+void invalidate_caches(unsigned long, unsigned long, unsigned long);
+#endif
+
 #define CONSISTENT_DMA_SIZE (4*SZ_1M)
 
 #ifdef CONFIG_ARCH_MSM_SCORPION
