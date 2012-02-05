@@ -63,4 +63,6 @@ extern struct clk msm_clocks_8x50[];
 extern unsigned msm_num_clocks_8x50;
 extern struct platform_device msm_device_vidc_720p;
 
+extern struct platform_device msm_footswitch;
+
 #endif

@@ -61,6 +61,8 @@
 #include "board-mahimahi-smb329.h"
 
 #include <linux/msm_kgsl.h>
+#include <linux/regulator/machine.h>
+#include "footswitch.h"
 
 static uint debug_uart;
 
@@ -343,6 +345,13 @@ struct platform_device msm_kgsl_3d0 = {
 	},
 };
 /* end kgsl */
+
+/* start footswitch regulator */
+struct platform_device *msm_footswitch_devices[] = {
+	FS_PCOM(FS_GFX3D,  "fs_gfx3d"),
+};
+unsigned msm_num_footswitch_devices = ARRAY_SIZE(msm_footswitch_devices);
+/* end footswitch regulator */
 
 static struct android_pmem_platform_data mdp_pmem_pdata = {
 	.name		= "pmem",
@@ -1139,6 +1148,9 @@ static void __init mahimahi_init(void)
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
 
 	platform_add_devices(devices, ARRAY_SIZE(devices));
+
+	platform_add_devices(msm_footswitch_devices,
+			msm_num_footswitch_devices);
 
 	i2c_register_board_info(0, base_i2c_devices,
 		ARRAY_SIZE(base_i2c_devices));

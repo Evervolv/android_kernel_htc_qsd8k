@@ -36,6 +36,7 @@ config ARCH_QSD8X50
 	select HAS_MSM_DEBUG_UART_PHYS
 	select VERIFY_PERMISSION_FAULT
 	select MSM_DAL
+	select REGULATOR
 
 config ARCH_MSM8X60
 	bool "MSM8X60"
