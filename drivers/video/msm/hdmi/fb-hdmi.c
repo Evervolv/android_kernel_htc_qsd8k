@@ -311,7 +311,7 @@ static int hdmifb_blit(struct fb_info *info, void __user *p)
             _hdmi_fb->doubleBuffering = 0;
 
             /* Are we rotating? */
-            if ((req.flags & MDP_ROT_MASK) == MDP_ROT_90 || (req.flags & MDP_ROT_MASK) == MDP_ROT_270)
+            if ((req.flags & 0x7) == MDP_ROT_90 || (req.flags & 0x7) == MDP_ROT_270)
             {
                 /* Are we scaling at the same time? */
                 if (req.src_rect.w != req.dst_rect.w || req.src_rect.h != req.dst_rect.h)
@@ -323,8 +323,8 @@ static int hdmifb_blit(struct fb_info *info, void __user *p)
             if (previousValue == 1 && _hdmi_fb->doubleBuffering == 0)
             {
                 // Switch us back to buffer 0
-                mdp->dma(mdp, _hdmi_fb->fb->fix.smem_start, _hdmi_fb->fb->var.xres * 2, 
-                         _hdmi_fb->fb->var.xres, _hdmi_fb->fb->var.yres, 0, 0, 
+                mdp->dma(mdp, _hdmi_fb->fb->fix.smem_start, _hdmi_fb->fb->var.xres * 2,
+                         _hdmi_fb->fb->var.xres, _hdmi_fb->fb->var.yres, 0, 0,
                          &_hdmi_fb->dma_callback, _hdmi_fb->panel->interface_type);
             }
         }
@@ -343,7 +343,7 @@ void reportUnderflow(void)
 
 int hdmi_usePanelSync(void)
 {
-    if (_hdmi_fb->mirroring && 
+    if (_hdmi_fb->mirroring &&
         (_hdmi_fb->vsyncMode == VSYNC_NONE || _hdmi_fb->vsyncMode == VSYNC_HDMI_ONLY))
         return 0;
     return 1;
@@ -351,7 +351,7 @@ int hdmi_usePanelSync(void)
 
 int hdmi_useHdmiSync(void)
 {
-    if (_hdmi_fb->mirroring && 
+    if (_hdmi_fb->mirroring &&
         (_hdmi_fb->vsyncMode == VSYNC_NONE || _hdmi_fb->vsyncMode == VSYNC_PANEL_ONLY))
         return 0;
     return 1;
@@ -405,8 +405,8 @@ void hdmi_DoBlit(int fb0Offset)
         {
             // Force us back to the primary buffer
             _hdmi_fb->mirrorReq.dst.offset = 0;
-            mdp->dma(mdp, _hdmi_fb->fb->fix.smem_start, _hdmi_fb->fb->var.xres * 2, 
-                     _hdmi_fb->fb->var.xres, _hdmi_fb->fb->var.yres, 0, 0, 
+            mdp->dma(mdp, _hdmi_fb->fb->fix.smem_start, _hdmi_fb->fb->var.xres * 2,
+                     _hdmi_fb->fb->var.xres, _hdmi_fb->fb->var.yres, 0, 0,
                      &_hdmi_fb->dma_callback, _hdmi_fb->panel->interface_type);
         }
     }
@@ -425,13 +425,13 @@ void hdmi_DoBlit(int fb0Offset)
     {
         if (hdmi_useHdmiSync())
         {
-            hdmifb_pan_update(_hdmi_fb->fb, 0, 0, 
+            hdmifb_pan_update(_hdmi_fb->fb, 0, 0,
                               _hdmi_fb->fb->var.xres, _hdmi_fb->fb->var.yres, yoffset);
         }
         else
         {
-            mdp->dma(mdp, _hdmi_fb->mirrorReq.dst.offset + _hdmi_fb->fb->fix.smem_start, 
-                     _hdmi_fb->fb->var.xres * 2, _hdmi_fb->fb->var.xres, _hdmi_fb->fb->var.yres, 0, 0, 
+            mdp->dma(mdp, _hdmi_fb->mirrorReq.dst.offset + _hdmi_fb->fb->fix.smem_start,
+                     _hdmi_fb->fb->var.xres * 2, _hdmi_fb->fb->var.xres, _hdmi_fb->fb->var.yres, 0, 0,
                      &_hdmi_fb->dma_callback, _hdmi_fb->panel->interface_type);
         }
     }
