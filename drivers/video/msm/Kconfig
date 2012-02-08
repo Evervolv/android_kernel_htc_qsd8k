@@ -1,5 +1,5 @@
 config FB_MSM
-	tristate
+	tristate "MSM Framebuffer"
 	depends on FB && ARCH_MSM
 	select FB_CFB_FILLRECT
 	select FB_CFB_COPYAREA
@@ -7,12 +7,12 @@ config FB_MSM
 	default y
 
 config FB_MSM_LEGACY_MDP
-	bool
+	bool "MSM Legacy MDP (qsd8k)"
 	depends on FB_MSM && (MSM_MDP31 || MSM_MDP22)
 	default y
 
 config FB_MSM_MDP_PPP
-	bool
+	bool "MSM MDP PPP"
 	depends on FB_MSM_LEGACY_MDP
 	default y
 
@@ -35,25 +35,6 @@ config FB_MSM_MDDI_NOVTEC
 	bool "Support for Novtec MDDI panels"
 	depends on FB_MSM_MDDI
 	default n
-	
-config GPU_MSM_KGSL
-	tristate "MSM 3D Graphics driver for Adreno class GPUs"
-	default n
-	depends on FB_MSM && (ARCH_QSD8X50 || ARCH_MSM7X30)
-	select GENERIC_ALLOCATOR
-	select CONFIG_FW_LOADER
-	help
-	  3D graphics driver for QSD8x50 and MSM7x27. Required to
-	  use hardware accelerated OpenGL ES 2.0 and 1.1 on these
-	  chips.
-
-config MSM_KGSL_MMU
-	bool "Turn on MMU for graphics driver "
-	depends on GPU_MSM_KGSL && MMU
-	default n
-	help
-	  If enabled, the GPU driver will allocate memory from vmalloc
-	  and enable the use of GPU MMU, instead of using pmem.
 
 config MSM_HDMI
 	bool "Support for HDMI in QCT platform"
