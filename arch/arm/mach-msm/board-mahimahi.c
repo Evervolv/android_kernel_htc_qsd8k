@@ -276,26 +276,6 @@ static struct platform_device mahimahi_rfkill = {
 	.id = -1,
 };
 
-#if 0
-#define PWR_RAIL_GRP_CLK		8
-static int mahimahi_kgsl_power_rail_mode(int follow_clk)
-{
-	int mode = follow_clk ? 0 : 1;
-	int rail_id = PWR_RAIL_GRP_CLK;
-
-	return msm_proc_comm(PCOM_CLKCTL_RPC_RAIL_CONTROL, &rail_id, &mode);
-}
-
-static int mahimahi_kgsl_power(bool on)
-{
-	int cmd;
-	int rail_id = PWR_RAIL_GRP_CLK;
-
-	cmd = on ? PCOM_CLKCTL_RPC_RAIL_ENABLE : PCOM_CLKCTL_RPC_RAIL_DISABLE;
-	return msm_proc_comm(cmd, &rail_id, NULL);
-}
-#endif
-
 /* start kgsl */
 static struct resource kgsl_3d0_resources[] = {
 	{
@@ -1136,13 +1116,6 @@ static void __init mahimahi_init(void)
 	gpio_direction_input(MAHIMAHI_GPIO_COMPASS_INT_N);
 
 	gpio_request(MAHIMAHI_GPIO_DS2482_SLP_N, "ds2482_slp_n");
-
-#if 0
-	/* set the gpu power rail to manual mode so clk en/dis will not
-	 * turn off gpu power, and hang it on resume */
-	mahimahi_kgsl_power_rail_mode(0);
-	mahimahi_kgsl_power(true);
-#endif
 
 	msm_device_hsusb.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
