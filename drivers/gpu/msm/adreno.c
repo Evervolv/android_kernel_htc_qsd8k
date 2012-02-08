@@ -759,7 +759,8 @@ static int adreno_getproperty(struct kgsl_device *device,
 			devinfo.device_id = device->id+1;
 			devinfo.chip_id = device->chip_id;
 			devinfo.mmu_enabled = kgsl_mmu_enabled();
-			devinfo.gpu_id = adreno_get_rev(adreno_dev);
+			devinfo.gmem_hostbaseaddr = (unsigned int)
+					adreno_dev->gmemspace.mmio_virt_base;
 			devinfo.gmem_gpubaseaddr = adreno_dev->gmemspace.
 					gpu_base;
 			devinfo.gmem_sizebytes = adreno_dev->gmemspace.
