@@ -655,7 +655,7 @@ static void msmfb_resume(struct work_struct *work)
 
 static int msmfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 {
-	u32 size;
+	uint32_t size;
 
 	if ((var->xres != info->var.xres) ||
 	    (var->yres != info->var.yres) ||
