@@ -33,6 +33,7 @@
 #include <asm/cacheflush.h>
 #include <asm/sizes.h>
 #include <linux/pm_runtime.h>
+#include <linux/sched.h>
 
 #define PMEM_MAX_USER_SPACE_DEVICES (10)
 #define PMEM_MAX_KERNEL_SPACE_DEVICES (2)
