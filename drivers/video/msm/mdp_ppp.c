@@ -413,6 +413,7 @@ static void flush_imgs(struct mdp_blit_req *req, struct ppp_regs *regs,
 #ifdef CONFIG_ANDROID_PMEM
 	uint32_t src0_len, src1_len, dst0_len, dst1_len;
 
+	if (!(req->flags & MDP_BLIT_NON_CACHED)) {
 	/* flush src images to memory before dma to mdp */
 	get_len(&req->src, &req->src_rect, regs->src_bpp, &src0_len,
 		&src1_len);
@@ -428,6 +429,7 @@ static void flush_imgs(struct mdp_blit_req *req, struct ppp_regs *regs,
 	if (IS_PSEUDOPLNR(req->dst.format))
 		flush_pmem_file(dst_file, req->dst.offset + dst0_len,
 				dst1_len);
+	}
 #endif
 }
 
