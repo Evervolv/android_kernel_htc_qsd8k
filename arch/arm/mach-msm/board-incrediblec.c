@@ -63,6 +63,8 @@
 #include <mach/msm_hsusb.h>
 #include <mach/bcm_bt_lpm.h>
 
+#include <linux/msm_kgsl.h>
+
 #define SMEM_SPINLOCK_I2C      6
 #define INCREDIBLEC_MICROP_VER		0x04
 
@@ -485,26 +487,7 @@ static struct spi_platform_data incrediblec_spi_pdata = {
 };
 
 
-static struct resource msm_kgsl_resources[] = {
-	{
-		.name	= "kgsl_reg_memory",
-		.start	= MSM_GPU_REG_PHYS,
-		.end	= MSM_GPU_REG_PHYS + MSM_GPU_REG_SIZE - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	{
-		.name	= "kgsl_phys_memory",
-		.start	= MSM_GPU_MEM_BASE,
-		.end	= MSM_GPU_MEM_BASE + MSM_GPU_MEM_SIZE - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	{
-		.start	= INT_GRAPHICS,
-		.end	= INT_GRAPHICS,
-		.flags	= IORESOURCE_IRQ,
-	},
-};
-
+#if 0
 #define PWR_RAIL_GRP_CLK		8
 static int incrediblec_kgsl_power_rail_mode(int follow_clk)
 {
@@ -522,13 +505,57 @@ static int incrediblec_kgsl_power(bool on)
 	cmd = on ? PCOM_CLKCTL_RPC_RAIL_ENABLE : PCOM_CLKCTL_RPC_RAIL_DISABLE;
 	return msm_proc_comm(cmd, &rail_id, NULL);
 }
+#endif
 
-static struct platform_device msm_kgsl_device = {
-	.name		= "kgsl",
-	.id		= -1,
-	.resource	= msm_kgsl_resources,
-	.num_resources	= ARRAY_SIZE(msm_kgsl_resources),
+/* start kgsl */
+static struct resource kgsl_3d0_resources[] = {
+	{
+		.name  = KGSL_3D0_REG_MEMORY,
+		.start = 0xA0000000,
+		.end = 0xA001ffff,
+		.flags = IORESOURCE_MEM,
+	},
+	{
+		.name = KGSL_3D0_IRQ,
+		.start = INT_GRAPHICS,
+		.end = INT_GRAPHICS,
+		.flags = IORESOURCE_IRQ,
+	},
 };
+
+static struct kgsl_device_platform_data kgsl_3d0_pdata = {
+	.pwr_data = {
+		.pwrlevel = {
+			{
+				.gpu_freq = 0,
+				.bus_freq = 128000000,
+			},
+		},
+		.init_level = 0,
+		.num_levels = 1,
+		.set_grp_async = NULL,
+		.idle_timeout = HZ/5,
+	},
+	.clk = {
+		.name = {
+			.clk = "grp_clk",
+		},
+	},
+	.imem_clk_name = {
+		.clk = "imem_clk",
+	},
+};
+
+struct platform_device msm_kgsl_3d0 = {
+	.name = "kgsl-3d0",
+	.id = 0,
+	.num_resources = ARRAY_SIZE(kgsl_3d0_resources),
+	.resource = kgsl_3d0_resources,
+	.dev = {
+		.platform_data = &kgsl_3d0_pdata,
+	},
+};
+/* end kgsl */
 
 static struct android_pmem_platform_data mdp_pmem_pdata = {
 	.name		= "pmem",
@@ -1134,7 +1161,7 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_camera_device,
 #endif
 	&msm_camera_sensor_ov8810,
-	&msm_kgsl_device,
+	&msm_kgsl_3d0,
 	&msm_device_i2c,
 	&incrediblec_flashlight_device,
 	&incrediblec_leds,
@@ -1331,13 +1358,13 @@ static void __init incrediblec_init(void)
 	if (0 == engineerid || 0xF == engineerid) {
 		mdp_pmem_pdata.start = MSM_PMEM_MDP_XA_BASE;
 		android_pmem_adsp_pdata.start = MSM_PMEM_ADSP_XA_BASE;
-                msm_kgsl_resources[1].start = MSM_GPU_MEM_XA_BASE;
-                msm_kgsl_resources[1].end = MSM_GPU_MEM_XA_BASE + MSM_GPU_MEM_SIZE - 1;
+                kgsl_3d0_resources[1].start = MSM_GPU_MEM_XA_BASE;
+                kgsl_3d0_resources[1].end = MSM_GPU_MEM_XA_BASE + MSM_GPU_MEM_SIZE - 1;
 	} else if (engineerid >= 3) {
 		mdp_pmem_pdata.start = MSM_PMEM_MDP_BASE + MSM_MEM_128MB_OFFSET;
 		android_pmem_adsp_pdata.start = MSM_PMEM_ADSP_BASE + MSM_MEM_128MB_OFFSET;
-		msm_kgsl_resources[1].start = MSM_GPU_MEM_BASE;
-		msm_kgsl_resources[1].end =  msm_kgsl_resources[1].start + MSM_GPU_MEM_SIZE - 1;
+		kgsl_3d0_resources[1].start = MSM_GPU_MEM_BASE;
+		kgsl_3d0_resources[1].end =  kgsl_3d0_resources[1].start + MSM_GPU_MEM_SIZE - 1;
 	}
 
 	incrediblec_board_serialno_setup(board_serialno());
@@ -1356,12 +1383,12 @@ static void __init incrediblec_init(void)
 	bcm_bt_lpm_pdata.gpio_wake = INCREDIBLEC_GPIO_BT_CHIP_WAKE;
 	config_gpio_table(bt_gpio_table_rev_CX, ARRAY_SIZE(bt_gpio_table_rev_CX));
 	
-	
+#if 0
 	/* set the gpu power rail to manual mode so clk en/dis will not
 	 * turn off gpu power, and hang it on resume */
 	incrediblec_kgsl_power_rail_mode(0);
 	incrediblec_kgsl_power(true);
-
+#endif
 	
 #ifdef CONFIG_SPI_QSD
 	msm_device_spi.dev.platform_data = &incrediblec_spi_pdata;

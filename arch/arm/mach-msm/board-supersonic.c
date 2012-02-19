@@ -72,6 +72,8 @@
 
 #include "board-supersonic-tpa2018d1.h"
 
+#include <linux/msm_kgsl.h>
+
 #define SMEM_SPINLOCK_I2C	   6
 
 #ifdef CONFIG_ARCH_QSD8X50
@@ -517,26 +519,7 @@ static struct spi_platform_data supersonic_spi_pdata = {
 	.clk_rate	= 1200000,
 };
 
-static struct resource msm_kgsl_resources[] = {
-	{
-		.name	= "kgsl_reg_memory",
-		.start	= MSM_GPU_REG_PHYS,
-		.end	= MSM_GPU_REG_PHYS + MSM_GPU_REG_SIZE - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	{
-		.name	= "kgsl_phys_memory",
-		.start	= MSM_GPU_MEM_BASE,
-		.end	= MSM_GPU_MEM_BASE + MSM_GPU_MEM_SIZE - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	{
-		.start	= INT_GRAPHICS,
-		.end	= INT_GRAPHICS,
-		.flags	= IORESOURCE_IRQ,
-	},
-};
-
+#if 0
 #define PWR_RAIL_GRP_CLK		8
 static int supersonic_kgsl_power_rail_mode(int follow_clk)
 {
@@ -554,14 +537,57 @@ static int supersonic_kgsl_power(bool on)
 	cmd = on ? PCOM_CLKCTL_RPC_RAIL_ENABLE : PCOM_CLKCTL_RPC_RAIL_DISABLE;
 	return msm_proc_comm(cmd, &rail_id, NULL);
 }
+#endif
 
-static struct platform_device msm_kgsl_device = {
-	.name		= "kgsl",
-	.id		= -1,
-	.resource	= msm_kgsl_resources,
-	.num_resources	= ARRAY_SIZE(msm_kgsl_resources),
+/* start kgsl */
+static struct resource kgsl_3d0_resources[] = {
+	{
+		.name  = KGSL_3D0_REG_MEMORY,
+		.start = 0xA0000000,
+		.end = 0xA001ffff,
+		.flags = IORESOURCE_MEM,
+	},
+	{
+		.name = KGSL_3D0_IRQ,
+		.start = INT_GRAPHICS,
+		.end = INT_GRAPHICS,
+		.flags = IORESOURCE_IRQ,
+	},
 };
 
+static struct kgsl_device_platform_data kgsl_3d0_pdata = {
+	.pwr_data = {
+		.pwrlevel = {
+			{
+				.gpu_freq = 0,
+				.bus_freq = 128000000,
+			},
+		},
+		.init_level = 0,
+		.num_levels = 1,
+		.set_grp_async = NULL,
+		.idle_timeout = HZ/5,
+	},
+	.clk = {
+		.name = {
+			.clk = "grp_clk",
+		},
+	},
+	.imem_clk_name = {
+		.clk = "imem_clk",
+	},
+};
+
+struct platform_device msm_kgsl_3d0 = {
+	.name = "kgsl-3d0",
+	.id = 0,
+	.num_resources = ARRAY_SIZE(kgsl_3d0_resources),
+	.resource = kgsl_3d0_resources,
+	.dev = {
+		.platform_data = &kgsl_3d0_pdata,
+	},
+};
+/* end kgsl */
 static struct android_pmem_platform_data mdp_pmem_pdata = {
 	.name		= "pmem",
 	.start		= MSM_PMEM_MDP_BASE,
@@ -1454,7 +1480,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_camera_sensor_s5k3h1,
 	&msm_camera_sensor_ov8810,
 	&msm_camera_sensor_s5k6aafx,
-	&msm_kgsl_device,
+	&msm_kgsl_3d0,
 	&msm_device_i2c,
 	&msm_camera_sensor_ov9665,
 	&supersonic_flashlight_device,
@@ -1579,10 +1605,12 @@ static void __init supersonic_init(void)
 				  &msm_device_uart1.dev, 1, MSM_GPIO_TO_INT(SUPERSONIC_GPIO_UART1_RX));
 #endif
 
+#if 0
 	/* set the gpu power rail to manual mode so clk en/dis will not
 	 * turn off gpu power, and hang it on resume */
 	supersonic_kgsl_power_rail_mode(0);
 	supersonic_kgsl_power(true);
+#endif
 
 #ifdef CONFIG_SPI_QSD
 	msm_device_spi.dev.platform_data = &supersonic_spi_pdata;

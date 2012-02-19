@@ -62,6 +62,8 @@
 #include "board-bravo-tpa2018d1.h"
 #include "board-bravo-smb329.h"
 
+#include <linux/msm_kgsl.h>
+
 #ifdef CONFIG_OPTICALJOYSTICK_CRUCIAL
 #include <linux/curcial_oj.h>
 #endif
@@ -280,26 +282,7 @@ static struct platform_device bravo_rfkill = {
 	.id = -1,
 };
 
-static struct resource msm_kgsl_resources[] = {
-	{
-		.name	= "kgsl_reg_memory",
-		.start	= MSM_GPU_REG_PHYS,
-		.end	= MSM_GPU_REG_PHYS + MSM_GPU_REG_SIZE - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	{
-		.name	= "kgsl_phys_memory",
-		.start	= MSM_GPU_MEM_BASE,
-		.end	= MSM_GPU_MEM_BASE + MSM_GPU_MEM_SIZE - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	{
-		.start	= INT_GRAPHICS,
-		.end	= INT_GRAPHICS,
-		.flags	= IORESOURCE_IRQ,
-	},
-};
-
+#if 0
 #define PWR_RAIL_GRP_CLK		8
 static int bravo_kgsl_power_rail_mode(int follow_clk)
 {
@@ -317,13 +300,57 @@ static int bravo_kgsl_power(bool on)
 	cmd = on ? PCOM_CLKCTL_RPC_RAIL_ENABLE : PCOM_CLKCTL_RPC_RAIL_DISABLE;
 	return msm_proc_comm(cmd, &rail_id, NULL);
 }
+#endif
 
-static struct platform_device msm_kgsl_device = {
-	.name		= "kgsl",
-	.id		= -1,
-	.resource	= msm_kgsl_resources,
-	.num_resources	= ARRAY_SIZE(msm_kgsl_resources),
+/* start kgsl */
+static struct resource kgsl_3d0_resources[] = {
+	{
+		.name  = KGSL_3D0_REG_MEMORY,
+		.start = 0xA0000000,
+		.end = 0xA001ffff,
+		.flags = IORESOURCE_MEM,
+	},
+	{
+		.name = KGSL_3D0_IRQ,
+		.start = INT_GRAPHICS,
+		.end = INT_GRAPHICS,
+		.flags = IORESOURCE_IRQ,
+	},
 };
+
+static struct kgsl_device_platform_data kgsl_3d0_pdata = {
+	.pwr_data = {
+		.pwrlevel = {
+			{
+				.gpu_freq = 0,
+				.bus_freq = 128000000,
+			},
+		},
+		.init_level = 0,
+		.num_levels = 1,
+		.set_grp_async = NULL,
+		.idle_timeout = HZ/5,
+	},
+	.clk = {
+		.name = {
+			.clk = "grp_clk",
+		},
+	},
+	.imem_clk_name = {
+		.clk = "imem_clk",
+	},
+};
+
+struct platform_device msm_kgsl_3d0 = {
+	.name = "kgsl-3d0",
+	.id = 0,
+	.num_resources = ARRAY_SIZE(kgsl_3d0_resources),
+	.resource = kgsl_3d0_resources,
+	.dev = {
+		.platform_data = &kgsl_3d0_pdata,
+	},
+};
+/* end kgsl */
 
 static struct android_pmem_platform_data mdp_pmem_pdata = {
 	.name		= "pmem",
@@ -1014,7 +1041,7 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_720P_CAMERA
 	&android_pmem_venc_device,
 #endif
-	&msm_kgsl_device,
+	&msm_kgsl_3d0,
 	&msm_device_i2c,
 	&msm_camera_sensor_s5k3e2fx,
 	&bravo_flashlight_device,
@@ -1225,10 +1252,12 @@ static void __init bravo_init(void)
 
 	gpio_request(BRAVO_GPIO_DS2482_SLP_N, "ds2482_slp_n");
 
+#if 0
 	/* set the gpu power rail to manual mode so clk en/dis will not
 	 * turn off gpu power, and hang it on resume */
 	bravo_kgsl_power_rail_mode(0);
 	bravo_kgsl_power(true);
+#endif
 
 	msm_device_hsusb.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
