@@ -521,26 +521,6 @@ static struct spi_platform_data supersonic_spi_pdata = {
 	.clk_rate	= 1200000,
 };
 
-#if 0
-#define PWR_RAIL_GRP_CLK		8
-static int supersonic_kgsl_power_rail_mode(int follow_clk)
-{
-	int mode = follow_clk ? 0 : 1;
-	int rail_id = PWR_RAIL_GRP_CLK;
-
-	return msm_proc_comm(PCOM_CLKCTL_RPC_RAIL_CONTROL, &rail_id, &mode);
-}
-
-static int supersonic_kgsl_power(bool on)
-{
-	int cmd;
-	int rail_id = PWR_RAIL_GRP_CLK;
-
-	cmd = on ? PCOM_CLKCTL_RPC_RAIL_ENABLE : PCOM_CLKCTL_RPC_RAIL_DISABLE;
-	return msm_proc_comm(cmd, &rail_id, NULL);
-}
-#endif
-
 /* start kgsl */
 static struct resource kgsl_3d0_resources[] = {
 	{
@@ -1620,13 +1600,6 @@ static void __init supersonic_init(void)
 #if defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	msm_serial_debug_init(MSM_UART1_PHYS, INT_UART1,
 				  &msm_device_uart1.dev, 1, MSM_GPIO_TO_INT(SUPERSONIC_GPIO_UART1_RX));
-#endif
-
-#if 0
-	/* set the gpu power rail to manual mode so clk en/dis will not
-	 * turn off gpu power, and hang it on resume */
-	supersonic_kgsl_power_rail_mode(0);
-	supersonic_kgsl_power(true);
 #endif
 
 #ifdef CONFIG_SPI_QSD

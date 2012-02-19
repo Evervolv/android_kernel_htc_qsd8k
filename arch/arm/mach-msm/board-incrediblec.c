@@ -488,27 +488,6 @@ static struct spi_platform_data incrediblec_spi_pdata = {
 	.clk_rate	= 1200000,
 };
 
-
-#if 0
-#define PWR_RAIL_GRP_CLK		8
-static int incrediblec_kgsl_power_rail_mode(int follow_clk)
-{
-	int mode = follow_clk ? 0 : 1;
-	int rail_id = PWR_RAIL_GRP_CLK;
-
-	return msm_proc_comm(PCOM_CLKCTL_RPC_RAIL_CONTROL, &rail_id, &mode);
-}
-
-static int incrediblec_kgsl_power(bool on)
-{
-	int cmd;
-	int rail_id = PWR_RAIL_GRP_CLK;
-
-	cmd = on ? PCOM_CLKCTL_RPC_RAIL_ENABLE : PCOM_CLKCTL_RPC_RAIL_DISABLE;
-	return msm_proc_comm(cmd, &rail_id, NULL);
-}
-#endif
-
 /* start kgsl */
 static struct resource kgsl_3d0_resources[] = {
 	{
@@ -1396,13 +1375,6 @@ static void __init incrediblec_init(void)
 
 	bcm_bt_lpm_pdata.gpio_wake = INCREDIBLEC_GPIO_BT_CHIP_WAKE;
 	config_gpio_table(bt_gpio_table_rev_CX, ARRAY_SIZE(bt_gpio_table_rev_CX));
-	
-#if 0
-	/* set the gpu power rail to manual mode so clk en/dis will not
-	 * turn off gpu power, and hang it on resume */
-	incrediblec_kgsl_power_rail_mode(0);
-	incrediblec_kgsl_power(true);
-#endif
 	
 #ifdef CONFIG_SPI_QSD
 	msm_device_spi.dev.platform_data = &incrediblec_spi_pdata;
