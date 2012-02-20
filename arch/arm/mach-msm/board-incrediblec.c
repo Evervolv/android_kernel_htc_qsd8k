@@ -1351,13 +1351,9 @@ static void __init incrediblec_init(void)
 	if (0 == engineerid || 0xF == engineerid) {
 		mdp_pmem_pdata.start = MSM_PMEM_MDP_XA_BASE;
 		android_pmem_adsp_pdata.start = MSM_PMEM_ADSP_XA_BASE;
-                kgsl_3d0_resources[1].start = MSM_GPU_MEM_XA_BASE;
-                kgsl_3d0_resources[1].end = MSM_GPU_MEM_XA_BASE + MSM_GPU_MEM_SIZE - 1;
 	} else if (engineerid >= 3) {
 		mdp_pmem_pdata.start = MSM_PMEM_MDP_BASE + MSM_MEM_128MB_OFFSET;
 		android_pmem_adsp_pdata.start = MSM_PMEM_ADSP_BASE + MSM_MEM_128MB_OFFSET;
-		kgsl_3d0_resources[1].start = MSM_GPU_MEM_BASE;
-		kgsl_3d0_resources[1].end =  kgsl_3d0_resources[1].start + MSM_GPU_MEM_SIZE - 1;
 	}
 
 	incrediblec_board_serialno_setup(board_serialno());
