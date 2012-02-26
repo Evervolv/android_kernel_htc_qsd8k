@@ -16,8 +16,6 @@
 #include <linux/ioctl.h>
 #include <linux/sched.h>
 
-#include <mach/socinfo.h>
-
 #include "kgsl.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_cffdump.h"
@@ -403,6 +401,7 @@ static int adreno_setstate(struct kgsl_device *device, uint32_t flags)
 static unsigned int
 adreno_getchipid(struct kgsl_device *device)
 {
+	/* XXX: drewis edit: only for 8x50 */
 	unsigned int chipid = 0;
 	unsigned int coreid, majorid, minorid, patchid, revid;
 
@@ -410,27 +409,13 @@ adreno_getchipid(struct kgsl_device *device)
 	adreno_regread(device, REG_RBBM_PERIPHID2, &majorid);
 	adreno_regread(device, REG_RBBM_PATCH_RELEASE, &revid);
 
-	/*
-	* adreno 22x gpus are indicated by coreid 2,
-	* but REG_RBBM_PERIPHID1 always contains 0 for this field
-	*/
-	if (cpu_is_msm8960() || cpu_is_msm8x60())
-		chipid = 2 << 24;
-	else
-		chipid = (coreid & 0xF) << 24;
+	chipid = (coreid & 0xF) << 24;
 
 	chipid |= ((majorid >> 4) & 0xF) << 16;
 
 	minorid = ((revid >> 0)  & 0xFF);
 
-	patchid = ((revid >> 16) & 0xFF);
-
-	/* 8x50 returns 0 for patch release, but it should be 1 */
-	if (cpu_is_qsd8x50())
-		patchid = 1;
-	/* userspace isn't prepared to deal with patch id for these chips yet */
-	else if (cpu_is_msm8960() || cpu_is_msm8x60())
-		patchid = 0;
+	patchid = 1;
 
 	chipid |= (minorid << 8) | patchid;
 
