@@ -20,7 +20,6 @@
 #include <linux/slab.h>
 #include <linux/time.h>
 #include <linux/sched.h>
-#include <mach/socinfo.h>
 
 #include "kgsl.h"
 #include "kgsl_cffdump.h"
@@ -363,10 +362,8 @@ void kgsl_cffdump_open(enum kgsl_deviceid device_id)
 	/*TODO: move this to where we can report correct gmemsize*/
 	unsigned int va_base;
 
-	if (cpu_is_msm8x60() || cpu_is_msm8960())
-		va_base = 0x40000000;
-	else
-		va_base = 0x20000000;
+	/* XXX: drewis edit: only for 8x50 */
+	va_base = 0x20000000;
 
 	kgsl_cffdump_memory_base(device_id, va_base,
 			CONFIG_MSM_KGSL_PAGE_TABLE_SIZE, SZ_256K);
