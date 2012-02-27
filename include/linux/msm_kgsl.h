@@ -83,9 +83,11 @@ struct kgsl_devinfo {
 	unsigned int chip_id;
 	unsigned int mmu_enabled;
 	unsigned int gmem_gpubaseaddr;
-	/* if gmem_hostbaseaddr is NULL, we would know its not mapped into
-	 * mmio space */
-	unsigned int gmem_hostbaseaddr;
+	/*
+	* This field contains the adreno revision
+	* number 200, 205, 220, etc...
+	*/
+	unsigned int gpu_id;
 	unsigned int gmem_sizebytes;
 };
 
