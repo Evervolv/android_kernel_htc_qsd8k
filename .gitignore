@@ -79,3 +79,7 @@ GTAGS
 *.orig
 *~
 \#*#
+
+# Special rule
+# XXX: there's got to be a more generic way to do this
+arch/arm/boot/compressed/ashldi3.S
