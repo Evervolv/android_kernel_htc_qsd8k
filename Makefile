@@ -340,8 +340,8 @@ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 CFLAGS_MODULE   =
 AFLAGS_MODULE   =
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	= -O1 -mtune=cortex-a8 -ftree-vectorize -ffast-math -fsingle-precision-constant
-AFLAGS_KERNEL	= -O1 -mtune=cortex-a8 -ftree-vectorize -ffast-math -fsingle-precision-constant
+CFLAGS_KERNEL	=
+AFLAGS_KERNEL	=
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
