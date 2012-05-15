@@ -1,16 +1,22 @@
-obj-y += proc_comm.o
-obj-y += io.o timer.o
-obj-y += memory.o
+obj-y += io.o dma.o memory.o timer.o
+obj-y += clock.o
+obj-$(CONFIG_CPU_FREQ_MSM) += cpufreq.o
+
+obj-$(CONFIG_MSM_PROC_COMM) += proc_comm.o
 ifndef CONFIG_ARCH_MSM8X60
-obj-y += dma.o
+	obj-$(CONFIG_MSM_PROC_COMM) += clock-pcom.o
+	obj-$(CONFIG_MSM_PROC_COMM) += vreg.o
+	ifdef CONFIG_MSM_PROC_COMM
+ifndef CONFIG_ARCH_FSM9XXX
+		obj-$(CONFIG_REGULATOR) += footswitch-pcom.o
 endif
-obj-y += nand_partitions.o
-obj-y += pmic.o
+	endif
+endif
+
 obj-y += drv_callback.o
 obj-y += htc_board_tags.o
 
 obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock-arm11.o idle.o
-obj-$(CONFIG_ARCH_MSM_SCORPION) += idle-v7.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += arch-init-scorpion.o
 
 obj-$(CONFIG_ARCH_QSD8X50) += acpuclock-qsd8x50.o
@@ -21,18 +27,31 @@ obj-y += irq.o
 endif
 
 obj-$(CONFIG_ARCH_MSM8X60) += clock-dummy.o iommu.o iommu_dev.o devices-msm8x60-iommu.o
-obj-$(CONFIG_MSM_PROC_COMM) += proc_comm.o clock-pcom.o vreg.o
-obj-$(CONFIG_MSM_PROC_COMM) += clock.o
-obj-$(CONFIG_MSM_PROC_COMM) += footswitch-pcom.o
-obj-$(CONFIG_ARCH_QSD8X50) += sirc.o
-obj-$(CONFIG_MSM_FIQ_SUPPORT) += fiq_glue.o
-obj-$(CONFIG_MSM_SMD) += smd.o smd_debug.o smem_log.o
-obj-$(CONFIG_MSM_SMD) += smd_tty.o smd_qmi.o
-obj-$(CONFIG_MSM_SMD) += last_radio_log.o
-obj-$(CONFIG_MSM_SCM) += scm.o scm-boot.o
-
 obj-$(CONFIG_HOTPLUG_CPU) += hotplug.o
 obj-$(CONFIG_SMP) += headsmp.o platsmp.o
+obj-$(CONFIG_CPU_V7) += idle-v7.o
+obj-$(CONFIG_MSM_SCM) += scm.o scm-boot.o
+obj-$(CONFIG_ARCH_QSD8X50) += sirc.o
+obj-$(CONFIG_MSM_FIQ_SUPPORT) += fiq_glue.o
+obj-$(CONFIG_MSM_SMD_LOGGING) += smem_log.o
+obj-$(CONFIG_MSM_SMD) += smd.o smd_debug.o
+obj-$(CONFIG_MSM_SMD) += smd_tty.o smd_qmi.o
+obj-$(CONFIG_MSM_SMD) += last_radio_log.o
+
+ifndef CONFIG_ARCH_MSM9615
+ifndef CONFIG_ARCH_MSM8960
+ifndef CONFIG_ARCH_MSM8X60
+	obj-$(CONFIG_MSM_SMD) += pmic.o
+endif
+endif
+endif
+ifndef CONFIG_ARCH_MSM8960
+ifndef CONFIG_ARCH_MSM8X60
+ifndef CONFIG_ARCH_APQ8064
+	obj-y += nand_partitions.o
+endif
+endif
+endif
 
 obj-$(CONFIG_MSM_DAL) += dal.o
 
@@ -45,12 +64,13 @@ obj-$(CONFIG_MSM_ADSP) += qdsp5/
 obj-$(CONFIG_MSM_QDSP5V2) += qdsp5v2/
 obj-$(CONFIG_MSM_QDSP6) += qdsp6/
 obj-$(CONFIG_MSM_HW3D) += hw3d.o
-obj-$(CONFIG_PM) += pm.o
-obj-$(CONFIG_CPU_FREQ) += cpufreq.o
 obj-$(CONFIG_MSM_REMOTE_SPINLOCK) += remote_spinlock.o
 obj-$(CONFIG_MSM_SSBI) += ssbi.o
-obj-$(CONFIG_HTC_ACOUSTIC) += htc_acoustic.o
-obj-$(CONFIG_HTC_ACOUSTIC_QSD) += htc_acoustic_qsd.o
+ifdef CONFIG_PM
+	obj-y += pm.o
+else
+	obj-y += no-pm.o
+endif
 
 obj-$(CONFIG_MACH_TROUT) += board-trout-rfkill.o
 obj-$(CONFIG_MACH_TROUT) += board-trout-wifi.o
@@ -71,6 +91,9 @@ obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-wifi.o board-mahimahi-audio.o
 obj-$(CONFIG_MACH_MAHIMAHI) += msm_vibrator.o
 obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-microp.o
 obj-$(CONFIG_MACH_MAHIMAHI) += htc_acoustic_qsd.o
+obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-tpa2018d1.o
+obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-smb329.o
+
 obj-$(CONFIG_MACH_HALIBUT) += board-halibut.o devices-msm7x00.o
 obj-$(CONFIG_MACH_HALIBUT) += board-halibut-keypad.o
 obj-$(CONFIG_MACH_HALIBUT) += board-halibut-panel.o fish_battery.o
@@ -121,7 +144,6 @@ obj-$(CONFIG_MACH_INCREDIBLEC) += msm_vibrator.o
 obj-$(CONFIG_MACH_INCREDIBLEC) += proc_engineerid.o board-incrediblec-tpa6130.o
 obj-$(CONFIG_MACH_INCREDIBLEC) += htc_acoustic_qsd.o
 
-
 obj-$(CONFIG_MACH_BRAVO) += board-bravo.o board-bravo-panel.o
 obj-$(CONFIG_MACH_BRAVO) += board-bravo-keypad.o board-bravo-mmc.o
 obj-$(CONFIG_MACH_BRAVO) += board-bravo-rfkill.o htc_wifi_nvs.o htc_awb_cal.o
@@ -140,21 +162,17 @@ obj-$(CONFIG_MACH_BRAVOC) += board-bravo-microp.o
 obj-$(CONFIG_MACH_BRAVOC) += board-bravo-tpa2018d1.o
 obj-$(CONFIG_MACH_BRAVOC) += board-bravo-smb329.o
 
+obj-$(CONFIG_HTC_ACOUSTIC) += htc_acoustic.o
+obj-$(CONFIG_HTC_ACOUSTIC_QSD) += htc_acoustic_qsd.o
 obj-$(CONFIG_HTC_BATTCHG) += htc_battery.o
 obj-$(CONFIG_HTC_PWRSINK) += htc_pwrsink.o
 obj-$(CONFIG_HTC_PWRSPLY) += htc_power_supply.o
 obj-$(CONFIG_HTC_HEADSET) += htc_headset.o
 obj-$(CONFIG_HTC_35MM_JACK) += htc_35mm_jack.o
-
-obj-$(CONFIG_MICROP_COMMON) += atmega_microp_common.o
 obj-$(CONFIG_HTC_HEADSET_MGR) += htc_headset_mgr.o
 obj-$(CONFIG_HTC_HEADSET_GPIO) += htc_headset_gpio.o
 obj-$(CONFIG_HTC_HEADSET_MICROP) += htc_headset_microp.o
 obj-$(CONFIG_PERFLOCK) += perflock.o
 obj-$(CONFIG_PERFLOCK) += htc_set_perflock.o
-
-obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-tpa2018d1.o
-obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-smb329.o
-
+obj-$(CONFIG_MICROP_COMMON) += atmega_microp_common.o
 obj-$(CONFIG_ARCH_MSM_FLASHLIGHT) += msm_flashlight.o
-
