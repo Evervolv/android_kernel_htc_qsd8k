@@ -4,6 +4,7 @@
  *  Copyright (C) 1994-2002 Russell King
  *  Copyright (c) 2003 ARM Limited
  *  All Rights Reserved
+ *  Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -355,10 +356,17 @@ __enable_mmu:
 #ifdef CONFIG_CPU_ICACHE_DISABLE
 	bic	r0, r0, #CR_I
 #endif
+#ifdef CONFIG_EMULATE_DOMAIN_MANAGER_V7
+	mov	r5, #(domain_val(DOMAIN_USER, DOMAIN_CLIENT) | \
+		      domain_val(DOMAIN_KERNEL, DOMAIN_CLIENT) | \
+		      domain_val(DOMAIN_TABLE, DOMAIN_CLIENT) | \
+		      domain_val(DOMAIN_IO, DOMAIN_CLIENT))
+#else
 	mov	r5, #(domain_val(DOMAIN_USER, DOMAIN_CLIENT) | \
 		      domain_val(DOMAIN_KERNEL, DOMAIN_MANAGER) | \
 		      domain_val(DOMAIN_TABLE, DOMAIN_CLIENT) | \
 		      domain_val(DOMAIN_IO, DOMAIN_CLIENT))
+#endif
 	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
 	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
 	b	__turn_mmu_on

@@ -24,6 +24,7 @@
 #include <mach/vmalloc.h>
 #include <mach/memory.h>
 #include <asm/pgtable-hwdef.h>
+#include <asm/tlbflush.h>
 
 /*
  * Just any arbitrary offset to the start of the vmalloc VM area: the
@@ -236,16 +237,27 @@ extern pgprot_t		pgprot_kernel;
 #define pgprot_device(prot) \
 	__pgprot_modify(prot, L_PTE_MT_MASK, L_PTE_MT_DEV_NONSHARED)
 
+#define pgprot_writethroughcache(prot) \
+	__pgprot_modify(prot, L_PTE_MT_MASK, L_PTE_MT_WRITETHROUGH)
+
+#define pgprot_writebackcache(prot) \
+	__pgprot_modify(prot, L_PTE_MT_MASK, L_PTE_MT_WRITEBACK)
+
+#define pgprot_writebackwacache(prot) \
+	__pgprot_modify(prot, L_PTE_MT_MASK, L_PTE_MT_WRITEALLOC)
+
 #ifdef CONFIG_ARM_DMA_MEM_BUFFERABLE
 #define pgprot_dmacoherent(prot) \
 	__pgprot_modify(prot, L_PTE_MT_MASK, L_PTE_MT_BUFFERABLE | L_PTE_XN)
 #define __HAVE_PHYS_MEM_ACCESS_PROT
+#define COHERENT_IS_NORMAL 1
 struct file;
 extern pgprot_t phys_mem_access_prot(struct file *file, unsigned long pfn,
 				     unsigned long size, pgprot_t vma_prot);
 #else
 #define pgprot_dmacoherent(prot) \
 	__pgprot_modify(prot, L_PTE_MT_MASK, L_PTE_MT_UNCACHED | L_PTE_XN)
+#define COHERENT_IS_NORMAL 0
 #endif
 
 #endif /* __ASSEMBLY__ */
@@ -472,8 +484,6 @@ static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
  * remap a physical page `pfn' of size `size' with page protection `prot'
  * into virtual address `from'
  */
-
-
 #ifndef HAS_ARCH_IO_REMAP_PFN_RANGE
 #define io_remap_pfn_range(vma,from,pfn,size,prot) \
 	remap_pfn_range(vma,from,pfn,size,prot)

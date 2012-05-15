@@ -108,6 +108,8 @@ EXPORT_SYMBOL(system_serial_high);
 unsigned int elf_hwcap __read_mostly;
 EXPORT_SYMBOL(elf_hwcap);
 
+unsigned int boot_reason;
+EXPORT_SYMBOL(boot_reason);
 
 #ifdef MULTI_CPU
 struct processor processor __read_mostly;
@@ -695,8 +697,12 @@ __tagtable(ATAG_PS, parse_tag_ps_calibration);
 
 static int __init parse_tag_cmdline(const struct tag *tag)
 {
+#ifndef CONFIG_CMDLINE_FORCE
 	strlcpy(default_command_line, tag->u.cmdline.cmdline, COMMAND_LINE_SIZE);
 
+#else
+	pr_warning("Ignoring tag cmdline (using the default kernel command line)\n");
+#endif /* CONFIG_CMDLINE_FORCE */
 	return 0;
 }
 

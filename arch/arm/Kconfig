@@ -62,7 +62,7 @@ config GENERIC_CLOCKEVENTS
 config GENERIC_CLOCKEVENTS_BROADCAST
 	bool
 	depends on GENERIC_CLOCKEVENTS
-	default y if SMP
+	default y if SMP && !LOCAL_TIMERS
 
 config HAVE_TCM
 	bool
@@ -127,8 +127,21 @@ config GENERIC_IRQ_PROBE
 
 config GENERIC_LOCKBREAK
 	bool
-	default y
+	help
+	  Enable generic lock breaking on preemptible SMP platforms.
+	  Some platforms may be susceptible to livelock with this
+	  item enabled.
+	default n
 	depends on SMP && PREEMPT
+
+config ARM_TICKET_LOCKS
+	bool
+	help
+	  Enable ticket locks, which help preserve fairness among
+	  contended locks and prevent livelock in multicore systems.
+	  Say 'y' if system stability is important.
+	default y if ARCH_MSM_SCORPIONMP
+	depends on SMP
 
 config RWSEM_GENERIC_SPINLOCK
 	bool
@@ -615,18 +628,23 @@ config ARCH_PXA
 	  Support for Intel/Marvell's PXA2xx/PXA3xx processor line.
 
 config ARCH_MSM
-	bool "Qualcomm MSM"
+	bool "Qualcomm MSM/QSD"
 	select ARCH_HAS_CPUFREQ
 	select ARCH_REQUIRE_GPIOLIB
 	select HAVE_CLK
 	select GENERIC_GPIO
+#	select GENERIC_TIME
 	select GENERIC_CLOCKEVENTS
 	select ARCH_REQUIRE_GPIOLIB
+#	select GENERIC_ALLOCATOR
+#	select ARCH_WANT_OPTIONAL_GPIOLIB
+#	select CLKDEV_LOOKUP
+#	select HAVE_SCHED_CLOCK
 	help
 	  Support for Qualcomm MSM/QSD based systems.  This runs on the
-	  apps processor of the MSM/QSD and depends on a shared memory
-	  interface to the modem processor which runs the baseband
-	  stack and controls some vital subsystems
+	  ARM11/Scorpion apps processor of the MSM/QSD and depends on a
+	  shared memory interface to the ARM9 modem processor which
+	  runs the baseband stack and controls some vital subsystems
 	  (clock and power control, etc).
 
 config ARCH_SHMOBILE
@@ -1036,6 +1054,15 @@ config ARM_TIMER_SP804
 
 source arch/arm/mm/Kconfig
 
+config RESERVE_FIRST_PAGE
+	bool
+	default n
+	help
+	  Reserve the first page at PHYS_OFFSET. The first
+	  physical page is used by many platforms for warm
+	  boot operations. Reserve this page so that it is
+	  not allocated by the kernel.
+
 config IWMMXT
 	bool "Enable iWMMXt support"
 	depends on CPU_XSCALE || CPU_XSC3 || CPU_MOHAWK || CPU_PJ4
@@ -1143,7 +1170,7 @@ config ARM_ERRATA_742231
 
 config PL310_ERRATA_588369
 	bool "Clean & Invalidate maintenance operations do not invalidate clean lines"
-	depends on CACHE_L2X0 && ARCH_OMAP4
+	depends on CACHE_L2X0
 	help
 	   The PL310 L2 cache controller implements three types of Clean &
 	   Invalidate maintenance operations: by Physical Address
@@ -1152,8 +1179,7 @@ config PL310_ERRATA_588369
 	   clean operation followed immediately by an invalidate operation,
 	   both performing to the same memory location. This functionality
 	   is not correctly implemented in PL310 as clean lines are not
-	   invalidated as a result of these operations. Note that this errata
-	   uses Texas Instrument's secure monitor api.
+	   invalidated as a result of these operations.
 
 config ARM_ERRATA_720789
 	bool "ARM errata: TLBIASIDIS and TLBIMVAIS operations can broadcast a faulty ASID"
@@ -1204,6 +1230,30 @@ config ARM_ERRATA_753970
 	  by another offset targeting an unmapped PL310 register 0x740.
 	  This has the same effect as the cache sync operation: store buffer
 	  drain and waiting for all buffers empty.
+
+config PL310_ERRATA_727915
+	bool "Background Clean & Invalidate by Way operation can cause data corruption"
+	depends on CACHE_L2X0
+	help
+	  PL310 implements the Clean & Invalidate by Way L2 cache maintenance
+	  operation (offset 0x7FC). This operation runs in background so that
+	  PL310 can handle normal accesses while it is in progress. Under very
+	  rare circumstances, due to this erratum, write data can be lost when
+	  PL310 treats a cacheable write transaction during a Clean &
+	  Invalidate by Way operation.
+
+config KSAPI
+        tristate "KSAPI support (EXPERIMENTAL)"
+	depends on ARCH_MSM_SCORPION || ARCH_MSM_KRAIT
+        default n
+        help
+          KSAPI: Performance monitoring tool for linux.
+          KSAPI records performance statistics for Snapdragon linux platform.
+          It uses the /proc FS as a means to exchange configuration data and
+          counter statistics. It can monitor the counter statistics for
+          Scorpion processor supported hardware performance counters on a per
+          thread basis or AXI counters on an overall system basis.
+
 
 endmenu
 
@@ -1282,9 +1332,9 @@ config SMP
 	depends on REALVIEW_EB_ARM11MP || REALVIEW_EB_A9MP || \
 		 MACH_REALVIEW_PB11MP || MACH_REALVIEW_PBX || ARCH_OMAP4 || \
 		 ARCH_S5PV310 || ARCH_TEGRA || ARCH_U8500 || ARCH_VEXPRESS_CA9X4 || \
-		 ARCH_MSM_SCORPIONMP || ARCH_SHMOBILE
+		 MSM_SMP || ARCH_SHMOBILE
 	select USE_GENERIC_SMP_HELPERS
-	select HAVE_ARM_SCU if !ARCH_MSM_SCORPIONMP
+	select HAVE_ARM_SCU if !MSM_SMP
 	help
 	  This enables support for systems with more than one CPU. If you have
 	  a system with only one CPU, like most personal computers, say N. If
@@ -1360,16 +1410,17 @@ config NR_CPUS
 config HOTPLUG_CPU
 	bool "Support for hot-pluggable CPUs (EXPERIMENTAL)"
 	depends on SMP && HOTPLUG && EXPERIMENTAL
-	depends on !ARCH_MSM
 	help
 	  Say Y here to experiment with turning CPUs off and on.  CPUs
 	  can be controlled through /sys/devices/system/cpu.
 
 config LOCAL_TIMERS
 	bool "Use local timer interrupts"
-	depends on SMP
+	depends on SMP && (REALVIEW_EB_ARM11MP || MACH_REALVIEW_PB11MP || \
+		REALVIEW_EB_A9MP || MACH_REALVIEW_PBX || ARCH_OMAP4 || ARCH_U8500 || \
+		MSM_SMP)
 	default y
-	select HAVE_ARM_TWD if !ARCH_MSM_SCORPIONMP
+	select HAVE_ARM_TWD if (ARCH_REALVIEW || ARCH_OMAP4 || ARCH_U8500)
 	help
 	  Enable support for local timers on SMP platforms, rather then the
 	  legacy IPI broadcast method.  Local timers allows the system
@@ -1484,6 +1535,30 @@ config VMALLOC_RESERVE
 	  Reserved vmalloc space if not specified on the kernel commandline.
 
 source "mm/Kconfig"
+
+config ARCH_MEMORY_PROBE
+	def_bool n
+	depends on MEMORY_HOTPLUG
+
+config ARCH_MEMORY_REMOVE
+	def_bool n
+	depends on MEMORY_HOTPLUG
+
+config ARCH_POPULATES_NODE_MAP
+	def_bool n
+	depends on MEMORY_HOTPLUG
+
+config DONT_RESERVE_FROM_MOVABLE_ZONE
+	def_bool y
+	depends on MEMORY_HOTPLUG
+
+config DONT_MAP_HOLE_AFTER_MEMBANK0
+	def_bool n
+	depends on SPARSEMEM
+
+config FIX_MOVABLE_ZONE
+	def_bool y
+	depends on MEMORY_HOTPLUG
 
 config FORCE_MAX_ZONEORDER
 	int "Maximum zone order" if ARCH_SHMOBILE
@@ -1616,6 +1691,17 @@ config DEPRECATED_PARAM_STRUCT
 	help
 	  This was deprecated in 2001 and announced to live on for 5 years.
 	  Some old boot loaders still use this way.
+
+config CP_ACCESS
+	tristate "CP register access tool"
+	default n
+	help
+	  Provide support for Coprocessor register access using /sys
+	  interface. Read and write to CP registers from userspace
+	  through sysfs interface. A sys file (cp_rw) will be created under
+	  /sys/devices/system/cpaccess/cpaccess0.
+
+	  If unsure, say N.
 
 endmenu
 
@@ -1841,6 +1927,8 @@ endif
 
 source "drivers/cpuidle/Kconfig"
 
+endmenu
+
 config CPU_FREQ_MSM
         bool
         depends on CPU_FREQ && ARCH_MSM
@@ -1848,8 +1936,6 @@ config CPU_FREQ_MSM
         help
           This enables the CPUFreq driver for Qualcomm CPUs.
           If in doubt, say Y.
-
-endmenu
 
 menu "Floating point emulation"
 

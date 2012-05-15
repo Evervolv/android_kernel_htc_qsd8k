@@ -221,8 +221,6 @@ ENDPROC(v7_coherent_user_range)
 ENTRY(v7_flush_kern_dcache_area)
 	dcache_line_size r2, r3
 	add	r1, r0, r1
-	sub	r3, r2, #1
-	bic	r0, r0, r3
 1:
 	mcr	p15, 0, r0, c7, c14, 1		@ clean & invalidate D line / unified line
 	add	r0, r0, r2
@@ -336,7 +334,7 @@ ENTRY(v7_cache_fns)
 	.long	v7_flush_kern_dcache_area
 	.long	v7_dma_map_area
 	.long	v7_dma_unmap_area
-	.long  v7_dma_inv_range
-	.long  v7_dma_clean_range
+	.long	v7_dma_inv_range
+	.long	v7_dma_clean_range
 	.long	v7_dma_flush_range
 	.size	v7_cache_fns, . - v7_cache_fns

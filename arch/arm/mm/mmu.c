@@ -214,6 +214,12 @@ static struct mem_type mem_types[] = {
 		.prot_sect	= PROT_SECT_DEVICE | PMD_SECT_WB,
 		.domain		= DOMAIN_IO,
 	},	
+	[MT_DEVICE_STRONGLY_ORDERED] = {  /* Guaranteed strongly ordered */
+		.prot_pte       = PROT_PTE_DEVICE,
+		.prot_l1        = PMD_TYPE_TABLE,
+		.prot_sect      = PROT_SECT_DEVICE | PMD_SECT_UNCACHED,
+		.domain         = DOMAIN_IO,
+	},
 	[MT_DEVICE_WC] = {	/* ioremap_wc */
 		.prot_pte	= PROT_PTE_DEVICE | L_PTE_MT_DEV_WC,
 		.prot_l1	= PMD_TYPE_TABLE,
@@ -250,6 +256,18 @@ static struct mem_type mem_types[] = {
 		.prot_pte  = L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY,
 		.prot_l1   = PMD_TYPE_TABLE,
 		.prot_sect = PMD_TYPE_SECT | PMD_SECT_AP_WRITE,
+		.domain    = DOMAIN_KERNEL,
+	},
+	[MT_MEMORY_R] = {
+		.prot_sect = PMD_TYPE_SECT | PMD_SECT_XN,
+		.domain    = DOMAIN_KERNEL,
+	},
+	[MT_MEMORY_RW] = {
+		.prot_sect = PMD_TYPE_SECT | PMD_SECT_AP_WRITE | PMD_SECT_XN,
+		.domain    = DOMAIN_KERNEL,
+	},
+	[MT_MEMORY_RX] = {
+		.prot_sect = PMD_TYPE_SECT,
 		.domain    = DOMAIN_KERNEL,
 	},
 	[MT_ROM] = {
@@ -355,6 +373,8 @@ static void __init build_mem_type_table(void)
 			mem_types[MT_DEVICE_NONSHARED].prot_sect |= PMD_SECT_XN;
 			mem_types[MT_DEVICE_CACHED].prot_sect |= PMD_SECT_XN;
 			mem_types[MT_DEVICE_WC].prot_sect |= PMD_SECT_XN;
+			mem_types[MT_DEVICE_STRONGLY_ORDERED].prot_sect |=
+								PMD_SECT_XN;
 		}
 		if (cpu_arch >= CPU_ARCH_ARMv7 && (cr & CR_TRE)) {
 			/*
@@ -428,6 +448,8 @@ static void __init build_mem_type_table(void)
 		 * from SVC mode and no access from userspace.
 		 */
 		mem_types[MT_ROM].prot_sect |= PMD_SECT_APX|PMD_SECT_AP_WRITE;
+		mem_types[MT_MEMORY_RX].prot_sect |= PMD_SECT_APX|PMD_SECT_AP_WRITE;
+		mem_types[MT_MEMORY_R].prot_sect |= PMD_SECT_APX|PMD_SECT_AP_WRITE;
 		mem_types[MT_MINICLEAN].prot_sect |= PMD_SECT_APX|PMD_SECT_AP_WRITE;
 		mem_types[MT_CACHECLEAN].prot_sect |= PMD_SECT_APX|PMD_SECT_AP_WRITE;
 
@@ -446,6 +468,9 @@ static void __init build_mem_type_table(void)
 			mem_types[MT_MEMORY].prot_sect |= PMD_SECT_S;
 			mem_types[MT_MEMORY].prot_pte |= L_PTE_SHARED;
 			mem_types[MT_MEMORY_NONCACHED].prot_sect |= PMD_SECT_S;
+			mem_types[MT_MEMORY_R].prot_sect |= PMD_SECT_S;
+			mem_types[MT_MEMORY_RW].prot_sect |= PMD_SECT_S;
+			mem_types[MT_MEMORY_RX].prot_sect |= PMD_SECT_S;
 			mem_types[MT_MEMORY_NONCACHED].prot_pte |= L_PTE_SHARED;
 		}
 	}
@@ -485,6 +510,9 @@ static void __init build_mem_type_table(void)
 	mem_types[MT_MEMORY].prot_sect |= ecc_mask | cp->pmd;
 	mem_types[MT_MEMORY].prot_pte |= kern_pgprot;
 	mem_types[MT_MEMORY_NONCACHED].prot_sect |= ecc_mask;
+	mem_types[MT_MEMORY_R].prot_sect |= ecc_mask | cp->pmd;
+	mem_types[MT_MEMORY_RW].prot_sect |= ecc_mask | cp->pmd;
+	mem_types[MT_MEMORY_RX].prot_sect |= ecc_mask | cp->pmd;
 	mem_types[MT_ROM].prot_sect |= cp->pmd;
 
 	switch (cp->pmd) {
@@ -650,7 +678,7 @@ static void __init create_36bit_mapping(struct map_desc *md,
  * offsets, and we take full advantage of sections and
  * supersections.
  */
-static void __init create_mapping(struct map_desc *md)
+void __init create_mapping(struct map_desc *md)
 {
 	unsigned long phys, addr, length, end;
 	const struct mem_type *type;
@@ -714,8 +742,7 @@ void __init iotable_init(struct map_desc *io_desc, int nr)
 		create_mapping(io_desc + i);
 }
 
-static void * __initdata vmalloc_min = (void *)(VMALLOC_END -
-						CONFIG_VMALLOC_RESERVE);
+static void * __initdata vmalloc_min = (void *)(VMALLOC_END - CONFIG_VMALLOC_RESERVE);
 
 /*
  * vmalloc=size forces the vmalloc area to be exactly 'size'
@@ -750,7 +777,12 @@ static phys_addr_t lowmem_limit __initdata = 0;
 static void __init sanity_check_meminfo(void)
 {
 	int i, j, highmem = 0;
+#if (defined CONFIG_HIGHMEM) && (defined CONFIG_FIX_MOVABLE_ZONE)
+	void *v_movable_start = __va(movable_reserved_start);
 
+	if (vmalloc_min > v_movable_start)
+		vmalloc_min = v_movable_start - SECTION_SIZE;
+#endif
 	lowmem_limit = __pa(vmalloc_min - 1) + 1;
 	memblock_set_current_limit(lowmem_limit);
 
@@ -1012,8 +1044,39 @@ static void __init map_lowmem(void)
 
 		map.pfn = __phys_to_pfn(start);
 		map.virtual = __phys_to_virt(start);
+#ifdef CONFIG_STRICT_MEMORY_RWX
+		if (start <= __pa(_text) && __pa(_text) < end) {
+			map.length = (unsigned long)_text - map.virtual;
+			map.type = MT_MEMORY;
+
+			create_mapping(&map);
+
+			map.pfn = __phys_to_pfn(__pa(_text));
+			map.virtual = (unsigned long)_text;
+			map.length = __start_rodata - _text;
+			map.type = MT_MEMORY_RX;
+
+			create_mapping(&map);
+
+			map.pfn = __phys_to_pfn(__pa(__start_rodata));
+			map.virtual = (unsigned long)__start_rodata;
+			map.length = _sdata - __start_rodata;
+			map.type = MT_MEMORY_R;
+
+			create_mapping(&map);
+
+			map.pfn = __phys_to_pfn(__pa(_sdata));
+			map.virtual = (unsigned long)_sdata;
+			map.length = __phys_to_virt(end) - (unsigned int)_sdata;
+			map.type = MT_MEMORY_RW;
+		} else {
+			map.length = end - start;
+			map.type = MT_MEMORY_RW;
+		}
+#else
 		map.length = end - start;
 		map.type = MT_MEMORY;
+#endif
 
 		create_mapping(&map);
 	}
@@ -1043,4 +1106,16 @@ void __init paging_init(struct machine_desc *mdesc)
 
 	empty_zero_page = virt_to_page(zero_page);
 	__flush_dcache_page(NULL, empty_zero_page);
+
+#if defined(CONFIG_ARCH_MSM7X27)
+	/*
+	 * ensure that the strongly ordered page is mapped before the
+	 * first call to write_to_strongly_ordered_memory. This page
+	 * is necessary for the msm 7x27 due to hardware quirks. The
+	 * map call is made here to ensure the bootmem call is made
+	 * in the right window (after initialization, before full
+	 * allocators are initialized)
+	 */
+	map_page_strongly_ordered();
+#endif
 }

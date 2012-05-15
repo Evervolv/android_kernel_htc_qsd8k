@@ -466,6 +466,7 @@ static inline unsigned long armv7_pmnc_read(void)
 static inline void armv7_pmnc_write(unsigned long val)
 {
 	val &= ARMV7_PMNC_MASK;
+	isb();
 	asm volatile("mcr p15, 0, %0, c9, c12, 0" : : "r"(val));
 }
 
@@ -502,6 +503,7 @@ static inline int armv7_pmnc_select_counter(unsigned int idx)
 
 	val = (idx - ARMV7_EVENT_CNT_TO_CNTx) & ARMV7_SELECT_MASK;
 	asm volatile("mcr p15, 0, %0, c9, c12, 5" : : "r" (val));
+	isb();
 
 	return idx;
 }
@@ -780,7 +782,7 @@ static irqreturn_t armv7pmu_handle_irq(int irq_num, void *dev)
 			continue;
 
 		hwc = &event->hw;
-		armpmu_event_update(event, hwc, idx);
+		armpmu_event_update(event, hwc, idx, 1);
 		data.period = event->hw.last_period;
 		if (!armpmu_event_set_period(event, hwc, idx))
 			continue;

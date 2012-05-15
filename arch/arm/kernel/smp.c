@@ -4,7 +4,7 @@
  *  Copyright (C) 2002 ARM Limited, All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the termsCON of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
 #include <linux/module.h>
@@ -278,8 +278,6 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	struct mm_struct *mm = &init_mm;
 	unsigned int cpu = smp_processor_id();
 
-	printk("CPU%u: Booted secondary processor\n", cpu);
-
 	/*
 	 * All kernel threads share the same mm context; grab a
 	 * reference and switch to it.
@@ -470,11 +468,7 @@ static void smp_timer_broadcast(const struct cpumask *mask)
 {
 	smp_cross_call(mask, IPI_TIMER);
 }
-#else
-#define smp_timer_broadcast	NULL
-#endif
 
-#ifndef CONFIG_LOCAL_TIMERS
 static void broadcast_timer_set_mode(enum clock_event_mode mode,
 	struct clock_event_device *evt)
 {
@@ -489,6 +483,7 @@ static void local_timer_setup(struct clock_event_device *evt)
 	evt->rating	= 400;
 	evt->mult	= 1;
 	evt->set_mode	= broadcast_timer_set_mode;
+	evt->broadcast	= smp_timer_broadcast;
 
 	clockevents_register_device(evt);
 }
@@ -500,7 +495,6 @@ void __cpuinit percpu_timer_setup(void)
 	struct clock_event_device *evt = &per_cpu(percpu_clockevent, cpu);
 
 	evt->cpumask = cpumask_of(cpu);
-	evt->broadcast = smp_timer_broadcast;
 
 	local_timer_setup(evt);
 }
@@ -589,6 +583,11 @@ asmlinkage void __exception_irq_entry do_IPI(int ipinr, struct pt_regs *regs)
 
 void smp_send_reschedule(int cpu)
 {
+
+	if (unlikely(cpu_is_offline(cpu))) {
+		WARN_ON(1);
+		return;
+	}
 	smp_cross_call(cpumask_of(cpu), IPI_RESCHEDULE);
 }
 
