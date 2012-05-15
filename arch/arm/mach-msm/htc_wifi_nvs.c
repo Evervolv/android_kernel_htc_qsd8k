@@ -36,7 +36,7 @@ static struct proc_dir_entry *wifi_calibration;
 
 unsigned char *get_wifi_nvs_ram( void )
 {
-	return wifi_nvs_ram;
+	return( wifi_nvs_ram );
 }
 EXPORT_SYMBOL(get_wifi_nvs_ram);
 
@@ -51,11 +51,10 @@ static int __init parse_tag_msm_wifi(const struct tag *tag)
 	size = min((tag->hdr.size - 2) * sizeof(__u32), NVS_MAX_SIZE);
 #ifdef ATAG_MSM_WIFI_DEBUG
 	printk("WiFi Data size = %d , 0x%x\n", tag->hdr.size, tag->hdr.tag);
-	for(i=0;( i < size );i++) {
+	for (i = 0; i < size; i++)
 		printk("%02x ", *dptr++);
-	}
-#endif	
-	memcpy(wifi_nvs_ram, dptr, size);
+#endif
+	memcpy( (void *)wifi_nvs_ram, (void *)dptr, size );
 	return 0;
 }
 

@@ -28,7 +28,6 @@
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/switch.h>
-#include <linux/wakelock.h>
 
 #include "board-mahimahi.h"
 
@@ -413,11 +412,10 @@ static int power_get_property(struct power_supply *psy,
 	if (psp != POWER_SUPPLY_PROP_ONLINE)
 		return -EINVAL;
 
-	if (psy->type == POWER_SUPPLY_TYPE_MAINS) {
+	if (psy->type == POWER_SUPPLY_TYPE_MAINS)
 		val->intval = (vbus_present && (usb_status == 2 || dock_mains));
-	} else {
+	else
 		val->intval = vbus_present;
-	}
 	return 0;
 }
 
