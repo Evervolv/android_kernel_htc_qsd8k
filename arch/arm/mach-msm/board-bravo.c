@@ -55,6 +55,7 @@
 #endif
 #include <mach/vreg.h>
 #include <mach/board-bravo-microp-common.h>
+#include <mach/socinfo.h>
 
 #include "board-bravo.h"
 #include "devices.h"
@@ -1287,6 +1288,8 @@ static void __init bravo_map_io(void)
 {
 	msm_map_qsd8x50_io();
 	msm_clock_init(msm_clocks_8x50, msm_num_clocks_8x50);
+	if (socinfo_init() < 0)
+		printk(KERN_ERR "%s: socinfo_init() failed!\n",__func__);
 }
 
 extern struct sys_timer msm_timer;

@@ -1,6 +1,7 @@
 obj-y += io.o dma.o memory.o timer.o
 obj-y += clock.o
 obj-$(CONFIG_CPU_FREQ_MSM) += cpufreq.o
+obj-y += socinfo.o
 
 obj-$(CONFIG_MSM_PROC_COMM) += proc_comm.o
 ifndef CONFIG_ARCH_MSM8X60

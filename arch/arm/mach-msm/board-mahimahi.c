@@ -54,6 +54,7 @@
 #ifdef CONFIG_PERFLOCK
 #include <mach/perflock.h>
 #endif
+#include <mach/socinfo.h>
 #include "board-mahimahi.h"
 #include "devices.h"
 #include "proc_comm.h"
@@ -1190,6 +1191,8 @@ static void __init mahimahi_map_io(void)
 {
 	msm_map_qsd8x50_io();
 	msm_clock_init(msm_clocks_8x50, msm_num_clocks_8x50);
+	if (socinfo_init() < 0)
+		printk(KERN_ERR "%s: socinfo_init() failed!\n",__func__);
 }
 
 extern struct sys_timer msm_timer;

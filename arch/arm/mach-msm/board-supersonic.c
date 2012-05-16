@@ -45,6 +45,7 @@
 #include <mach/htc_battery.h>
 #include <mach/msm_serial_debugger.h>
 #include <mach/system.h>
+#include <mach/socinfo.h>
 #include <linux/spi/spi.h>
 
 #include "board-supersonic.h"
@@ -1667,6 +1668,8 @@ static void __init supersonic_map_io(void)
 {
 	msm_map_qsd8x50_io();
 	msm_clock_init(msm_clocks_8x50, msm_num_clocks_8x50);
+	if (socinfo_init() < 0)
+		printk(KERN_ERR "%s: socinfo_init() failed!\n",__func__);
 }
 
 extern struct sys_timer msm_timer;
