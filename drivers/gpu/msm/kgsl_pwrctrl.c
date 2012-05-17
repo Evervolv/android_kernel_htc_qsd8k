@@ -13,12 +13,17 @@
 #include <linux/interrupt.h>
 #include <mach/msm_iomap.h>
 #include <mach/msm_bus.h>
+#include <mach/socinfo.h>
 
 #include "kgsl.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_device.h"
 
-#define GPU_SWFI_LATENCY	3
+#define KGSL_PWRFLAGS_POWER_ON 0
+#define KGSL_PWRFLAGS_CLK_ON   1
+#define KGSL_PWRFLAGS_AXI_ON   2
+#define KGSL_PWRFLAGS_IRQ_ON   3
+
 #define UPDATE_BUSY_VAL		1000000
 #define UPDATE_BUSY		50
 
@@ -335,7 +340,6 @@ void kgsl_pwrctrl_clk(struct kgsl_device *device, int state)
 		}
 	}
 }
-EXPORT_SYMBOL(kgsl_pwrctrl_clk);
 
 void kgsl_pwrctrl_axi(struct kgsl_device *device, int state)
 {
@@ -372,8 +376,6 @@ void kgsl_pwrctrl_axi(struct kgsl_device *device, int state)
 		}
 	}
 }
-EXPORT_SYMBOL(kgsl_pwrctrl_axi);
-
 
 void kgsl_pwrctrl_pwrrail(struct kgsl_device *device, int state)
 {
@@ -397,7 +399,6 @@ void kgsl_pwrctrl_pwrrail(struct kgsl_device *device, int state)
 		}
 	}
 }
-EXPORT_SYMBOL(kgsl_pwrctrl_pwrrail);
 
 void kgsl_pwrctrl_irq(struct kgsl_device *device, int state)
 {
@@ -474,6 +475,8 @@ int kgsl_pwrctrl_init(struct kgsl_device *device)
 					   gpu_freq) : 0;
 		pwr->pwrlevels[i].bus_freq =
 			pdata_pwr->pwrlevel[i].bus_freq;
+		pwr->pwrlevels[i].io_fraction =
+			pdata_pwr->pwrlevel[i].io_fraction;
 	}
 	/* Do not set_rate for targets in sync with AXI */
 	if (pwr->pwrlevels[0].gpu_freq > 0)
@@ -577,10 +580,11 @@ void kgsl_idle_check(struct work_struct *work)
 							idle_check_ws);
 
 	mutex_lock(&device->mutex);
-	if (device->requested_state != KGSL_STATE_SLEEP)
-		kgsl_pwrscale_idle(device);
-
 	if (device->state & (KGSL_STATE_ACTIVE | KGSL_STATE_NAP)) {
+		if ((device->requested_state != KGSL_STATE_SLEEP) &&
+			(device->requested_state != KGSL_STATE_SLUMBER))
+			kgsl_pwrscale_idle(device);
+
 		if (kgsl_pwrctrl_sleep(device) != 0) {
 			mod_timer(&device->idle_timer,
 					jiffies +
@@ -616,7 +620,8 @@ void kgsl_timer(unsigned long data)
 void kgsl_pre_hwaccess(struct kgsl_device *device)
 {
 	BUG_ON(!mutex_is_locked(&device->mutex));
-	if (device->state & (KGSL_STATE_SLEEP | KGSL_STATE_NAP))
+	if (device->state & (KGSL_STATE_SLEEP | KGSL_STATE_NAP |
+				KGSL_STATE_SLUMBER))
 		kgsl_pwrctrl_wake(device);
 }
 EXPORT_SYMBOL(kgsl_pre_hwaccess);
@@ -628,14 +633,46 @@ void kgsl_check_suspended(struct kgsl_device *device)
 		mutex_unlock(&device->mutex);
 		wait_for_completion(&device->hwaccess_gate);
 		mutex_lock(&device->mutex);
-	}
-	if (device->state == KGSL_STATE_DUMP_AND_RECOVER) {
+	} else if (device->state == KGSL_STATE_DUMP_AND_RECOVER) {
 		mutex_unlock(&device->mutex);
 		wait_for_completion(&device->recovery_gate);
 		mutex_lock(&device->mutex);
-	}
- }
+	} else if (device->state == KGSL_STATE_SLUMBER)
+		kgsl_pwrctrl_wake(device);
+}
 
+static int
+_slumber(struct kgsl_device *device)
+{
+	int status = -EINVAL;
+	if (!device)
+		return -EINVAL;
+	KGSL_PWR_WARN(device, "Slumber start\n");
+
+	device->requested_state = KGSL_STATE_SLUMBER;
+	del_timer(&device->idle_timer);
+	switch (device->state) {
+	case KGSL_STATE_ACTIVE:
+		/* Wait for the device to become idle */
+		device->ftbl->idle(device, KGSL_TIMEOUT_DEFAULT);
+	case KGSL_STATE_NAP:
+	case KGSL_STATE_SLEEP:
+		device->ftbl->suspend_context(device);
+		device->ftbl->stop(device);
+		device->state = KGSL_STATE_SLUMBER;
+		device->pwrctrl.restore_slumber = 1;
+		KGSL_PWR_WARN(device, "state -> SLUMBER, device %d\n",
+				device->id);
+		break;
+	default:
+		break;
+	}
+	status = 0;
+	/* Don't set requested state to NONE
+	It's done in kgsl_pwrctrl_sleep*/
+	KGSL_PWR_WARN(device, "Done going to slumber\n");
+	return status;
+}
 
 /******************************************************************/
 /* Caller must hold the device mutex. */
@@ -645,17 +682,33 @@ int kgsl_pwrctrl_sleep(struct kgsl_device *device)
 	KGSL_PWR_INFO(device, "sleep device %d\n", device->id);
 
 	/* Work through the legal state transitions */
-	if (device->requested_state == KGSL_STATE_NAP) {
-		if (device->ftbl->isidle(device))
+	if ((device->requested_state == KGSL_STATE_NAP)) {
+		if (device->pwrctrl.restore_slumber) {
+			device->requested_state = KGSL_STATE_NONE;
+			return 0;
+		} else if (device->ftbl->isidle(device))
 			goto nap;
 	} else if (device->requested_state == KGSL_STATE_SLEEP) {
 		if (device->state == KGSL_STATE_NAP ||
-			device->ftbl->isidle(device))
-			goto sleep;
+			device->ftbl->isidle(device)) {
+			if (!device->pwrctrl.restore_slumber)
+				goto sleep;
+			else
+				goto slumber;
+			}
+	} else if (device->requested_state == KGSL_STATE_SLUMBER) {
+		if (device->state == KGSL_STATE_INIT)
+			return 0;
+		if (device->ftbl->isidle(device))
+			goto slumber;
 	}
 
 	device->requested_state = KGSL_STATE_NONE;
 	return -EBUSY;
+
+
+slumber:
+	_slumber(device);
 
 sleep:
 	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_OFF);
@@ -678,9 +731,8 @@ clk_off:
 
 	device->state = device->requested_state;
 	device->requested_state = KGSL_STATE_NONE;
-	wake_unlock(&device->idle_wakelock);
-	pm_qos_update_request(&device->pm_qos_req_dma,
-				PM_QOS_DEFAULT_VALUE);
+	if (device->idle_wakelock.name)
+		wake_unlock(&device->idle_wakelock);
 	KGSL_PWR_WARN(device, "state -> NAP/SLEEP(%d), device %d\n",
 				  device->state, device->id);
 
@@ -688,12 +740,33 @@ clk_off:
 }
 EXPORT_SYMBOL(kgsl_pwrctrl_sleep);
 
+static int
+_wake_from_slumber(struct kgsl_device *device)
+{
+	int status = -EINVAL;
+	if (!device)
+		return -EINVAL;
+
+	KGSL_PWR_WARN(device, "wake from slumber start\n");
+
+	device->requested_state = KGSL_STATE_ACTIVE;
+	kgsl_pwrctrl_pwrlevel_change(device, KGSL_PWRLEVEL_NOMINAL);
+	status = device->ftbl->start(device, 0);
+	device->requested_state = KGSL_STATE_NONE;
+
+	KGSL_PWR_WARN(device, "Done waking from slumber\n");
+	return status;
+}
+
 /******************************************************************/
 /* Caller must hold the device mutex. */
 void kgsl_pwrctrl_wake(struct kgsl_device *device)
 {
-	if (device->state == KGSL_STATE_SUSPEND)
+	if (device->state & (KGSL_STATE_SUSPEND | KGSL_STATE_INIT))
 		return;
+
+	if (device->state == KGSL_STATE_SLUMBER)
+		_wake_from_slumber(device);
 
 	if (device->state != KGSL_STATE_NAP) {
 		kgsl_pwrctrl_axi(device, KGSL_PWRFLAGS_ON);
@@ -712,8 +785,9 @@ void kgsl_pwrctrl_wake(struct kgsl_device *device)
 	mod_timer(&device->idle_timer,
 				jiffies + device->pwrctrl.interval_timeout);
 
-	wake_lock(&device->idle_wakelock);
-	pm_qos_update_request(&device->pm_qos_req_dma, GPU_SWFI_LATENCY);
+	if (device->idle_wakelock.name)
+		wake_lock(&device->idle_wakelock);
+
 	KGSL_PWR_INFO(device, "wake return for device %d\n", device->id);
 }
 EXPORT_SYMBOL(kgsl_pwrctrl_wake);

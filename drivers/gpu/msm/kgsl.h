@@ -101,9 +101,6 @@ struct kgsl_driver {
 
 extern struct kgsl_driver kgsl_driver;
 
-#define KGSL_USER_MEMORY 1
-#define KGSL_MAPPED_MEMORY 2
-
 struct kgsl_pagetable;
 struct kgsl_memdesc_ops;
 
@@ -115,14 +112,25 @@ struct kgsl_memdesc {
 	unsigned int physaddr;
 	unsigned int size;
 	unsigned int priv;
+	struct scatterlist *sg;
+	unsigned int sglen;
 	struct kgsl_memdesc_ops *ops;
 };
+
+/* List of different memory entry types */
+
+#define KGSL_MEM_ENTRY_KERNEL 0
+#define KGSL_MEM_ENTRY_PMEM   1
+#define KGSL_MEM_ENTRY_ASHMEM 2
+#define KGSL_MEM_ENTRY_USER   3
+#define KGSL_MEM_ENTRY_ION    4
+#define KGSL_MEM_ENTRY_MAX    5
 
 struct kgsl_mem_entry {
 	struct kref refcount;
 	struct kgsl_memdesc memdesc;
 	int memtype;
-	struct file *file_ptr;
+	void *priv_data;
 	struct list_head list;
 	uint32_t free_timestamp;
 	/* back pointer to private structure under whose context this
@@ -176,10 +184,14 @@ static inline int kgsl_gpuaddr_in_memdesc(const struct kgsl_memdesc *memdesc,
 	return 0;
 }
 
-static inline bool timestamp_cmp(unsigned int new, unsigned int old)
+static inline int timestamp_cmp(unsigned int new, unsigned int old)
 {
 	int ts_diff = new - old;
-	return (ts_diff >= 0) || (ts_diff < -20000);
+
+	if (ts_diff == 0)
+		return 0;
+
+	return ((ts_diff > 0) || (ts_diff < -20000)) ? 1 : -1;
 }
 
 static inline void

@@ -15,7 +15,6 @@
 
 #include <linux/idr.h>
 #include <linux/wakelock.h>
-#include <linux/pm_qos_params.h>
 #include <linux/earlysuspend.h>
 
 #include "kgsl.h"
@@ -46,6 +45,7 @@
 #define KGSL_STATE_SUSPEND	0x00000010
 #define KGSL_STATE_HUNG		0x00000020
 #define KGSL_STATE_DUMP_AND_RECOVER	0x00000040
+#define KGSL_STATE_SLUMBER	0x00000080
 
 #define KGSL_GRAPHICS_MEMORY_LOW_WATERMARK  0x1000000
 
@@ -118,6 +118,14 @@ struct kgsl_mh {
 	int              mpu_range;
 };
 
+struct kgsl_event {
+	uint32_t timestamp;
+	void (*func)(struct kgsl_device *, void *, u32);
+	void *priv;
+	struct list_head list;
+};
+
+
 struct kgsl_device {
 	struct device *dev;
 	const char *name;
@@ -164,7 +172,8 @@ struct kgsl_device {
 	struct wake_lock idle_wakelock;
 	struct kgsl_pwrscale pwrscale;
 	struct kobject pwrscale_kobj;
-	struct pm_qos_request_list pm_qos_req_dma;
+	struct work_struct ts_expired_ws;
+	struct list_head events;
 };
 
 struct kgsl_context {
@@ -184,15 +193,12 @@ struct kgsl_process_private {
 	struct list_head mem_list;
 	struct kgsl_pagetable *pagetable;
 	struct list_head list;
-	struct kobject *kobj;
+	struct kobject kobj;
 
 	struct {
-		unsigned int user;
-		unsigned int user_max;
-		unsigned int mapped;
-		unsigned int mapped_max;
-		unsigned int flushes;
-	} stats;
+		unsigned int cur;
+		unsigned int max;
+	} stats[KGSL_MEM_ENTRY_MAX];
 };
 
 struct kgsl_device_private {
@@ -206,6 +212,14 @@ struct kgsl_power_stats {
 };
 
 struct kgsl_device *kgsl_get_device(int dev_idx);
+
+static inline void kgsl_process_add_stats(struct kgsl_process_private *priv,
+	unsigned int type, size_t size)
+{
+	priv->stats[type].cur += size;
+	if (priv->stats[type].max < priv->stats[type].cur)
+		priv->stats[type].max = priv->stats[type].cur;
+}
 
 static inline void kgsl_regread(struct kgsl_device *device,
 				unsigned int offsetwords,

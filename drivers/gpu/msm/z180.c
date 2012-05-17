@@ -234,6 +234,7 @@ static irqreturn_t z180_isr(int irq, void *data)
 			count &= 255;
 			z180_dev->timestamp += count;
 
+			queue_work(device->work_queue, &device->ts_expired_ws);
 			wake_up_interruptible(&device->wait_queue);
 
 			atomic_notifier_call_chain(
@@ -377,7 +378,8 @@ static int z180_idle(struct kgsl_device *device, unsigned int timeout)
 	int status = 0;
 	struct z180_device *z180_dev = Z180_DEVICE(device);
 
-	if (z180_dev->current_timestamp > z180_dev->timestamp)
+	if (timestamp_cmp(z180_dev->current_timestamp,
+		z180_dev->timestamp) > 0)
 		status = z180_wait(device, z180_dev->current_timestamp,
 					timeout);
 
@@ -410,7 +412,7 @@ z180_cmdstream_issueibcmds(struct kgsl_device_private *dev_priv,
 	unsigned int sizedwords;
 
 	if (device->state & KGSL_STATE_HUNG) {
-		return -EINVAL;
+		result = -EINVAL;
 		goto error;
 	}
 	if (numibs != 1) {
@@ -564,7 +566,7 @@ static int z180_start(struct kgsl_device *device, unsigned int init_ram)
 	z180_cmdstream_start(device);
 
 	mod_timer(&device->idle_timer, jiffies + FIRST_TIMEOUT);
-	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_IRQ_ON);
+	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_ON);
 	return 0;
 
 error_clk_off:
@@ -643,15 +645,10 @@ static int z180_getproperty(struct kgsl_device *device,
 
 static unsigned int z180_isidle(struct kgsl_device *device)
 {
-	int status = false;
 	struct z180_device *z180_dev = Z180_DEVICE(device);
 
-	int timestamp = z180_dev->timestamp;
-
-	if (timestamp == z180_dev->current_timestamp)
-		status = true;
-
-	return status;
+	return (timestamp_cmp(z180_dev->timestamp,
+		z180_dev->current_timestamp) == 0) ? true : false;
 }
 
 static int z180_suspend_context(struct kgsl_device *device)
@@ -806,6 +803,11 @@ static int z180_waittimestamp(struct kgsl_device *device,
 				unsigned int msecs)
 {
 	int status = -EINVAL;
+
+	/* Don't wait forever, set a max (10 sec) value for now */
+	if (msecs == -1)
+		msecs = 10 * MSEC_PER_SEC;
+
 	mutex_unlock(&device->mutex);
 	status = z180_wait(device, timestamp, msecs);
 	mutex_lock(&device->mutex);

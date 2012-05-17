@@ -13,7 +13,9 @@
 #ifndef __KGSL_SHAREDMEM_H
 #define __KGSL_SHAREDMEM_H
 
+#include <linux/slab.h>
 #include <linux/dma-mapping.h>
+#include "kgsl_mmu.h"
 
 struct kgsl_device;
 struct kgsl_process_private;
@@ -26,8 +28,6 @@ struct kgsl_process_private;
 #define KGSL_MEMFLAGS_CACHED    0x00000001
 
 struct kgsl_memdesc_ops {
-	unsigned long (*physaddr)(struct kgsl_memdesc *, unsigned int);
-	void (*outer_cache)(struct kgsl_memdesc *, int);
 	int (*vmflags)(struct kgsl_memdesc *);
 	int (*vmfault)(struct kgsl_memdesc *, struct vm_area_struct *,
 		       struct vm_fault *);
@@ -35,8 +35,6 @@ struct kgsl_memdesc_ops {
 };
 
 extern struct kgsl_memdesc_ops kgsl_vmalloc_ops;
-extern struct kgsl_memdesc_ops kgsl_contiguous_ops;
-extern struct kgsl_memdesc_ops kgsl_userptr_ops;
 
 int kgsl_sharedmem_vmalloc(struct kgsl_memdesc *memdesc,
 			   struct kgsl_pagetable *pagetable, size_t size);
@@ -78,14 +76,28 @@ int kgsl_sharedmem_init_sysfs(void);
 void kgsl_sharedmem_uninit_sysfs(void);
 
 static inline int
+memdesc_sg_phys(struct kgsl_memdesc *memdesc,
+		unsigned int physaddr, unsigned int size)
+{
+	struct page *page = phys_to_page(physaddr);
+
+	memdesc->sg = kmalloc(sizeof(struct scatterlist) * 1, GFP_KERNEL);
+	if (memdesc->sg == NULL)
+		return -ENOMEM;
+
+	memdesc->sglen = 1;
+	sg_init_table(memdesc->sg, 1);
+	sg_set_page(&memdesc->sg[0], page, size, 0);
+	return 0;
+}
+
+static inline int
 kgsl_allocate(struct kgsl_memdesc *memdesc,
 		struct kgsl_pagetable *pagetable, size_t size)
 {
-#ifdef CONFIG_MSM_KGSL_MMU
+	if (kgsl_mmu_get_mmutype() == KGSL_MMU_TYPE_NONE)
+		return kgsl_sharedmem_ebimem(memdesc, pagetable, size);
 	return kgsl_sharedmem_vmalloc(memdesc, pagetable, size);
-#else
-	return kgsl_sharedmem_ebimem(memdesc, pagetable, size);
-#endif
 }
 
 static inline int
@@ -93,21 +105,18 @@ kgsl_allocate_user(struct kgsl_memdesc *memdesc,
 		struct kgsl_pagetable *pagetable,
 		size_t size, unsigned int flags)
 {
-#ifdef CONFIG_MSM_KGSL_MMU
+	if (kgsl_mmu_get_mmutype() == KGSL_MMU_TYPE_NONE)
+		return kgsl_sharedmem_ebimem_user(memdesc, pagetable, size,
+						  flags);
 	return kgsl_sharedmem_vmalloc_user(memdesc, pagetable, size, flags);
-#else
-	return kgsl_sharedmem_ebimem_user(memdesc, pagetable, size, flags);
-#endif
 }
 
 static inline int
 kgsl_allocate_contiguous(struct kgsl_memdesc *memdesc, size_t size)
 {
 	int ret  = kgsl_sharedmem_alloc_coherent(memdesc, size);
-#ifndef CONFIG_MSM_KGSL_MMU
-	if (!ret)
+	if (!ret && (kgsl_mmu_get_mmutype() == KGSL_MMU_TYPE_NONE))
 		memdesc->gpuaddr = memdesc->physaddr;
-#endif
 	return ret;
 }
 

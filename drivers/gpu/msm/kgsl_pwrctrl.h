@@ -16,17 +16,11 @@
 /*****************************************************************************
 ** power flags
 *****************************************************************************/
-#define KGSL_PWRFLAGS_POWER_ON 0
-#define KGSL_PWRFLAGS_CLK_ON   1
-#define KGSL_PWRFLAGS_AXI_ON   2
-#define KGSL_PWRFLAGS_IRQ_ON   3
-
 #define KGSL_PWRFLAGS_ON   1
 #define KGSL_PWRFLAGS_OFF  0
 
 #define KGSL_PWRLEVEL_TURBO 0
 #define KGSL_PWRLEVEL_NOMINAL 1
-#define KGSL_PWRLEVEL_LOW_OFFSET 2
 
 #define KGSL_MAX_CLKS 5
 
@@ -61,11 +55,9 @@ struct kgsl_pwrctrl {
 	const char *src_clk_name;
 	s64 time;
 	struct kgsl_busy busy;
+	unsigned int restore_slumber;
 };
 
-void kgsl_pwrctrl_clk(struct kgsl_device *device, int state);
-void kgsl_pwrctrl_axi(struct kgsl_device *device, int state);
-void kgsl_pwrctrl_pwrrail(struct kgsl_device *device, int state);
 void kgsl_pwrctrl_irq(struct kgsl_device *device, int state);
 int kgsl_pwrctrl_init(struct kgsl_device *device);
 void kgsl_pwrctrl_close(struct kgsl_device *device);

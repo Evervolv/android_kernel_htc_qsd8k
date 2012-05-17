@@ -38,6 +38,12 @@
 #define ADRENO_DEFAULT_PWRSCALE_POLICY  NULL
 #endif
 
+/*
+ * constants for the size of shader instructions
+ */
+#define ADRENO_ISTORE_BYTES 12
+#define ADRENO_ISTORE_WORDS 3
+
 enum adreno_gpurev {
 	ADRENO_REV_UNKNOWN = 0,
 	ADRENO_REV_A200 = 200,
@@ -54,7 +60,6 @@ struct adreno_device {
 	enum adreno_gpurev gpurev;
 	struct kgsl_memregion gmemspace;
 	struct adreno_context *drawctxt_active;
-	wait_queue_head_t ib1_wq;
 	const char *pfp_fwfile;
 	unsigned int *pfp_fw;
 	size_t pfp_fw_size;
@@ -64,6 +69,9 @@ struct adreno_device {
 	struct adreno_ringbuffer ringbuffer;
 	unsigned int mharb;
 	struct adreno_gpudev *gpudev;
+	unsigned int wait_timeout;
+	unsigned int istore_size;
+	unsigned int pix_shader_start;
 };
 
 struct adreno_gpudev {
@@ -125,5 +133,28 @@ static inline int adreno_is_a2xx(struct adreno_device *adreno_dev)
 	return (adreno_dev->gpurev <= ADRENO_REV_A225);
 }
 
+/**
+ * adreno_encode_istore_size - encode istore size in CP format
+ * @adreno_dev - The 3D device.
+ *
+ * Encode the istore size into the format expected that the
+ * CP_SET_SHADER_BASES and CP_ME_INIT commands:
+ * bits 31:29 - istore size as encoded by this function
+ * bits 27:16 - vertex shader start offset in instructions
+ * bits 11:0 - pixel shader start offset in instructions.
+ */
+static inline int adreno_encode_istore_size(struct adreno_device *adreno_dev)
+{
+	unsigned int size;
+	/* in a225 the CP microcode multiplies the encoded
+	 * value by 3 while decoding.
+	 */
+	if (adreno_is_a225(adreno_dev))
+		size = adreno_dev->istore_size/3;
+	else
+		size = adreno_dev->istore_size;
+
+	return (ilog2(size) - 5) << 29;
+}
 
 #endif /*__ADRENO_H */

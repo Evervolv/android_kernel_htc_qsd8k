@@ -226,8 +226,6 @@ kgsl_iommu_unmap(void *mmu_specific_pt,
 {
 	int ret;
 	unsigned int range = memdesc->size;
-	unsigned int iommu_map_addr;
-	int map_order = get_order(SZ_4K);
 	struct iommu_domain *domain = (struct iommu_domain *)
 					mmu_specific_pt;
 
@@ -240,14 +238,11 @@ kgsl_iommu_unmap(void *mmu_specific_pt,
 	if (range == 0 || gpuaddr == 0)
 		return 0;
 
-	for (iommu_map_addr = gpuaddr; iommu_map_addr < (gpuaddr + range);
-		iommu_map_addr += SZ_4K) {
-		ret = iommu_unmap(domain, iommu_map_addr, map_order);
-		if (ret)
-			KGSL_CORE_ERR("iommu_unmap(%p, %x, %d) failed "
-			"with err: %d\n", domain, iommu_map_addr,
-			map_order, ret);
-	}
+	ret = iommu_unmap_range(domain, gpuaddr, range);
+	if (ret)
+		KGSL_CORE_ERR("iommu_unmap_range(%p, %x, %d) failed "
+			"with err: %d\n", domain, gpuaddr,
+			range, ret);
 
 	return 0;
 }
@@ -257,38 +252,23 @@ kgsl_iommu_map(void *mmu_specific_pt,
 			struct kgsl_memdesc *memdesc,
 			unsigned int protflags)
 {
-	int ret = 0;
-	unsigned int physaddr;
+	int ret;
 	unsigned int iommu_virt_addr;
-	unsigned int offset = 0;
-	int map_order;
-	struct iommu_domain *domain = (struct iommu_domain *)
-					mmu_specific_pt;
+	struct iommu_domain *domain = mmu_specific_pt;
 
 	BUG_ON(NULL == domain);
 
-	map_order = get_order(SZ_4K);
 
-	for (iommu_virt_addr = memdesc->gpuaddr;
-		iommu_virt_addr < (memdesc->gpuaddr + memdesc->size);
-		iommu_virt_addr += SZ_4K, offset += PAGE_SIZE) {
-		physaddr = memdesc->ops->physaddr(memdesc, offset);
-		if (!physaddr) {
-			KGSL_CORE_ERR("Failed to convert %x address to "
-			"physical\n", (unsigned int)memdesc->hostptr + offset);
-			kgsl_iommu_unmap(mmu_specific_pt, memdesc);
-			return -EFAULT;
-		}
-		ret = iommu_map(domain, iommu_virt_addr, physaddr,
-				map_order, MSM_IOMMU_ATTR_NONCACHED);
-		if (ret) {
-			KGSL_CORE_ERR("iommu_map(%p, %x, %x, %d, %d) "
-			"failed with err: %d\n", domain,
-			iommu_virt_addr, physaddr, map_order,
-			MSM_IOMMU_ATTR_NONCACHED, ret);
-			kgsl_iommu_unmap(mmu_specific_pt, memdesc);
-			return ret;
-		}
+	iommu_virt_addr = memdesc->gpuaddr;
+
+	ret = iommu_map_range(domain, iommu_virt_addr, memdesc->sg,
+				memdesc->size, 0);
+	if (ret) {
+		KGSL_CORE_ERR("iommu_map_range(%p, %x, %p, %d, %d) "
+				"failed with err: %d\n", domain,
+				iommu_virt_addr, memdesc->sg, memdesc->size,
+				0, ret);
+		return ret;
 	}
 
 	return ret;
