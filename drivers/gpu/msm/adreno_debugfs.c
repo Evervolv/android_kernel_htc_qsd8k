@@ -14,12 +14,13 @@
 #include <linux/delay.h>
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
+#include <linux/io.h>
 
 #include "kgsl.h"
 #include "adreno_postmortem.h"
 #include "adreno.h"
 
-#include "a200_reg.h"
+#include "a2xx_reg.h"
 
 unsigned int kgsl_cff_dump_enable;
 int kgsl_pm_regs_enabled;
@@ -130,7 +131,7 @@ static ssize_t kgsl_ib_dump_read(
 	if (!ppos || !device || !kgsl_ib_base)
 		return 0;
 
-	kgsl_regread(device, REG_MH_MMU_PT_BASE, &pt_base);
+	kgsl_regread(device, MH_MMU_PT_BASE, &pt_base);
 	base_addr = kgsl_sharedmem_convertaddr(device, pt_base, kgsl_ib_base,
 		&ib_memsize);
 
@@ -395,8 +396,8 @@ static void kgsl_mh_reg_read_fill(struct kgsl_device *device, int i,
 	int j;
 
 	for (j = 0; j < linec; ++j) {
-		kgsl_regwrite(device, REG_MH_DEBUG_CTRL, i+j);
-		kgsl_regread(device, REG_MH_DEBUG_DATA, vals+j);
+		kgsl_regwrite(device, MH_DEBUG_CTRL, i+j);
+		kgsl_regread(device, MH_DEBUG_DATA, vals+j);
 	}
 }
 

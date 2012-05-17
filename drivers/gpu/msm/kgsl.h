@@ -1,29 +1,13 @@
 /* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *     * Neither the name of Code Aurora Forum, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
  *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
  */
 #ifndef __KGSL_H
@@ -38,25 +22,7 @@
 #include <linux/cdev.h>
 #include <linux/regulator/consumer.h>
 
-#include <linux/atomic.h>
-
-#include "kgsl_device.h"
-#include "kgsl_pwrctrl.h"
-#include "kgsl_sharedmem.h"
-#include "kgsl_log.h"
-#include "kgsl_cffdump.h"
-
 #define KGSL_NAME "kgsl"
-
-#define CHIP_REV_251 0x020501
-
-/* Flags to control whether to flush or invalidate a cached memory range */
-#define KGSL_CACHE_INV		0x00000000
-#define KGSL_CACHE_CLEAN	0x00000001
-#define KGSL_CACHE_FLUSH	0x00000002
-
-#define KGSL_CACHE_USER_ADDR	0x00000010
-#define KGSL_CACHE_VMALLOC_ADDR	0x00000020
 
 /*cache coherency ops */
 #define DRM_KGSL_GEM_CACHE_OP_TO_DEV	0x0001
@@ -74,13 +40,9 @@
 #define KGSL_PAGETABLE_ENTRIES(_sz) (((_sz) >> PAGE_SHIFT) + \
 				     KGSL_PT_EXTRA_ENTRIES)
 
-#ifdef CONFIG_MSM_KGSL_MMU
 #define KGSL_PAGETABLE_SIZE \
 ALIGN(KGSL_PAGETABLE_ENTRIES(CONFIG_MSM_KGSL_PAGE_TABLE_SIZE) * \
 KGSL_PAGETABLE_ENTRY_SIZE, PAGE_SIZE)
-#else
-#define KGSL_PAGETABLE_SIZE 0
-#endif
 
 #ifdef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
 #define KGSL_PAGETABLE_COUNT (CONFIG_MSM_KGSL_PAGE_TABLE_COUNT)
@@ -99,6 +61,8 @@ KGSL_PAGETABLE_ENTRY_SIZE, PAGE_SIZE)
 #define KGSL_STATS_ADD(_size, _stat, _max) \
 	do { _stat += (_size); if (_stat > _max) _max = _stat; } while (0)
 
+struct kgsl_device;
+
 struct kgsl_driver {
 	struct cdev cdev;
 	dev_t major;
@@ -108,24 +72,21 @@ struct kgsl_driver {
 	/* Kobjects for storing pagetable and process statistics */
 	struct kobject *ptkobj;
 	struct kobject *prockobj;
-	atomic_t device_count;
 	struct kgsl_device *devp[KGSL_DEVICE_MAX];
-
-	uint32_t flags_debug;
 
 	/* Global lilst of open processes */
 	struct list_head process_list;
 	/* Global list of pagetables */
 	struct list_head pagetable_list;
-	/* Mutex for accessing the pagetable list */
-	struct mutex pt_mutex;
+	/* Spinlock for accessing the pagetable list */
+	spinlock_t ptlock;
 	/* Mutex for accessing the process list */
 	struct mutex process_mutex;
 
 	/* Mutex for protecting the device list */
 	struct mutex devlock;
 
-	struct kgsl_ptpool ptpool;
+	void *ptpool;
 
 	struct {
 		unsigned int vmalloc;
@@ -142,6 +103,20 @@ extern struct kgsl_driver kgsl_driver;
 
 #define KGSL_USER_MEMORY 1
 #define KGSL_MAPPED_MEMORY 2
+
+struct kgsl_pagetable;
+struct kgsl_memdesc_ops;
+
+/* shared memory allocation */
+struct kgsl_memdesc {
+	struct kgsl_pagetable *pagetable;
+	void *hostptr;
+	unsigned int gpuaddr;
+	unsigned int physaddr;
+	unsigned int size;
+	unsigned int priv;
+	struct kgsl_memdesc_ops *ops;
+};
 
 struct kgsl_mem_entry {
 	struct kref refcount;
@@ -167,53 +142,14 @@ uint8_t *kgsl_gpuaddr_to_vaddr(const struct kgsl_memdesc *memdesc,
 struct kgsl_mem_entry *kgsl_sharedmem_find_region(
 	struct kgsl_process_private *private, unsigned int gpuaddr,
 	size_t size);
-int kgsl_idle(struct kgsl_device *device, unsigned int timeout);
-int kgsl_setstate(struct kgsl_device *device, uint32_t flags);
-
-static inline void kgsl_regread(struct kgsl_device *device,
-				unsigned int offsetwords,
-				unsigned int *value)
-{
-	device->ftbl.device_regread(device, offsetwords, value);
-}
-
-static inline void kgsl_regwrite(struct kgsl_device *device,
-				 unsigned int offsetwords,
-				 unsigned int value)
-{
-	device->ftbl.device_regwrite(device, offsetwords, value);
-}
-
-static inline void kgsl_regread_isr(struct kgsl_device *device,
-				unsigned int offsetwords,
-				unsigned int *value)
-{
-	device->ftbl.device_regread_isr(device, offsetwords, value);
-}
-
-static inline void kgsl_regwrite_isr(struct kgsl_device *device,
-				 unsigned int offsetwords,
-				 unsigned int value)
-{
-	device->ftbl.device_regwrite_isr(device, offsetwords, value);
-}
-
-int kgsl_check_timestamp(struct kgsl_device *device, unsigned int timestamp);
-
-int kgsl_register_ts_notifier(struct kgsl_device *device,
-			      struct notifier_block *nb);
-
-int kgsl_unregister_ts_notifier(struct kgsl_device *device,
-				struct notifier_block *nb);
-
-int kgsl_device_platform_probe(struct kgsl_device *device,
-		irqreturn_t (*dev_isr) (int, void*));
-void kgsl_device_platform_remove(struct kgsl_device *device);
 
 extern const struct dev_pm_ops kgsl_pm_ops;
 
+struct early_suspend;
 int kgsl_suspend_driver(struct platform_device *pdev, pm_message_t state);
 int kgsl_resume_driver(struct platform_device *pdev);
+void kgsl_early_suspend_driver(struct early_suspend *h);
+void kgsl_late_resume_driver(struct early_suspend *h);
 
 #ifdef CONFIG_MSM_KGSL_DRM
 extern int kgsl_drm_init(struct platform_device *dev);
@@ -240,18 +176,6 @@ static inline int kgsl_gpuaddr_in_memdesc(const struct kgsl_memdesc *memdesc,
 	return 0;
 }
 
-static inline struct kgsl_device *kgsl_device_from_dev(struct device *dev)
-{
-	int i;
-
-	for (i = 0; i < KGSL_DEVICE_MAX; i++) {
-		if (kgsl_driver.devp[i] && kgsl_driver.devp[i]->dev == dev)
-			return kgsl_driver.devp[i];
-	}
-
-	return NULL;
-}
-
 static inline bool timestamp_cmp(unsigned int new, unsigned int old)
 {
 	int ts_diff = new - old;
@@ -268,23 +192,6 @@ static inline void
 kgsl_mem_entry_put(struct kgsl_mem_entry *entry)
 {
 	kref_put(&entry->refcount, kgsl_mem_entry_destroy);
-}
-
-static inline int kgsl_create_device_sysfs_files(struct device *root,
-	const struct device_attribute **list)
-{
-	int ret = 0, i;
-	for (i = 0; list[i] != NULL; i++)
-		ret |= device_create_file(root, list[i]);
-	return ret;
-}
-
-static inline void kgsl_remove_device_sysfs_files(struct device *root,
-	const struct device_attribute **list)
-{
-	int i;
-	for (i = 0; list[i] != NULL; i++)
-		device_remove_file(root, list[i]);
 }
 
 #endif /* __KGSL_H */

@@ -1,29 +1,13 @@
 /* Copyright (c) 2002,2007-2011, Code Aurora Forum. All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *     * Neither the name of Code Aurora Forum, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
  *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
  */
 #ifndef __KGSL_DEVICE_H
@@ -31,7 +15,10 @@
 
 #include <linux/idr.h>
 #include <linux/wakelock.h>
+#include <linux/pm_qos_params.h>
+#include <linux/earlysuspend.h>
 
+#include "kgsl.h"
 #include "kgsl_mmu.h"
 #include "kgsl_pwrctrl.h"
 #include "kgsl_log.h"
@@ -71,55 +58,48 @@ struct kgsl_context;
 struct kgsl_power_stats;
 
 struct kgsl_functable {
-	void (*device_regread) (struct kgsl_device *device,
-					unsigned int offsetwords,
-					unsigned int *value);
-	void (*device_regwrite) (struct kgsl_device *device,
-					unsigned int offsetwords,
-					unsigned int value);
-	void (*device_regread_isr) (struct kgsl_device *device,
-				    unsigned int offsetwords,
-				    unsigned int *value);
-	void (*device_regwrite_isr) (struct kgsl_device *device,
-				     unsigned int offsetwords,
-				     unsigned int value);
-	int (*device_setstate) (struct kgsl_device *device, uint32_t flags);
-	int (*device_idle) (struct kgsl_device *device, unsigned int timeout);
-	unsigned int (*device_isidle) (struct kgsl_device *device);
-	int (*device_suspend_context) (struct kgsl_device *device);
-	int (*device_resume_context) (struct kgsl_device *device);
-	int (*device_start) (struct kgsl_device *device, unsigned int init_ram);
-	int (*device_stop) (struct kgsl_device *device);
-	int (*device_getproperty) (struct kgsl_device *device,
-					enum kgsl_property_type type,
-					void *value,
-					unsigned int sizebytes);
-	int (*device_waittimestamp) (struct kgsl_device *device,
-					unsigned int timestamp,
-					unsigned int msecs);
-	unsigned int (*device_readtimestamp) (
-					struct kgsl_device *device,
-					enum kgsl_timestamp_type type);
-	int (*device_issueibcmds) (struct kgsl_device_private *dev_priv,
-				struct kgsl_context *context,
-				struct kgsl_ibdesc *ibdesc,
-				unsigned int sizedwords,
-				uint32_t *timestamp,
-				unsigned int flags);
-	int (*device_drawctxt_create) (struct kgsl_device_private *dev_priv,
-					uint32_t flags,
-					struct kgsl_context *context);
-	int (*device_drawctxt_destroy) (struct kgsl_device *device,
-					struct kgsl_context *context);
-	long (*device_ioctl) (struct kgsl_device_private *dev_priv,
-					unsigned int cmd, void *data);
-	int (*device_setup_pt)(struct kgsl_device *device,
-			       struct kgsl_pagetable *pagetable);
-
-	int (*device_cleanup_pt)(struct kgsl_device *device,
-				 struct kgsl_pagetable *pagetable);
-	void (*device_power_stats)(struct kgsl_device *device,
+	/* Mandatory functions - these functions must be implemented
+	   by the client device.  The driver will not check for a NULL
+	   pointer before calling the hook.
+	 */
+	void (*regread) (struct kgsl_device *device,
+		unsigned int offsetwords, unsigned int *value);
+	void (*regwrite) (struct kgsl_device *device,
+		unsigned int offsetwords, unsigned int value);
+	int (*idle) (struct kgsl_device *device, unsigned int timeout);
+	unsigned int (*isidle) (struct kgsl_device *device);
+	int (*suspend_context) (struct kgsl_device *device);
+	int (*start) (struct kgsl_device *device, unsigned int init_ram);
+	int (*stop) (struct kgsl_device *device);
+	int (*getproperty) (struct kgsl_device *device,
+		enum kgsl_property_type type, void *value,
+		unsigned int sizebytes);
+	int (*waittimestamp) (struct kgsl_device *device,
+		unsigned int timestamp, unsigned int msecs);
+	unsigned int (*readtimestamp) (struct kgsl_device *device,
+		enum kgsl_timestamp_type type);
+	int (*issueibcmds) (struct kgsl_device_private *dev_priv,
+		struct kgsl_context *context, struct kgsl_ibdesc *ibdesc,
+		unsigned int sizedwords, uint32_t *timestamp,
+		unsigned int flags);
+	int (*setup_pt)(struct kgsl_device *device,
+		struct kgsl_pagetable *pagetable);
+	void (*cleanup_pt)(struct kgsl_device *device,
+		struct kgsl_pagetable *pagetable);
+	void (*power_stats)(struct kgsl_device *device,
 		struct kgsl_power_stats *stats);
+	void (*irqctrl)(struct kgsl_device *device, int state);
+	/* Optional functions - these functions are not mandatory.  The
+	   driver will check that the function pointer is not NULL before
+	   calling the hook */
+	void (*setstate) (struct kgsl_device *device, uint32_t flags);
+	int (*drawctxt_create) (struct kgsl_device *device,
+		struct kgsl_pagetable *pagetable, struct kgsl_context *context,
+		uint32_t flags);
+	void (*drawctxt_destroy) (struct kgsl_device *device,
+		struct kgsl_context *context);
+	long (*ioctl) (struct kgsl_device_private *dev_priv,
+		unsigned int cmd, void *data);
 };
 
 struct kgsl_memregion {
@@ -127,6 +107,15 @@ struct kgsl_memregion {
 	unsigned int mmio_phys_base;
 	uint32_t gpu_base;
 	unsigned int sizebytes;
+};
+
+/* MH register values */
+struct kgsl_mh {
+	unsigned int     mharb;
+	unsigned int     mh_intf_cfg1;
+	unsigned int     mh_intf_cfg2;
+	uint32_t         mpu_base;
+	int              mpu_range;
 };
 
 struct kgsl_device {
@@ -140,9 +129,10 @@ struct kgsl_device {
 	struct kgsl_memdesc memstore;
 	const char *iomemname;
 
+	struct kgsl_mh mh;
 	struct kgsl_mmu mmu;
 	struct completion hwaccess_gate;
-	struct kgsl_functable ftbl;
+	const struct kgsl_functable *ftbl;
 	struct work_struct idle_check_ws;
 	struct timer_list idle_timer;
 	struct kgsl_pwrctrl pwrctrl;
@@ -163,6 +153,7 @@ struct kgsl_device {
 	struct completion recovery_gate;
 	struct dentry *d_debugfs;
 	struct idr context_idr;
+	struct early_suspend display_off;
 
 	/* Logging levels */
 	int cmd_log;
@@ -173,6 +164,7 @@ struct kgsl_device {
 	struct wake_lock idle_wakelock;
 	struct kgsl_pwrscale pwrscale;
 	struct kobject pwrscale_kobj;
+	struct pm_qos_request_list pm_qos_req_dma;
 };
 
 struct kgsl_context {
@@ -215,10 +207,58 @@ struct kgsl_power_stats {
 
 struct kgsl_device *kgsl_get_device(int dev_idx);
 
+static inline void kgsl_regread(struct kgsl_device *device,
+				unsigned int offsetwords,
+				unsigned int *value)
+{
+	device->ftbl->regread(device, offsetwords, value);
+}
+
+static inline void kgsl_regwrite(struct kgsl_device *device,
+				 unsigned int offsetwords,
+				 unsigned int value)
+{
+	device->ftbl->regwrite(device, offsetwords, value);
+}
+
+static inline int kgsl_idle(struct kgsl_device *device, unsigned int timeout)
+{
+	return device->ftbl->idle(device, timeout);
+}
+
+static inline int kgsl_create_device_sysfs_files(struct device *root,
+	const struct device_attribute **list)
+{
+	int ret = 0, i;
+	for (i = 0; list[i] != NULL; i++)
+		ret |= device_create_file(root, list[i]);
+	return ret;
+}
+
+static inline void kgsl_remove_device_sysfs_files(struct device *root,
+	const struct device_attribute **list)
+{
+	int i;
+	for (i = 0; list[i] != NULL; i++)
+		device_remove_file(root, list[i]);
+}
+
 static inline struct kgsl_mmu *
 kgsl_get_mmu(struct kgsl_device *device)
 {
 	return (struct kgsl_mmu *) (device ? &device->mmu : NULL);
+}
+
+static inline struct kgsl_device *kgsl_device_from_dev(struct device *dev)
+{
+	int i;
+
+	for (i = 0; i < KGSL_DEVICE_MAX; i++) {
+		if (kgsl_driver.devp[i] && kgsl_driver.devp[i]->dev == dev)
+			return kgsl_driver.devp[i];
+	}
+
+	return NULL;
 }
 
 static inline int kgsl_create_device_workqueue(struct kgsl_device *device)
@@ -243,5 +283,17 @@ kgsl_find_context(struct kgsl_device_private *dev_priv, uint32_t id)
 
 	return  (ctxt && ctxt->dev_priv == dev_priv) ? ctxt : NULL;
 }
+
+int kgsl_check_timestamp(struct kgsl_device *device, unsigned int timestamp);
+
+int kgsl_register_ts_notifier(struct kgsl_device *device,
+			      struct notifier_block *nb);
+
+int kgsl_unregister_ts_notifier(struct kgsl_device *device,
+				struct notifier_block *nb);
+
+int kgsl_device_platform_probe(struct kgsl_device *device,
+		irqreturn_t (*dev_isr) (int, void*));
+void kgsl_device_platform_remove(struct kgsl_device *device);
 
 #endif  /* __KGSL_DEVICE_H */

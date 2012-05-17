@@ -20,6 +20,7 @@
 #include <linux/slab.h>
 #include <linux/time.h>
 #include <linux/sched.h>
+#include <mach/socinfo.h>
 
 #include "kgsl.h"
 #include "kgsl_cffdump.h"
@@ -362,8 +363,10 @@ void kgsl_cffdump_open(enum kgsl_deviceid device_id)
 	/*TODO: move this to where we can report correct gmemsize*/
 	unsigned int va_base;
 
-	/* XXX: drewis edit: only for 8x50 */
-	va_base = 0x20000000;
+	if (cpu_is_msm8x60() || cpu_is_msm8960())
+		va_base = 0x40000000;
+	else
+		va_base = 0x20000000;
 
 	kgsl_cffdump_memory_base(device_id, va_base,
 			CONFIG_MSM_KGSL_PAGE_TABLE_SIZE, SZ_256K);
@@ -523,8 +526,8 @@ static bool kgsl_cffdump_handle_type3(struct kgsl_device_private *dev_priv,
 	static uint size_stack[ADDRESS_STACK_SIZE];
 
 	switch (GET_PM4_TYPE3_OPCODE(hostaddr)) {
-	case PM4_INDIRECT_BUFFER_PFD:
-	case PM4_INDIRECT_BUFFER:
+	case CP_INDIRECT_BUFFER_PFD:
+	case CP_INDIRECT_BUFFER:
 	{
 		/* traverse indirect buffers */
 		int i;
@@ -607,7 +610,6 @@ bool kgsl_cffdump_parse_ibs(struct kgsl_device_private *dev_priv,
 
 	if (!memdesc->physaddr) {
 		KGSL_CORE_ERR("no physaddr");
-		return true;
 	} else {
 		mb();
 		kgsl_cache_range_op((struct kgsl_memdesc *)memdesc,

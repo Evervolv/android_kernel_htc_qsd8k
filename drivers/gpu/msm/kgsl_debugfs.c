@@ -14,6 +14,7 @@
 #include <linux/debugfs.h>
 
 #include "kgsl.h"
+#include "kgsl_device.h"
 
 /*default log levels is error for everything*/
 #define KGSL_LOG_LEVEL_DEFAULT 3
