@@ -31,6 +31,7 @@ enum {
 	HW_PLATFORM_FLUID   = 3,
 	HW_PLATFORM_SVLTE_FFA	= 4,
 	HW_PLATFORM_SVLTE_SURF	= 5,
+	HW_PLATFORM_LIQUID  = 9,
 	/* Dragonboard platform id is assigned as 10 in CDT */
 	HW_PLATFORM_DRAGON	= 10,
 	HW_PLATFORM_INVALID
@@ -41,6 +42,7 @@ const char *hw_platform[] = {
 	[HW_PLATFORM_SURF] = "Surf",
 	[HW_PLATFORM_FFA] = "FFA",
 	[HW_PLATFORM_FLUID] = "Fluid",
+	[HW_PLATFORM_LIQUID] = "Liquid",
 	[HW_PLATFORM_SVLTE_FFA] = "SVLTE_FFA",
 	[HW_PLATFORM_SVLTE_SURF] = "SLVTE_SURF",
 	[HW_PLATFORM_DRAGON] = "Dragon"
@@ -164,10 +166,6 @@ static enum msm_cpu cpu_of_id[] = {
 	[37] = MSM_CPU_8X50,
 	[38] = MSM_CPU_8X50,
 
-	/* 8x50A IDs */
-	[64] = MSM_CPU_8X50A,
-	[65] = MSM_CPU_8X50A,
-
 	/* 7x30 IDs */
 	[59] = MSM_CPU_7X30,
 	[60] = MSM_CPU_7X30,
@@ -214,8 +212,23 @@ static enum msm_cpu cpu_of_id[] = {
 	[104] = MSM_CPU_9615,
 	[105] = MSM_CPU_9615,
 
-	/* 8064 IDs*/
+	/* 8064 IDs */
 	[109] = MSM_CPU_8064,
+
+	/* 8930 IDs */
+	[116] = MSM_CPU_8930,
+
+	/* 8660A ID */
+	[122] = MSM_CPU_8960,
+
+	/* 8260A ID */
+	[123] = MSM_CPU_8960,
+
+	/* 8060A ID */
+	[124] = MSM_CPU_8960,
+
+	/* Copper IDs */
+	[126] = MSM_CPU_COPPER,
 
 	/* Uninitialized IDs are not known to run Linux.
 	   MSM_CPU_UNKNOWN is set to 0 to ensure these IDs are
@@ -583,6 +596,8 @@ void *setup_dummy_socinfo(void)
 		dummy_socinfo.id = 109;
 	else if (machine_is_msm9615_mtp() || machine_is_msm9615_cdp())
 		dummy_socinfo.id = 104;
+	else if (early_machine_is_copper())
+		dummy_socinfo.id = 126;
 	return (void *) &dummy_socinfo;
 }
 
@@ -704,8 +719,11 @@ const int get_core_count(void)
 
 const int read_msm_cpu_type(void)
 {
-	if (machine_is_msm8960_sim())
+	if (machine_is_msm8960_sim() || machine_is_msm8960_rumi3())
 		return MSM_CPU_8960;
+
+	if (socinfo_get_msm_cpu() != MSM_CPU_UNKNOWN)
+		return socinfo_get_msm_cpu();
 
 	switch (read_cpuid_id()) {
 	case 0x510F02D0:
@@ -716,13 +734,12 @@ const int read_msm_cpu_type(void)
 	case 0x510F04D0:
 	case 0x510F04D1:
 	case 0x510F04D2:
+	case 0x511F04D0:
+	case 0x512F04D0:
 		return MSM_CPU_8960;
 
-	case 0x511F04D0:
-		if (get_core_count() == 2)
-			return MSM_CPU_8960;
-		else
-			return MSM_CPU_8X30;
+	case 0x51404D11: /* We can't get here unless we are in bringup */
+		return MSM_CPU_8930;
 
 	case 0x510F06F0:
 		return MSM_CPU_8064;
