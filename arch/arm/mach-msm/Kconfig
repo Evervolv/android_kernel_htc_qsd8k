@@ -407,6 +407,18 @@ config CACHE_FLUSH_RANGE_LIMIT
 	  entire cache instead. Flushing a large range can be slower than
 	  flushing, then refilling, the entire cache.
 
+config PHYS_OFFSET
+	hex "Physical Offset"
+	default "0x40800000" if ARCH_MSM9615
+	default "0x80200000" if ARCH_APQ8064
+	default "0x80200000" if ARCH_MSM8960
+	default "0x10000000" if ARCH_FSM9XXX
+	default "0x00200000" if !MSM_STACKED_MEMORY
+	default "0x00000000" if ARCH_QSD8X50 && MSM_SOC_REV_A
+	default "0x20000000" if ARCH_QSD8X50
+	default "0x40200000" if ARCH_MSM8X60
+	default "0x10000000"
+
 choice
 	prompt "Default Timer"
 	default MSM7X00A_USE_GP_TIMER

@@ -41,6 +41,8 @@
 #include <linux/wakelock.h>
 #endif
 
+#define RESET_VECTOR		UL(0x00000000)
+
 enum {
 	MSM_PM_DEBUG_SUSPEND = 1U << 0,
 	MSM_PM_DEBUG_POWER_COLLAPSE = 1U << 1,
