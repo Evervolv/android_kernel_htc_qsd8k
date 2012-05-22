@@ -648,14 +648,6 @@ config AXI_SCREEN_POLICY
 	help
 	  Simple AXI scaling based on screen ON/OFF and PWRC.
 
-config MSM_HW3D
-	tristate "MSM Hardware 3D Register Driver"
-	depends on EARLYSUSPEND
-	default y
-	help
-	  Provides access to registers needed by the userspace OpenGL|ES
-	  library.
-
 config MSM_ADSP
 	depends on ARCH_MSM7X00A
 	tristate "MSM ADSP driver"

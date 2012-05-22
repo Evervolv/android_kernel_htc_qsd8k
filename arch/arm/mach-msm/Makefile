@@ -64,7 +64,6 @@ obj-$(CONFIG_MSM_RPCSERVERS) += rpc_server_time_remote.o
 obj-$(CONFIG_MSM_ADSP) += qdsp5/
 obj-$(CONFIG_MSM_QDSP5V2) += qdsp5v2/
 obj-$(CONFIG_MSM_QDSP6) += qdsp6/
-obj-$(CONFIG_MSM_HW3D) += hw3d.o
 obj-$(CONFIG_MSM_REMOTE_SPINLOCK) += remote_spinlock.o
 obj-$(CONFIG_MSM_SSBI) += ssbi.o
 ifdef CONFIG_PM
