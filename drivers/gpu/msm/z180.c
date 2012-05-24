@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -18,6 +18,7 @@
 
 #include "z180.h"
 #include "z180_reg.h"
+#include "z180_trace.h"
 
 #define DRIVER_VERSION_MAJOR   3
 #define DRIVER_VERSION_MINOR   1
@@ -156,13 +157,6 @@ static struct z180_device device_2d0 = {
 		.active_cnt = 0,
 		.iomemname = KGSL_2D0_REG_MEMORY,
 		.ftbl = &z180_functable,
-#ifdef CONFIG_HAS_EARLYSUSPEND
-		.display_off = {
-			.level = EARLY_SUSPEND_LEVEL_STOP_DRAWING,
-			.suspend = kgsl_early_suspend_driver,
-			.resume = kgsl_late_resume_driver,
-		},
-#endif
 	},
 };
 
@@ -194,13 +188,6 @@ static struct z180_device device_2d1 = {
 		.active_cnt = 0,
 		.iomemname = KGSL_2D1_REG_MEMORY,
 		.ftbl = &z180_functable,
-		.display_off = {
-#ifdef CONFIG_HAS_EARLYSUSPEND
-			.level = EARLY_SUSPEND_LEVEL_STOP_DRAWING,
-			.suspend = kgsl_early_suspend_driver,
-			.resume = kgsl_late_resume_driver,
-#endif
-		},
 	},
 };
 
@@ -212,6 +199,8 @@ static irqreturn_t z180_isr(int irq, void *data)
 	struct z180_device *z180_dev = Z180_DEVICE(device);
 
 	z180_regread(device, ADDR_VGC_IRQSTATUS >> 2, &status);
+
+	trace_kgsl_z180_irq_status(device, status);
 
 	if (status & GSL_VGC_INT_MASK) {
 		z180_regwrite(device,
@@ -245,10 +234,10 @@ static irqreturn_t z180_isr(int irq, void *data)
 
 	if ((device->pwrctrl.nap_allowed == true) &&
 		(device->requested_state == KGSL_STATE_NONE)) {
-		device->requested_state = KGSL_STATE_NAP;
+		kgsl_pwrctrl_request_state(device, KGSL_STATE_NAP);
 		queue_work(device->work_queue, &device->idle_check_ws);
 	}
-	mod_timer(&device->idle_timer,
+	mod_timer_pending(&device->idle_timer,
 			jiffies + device->pwrctrl.interval_timeout);
 
 	return result;
@@ -457,6 +446,7 @@ z180_cmdstream_issueibcmds(struct kgsl_device_private *dev_priv,
 	z180_dev->ringbuffer.prevctx = context->id;
 
 	addcmd(&z180_dev->ringbuffer, index, cmd + ofs, cnt);
+	kgsl_pwrscale_busy(device);
 
 	/* Make sure the next ringbuffer entry has a marker */
 	addmarker(&z180_dev->ringbuffer, nextindex);
@@ -520,6 +510,7 @@ static int __devinit z180_probe(struct platform_device *pdev)
 		goto error_close_ringbuffer;
 
 	kgsl_pwrscale_init(device);
+	kgsl_pwrscale_attach_policy(device, Z180_DEFAULT_PWRSCALE_POLICY);
 
 	return status;
 
@@ -548,9 +539,7 @@ static int z180_start(struct kgsl_device *device, unsigned int init_ram)
 {
 	int status = 0;
 
-	device->state = KGSL_STATE_INIT;
-	device->requested_state = KGSL_STATE_NONE;
-	KGSL_PWR_WARN(device, "state -> INIT, device %d\n", device->id);
+	kgsl_pwrctrl_set_state(device, KGSL_STATE_INIT);
 
 	kgsl_pwrctrl_enable(device);
 
@@ -567,6 +556,7 @@ static int z180_start(struct kgsl_device *device, unsigned int init_ram)
 
 	mod_timer(&device->idle_timer, jiffies + FIRST_TIMEOUT);
 	kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_ON);
+	device->ftbl->irqctrl(device, 1);
 	return 0;
 
 error_clk_off:
@@ -577,6 +567,7 @@ error_clk_off:
 
 static int z180_stop(struct kgsl_device *device)
 {
+	device->ftbl->irqctrl(device, 0);
 	z180_idle(device, KGSL_TIMEOUT_DEFAULT);
 
 	del_timer_sync(&device->idle_timer);
@@ -831,8 +822,7 @@ static int z180_wait(struct kgsl_device *device,
 		status = 0;
 	else if (timeout == 0) {
 		status = -ETIMEDOUT;
-		device->state = KGSL_STATE_HUNG;
-		KGSL_PWR_WARN(device, "state -> HUNG, device %d\n", device->id);
+		kgsl_pwrctrl_set_state(device, KGSL_STATE_HUNG);
 	} else
 		status = timeout;
 
@@ -858,17 +848,17 @@ static void z180_power_stats(struct kgsl_device *device,
 			    struct kgsl_power_stats *stats)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
+	s64 tmp = ktime_to_us(ktime_get());
 
 	if (pwr->time == 0) {
-		pwr->time = ktime_to_us(ktime_get());
+		pwr->time = tmp;
 		stats->total_time = 0;
 		stats->busy_time = 0;
 	} else {
-		s64 tmp;
-		tmp = ktime_to_us(ktime_get());
 		stats->total_time = tmp - pwr->time;
-		stats->busy_time = tmp - pwr->time;
 		pwr->time = tmp;
+		stats->busy_time = tmp - device->on_time;
+		device->on_time = tmp;
 	}
 }
 
@@ -883,6 +873,16 @@ static void z180_irqctrl(struct kgsl_device *device, int state)
 		z180_regwrite(device, (ADDR_VGC_IRQENABLE >> 2), 0);
 		z180_regwrite(device, MH_INTERRUPT_MASK, 0);
 	}
+}
+
+static unsigned int z180_gpuid(struct kgsl_device *device)
+{
+	/* Standard KGSL gpuid format:
+	 * top word is 0x0002 for 2D or 0x0003 for 3D
+	 * Bottom word is core specific identifer
+	 */
+
+	return (0x0002 << 16) | 180;
 }
 
 static const struct kgsl_functable z180_functable = {
@@ -902,6 +902,7 @@ static const struct kgsl_functable z180_functable = {
 	.cleanup_pt = z180_cleanup_pt,
 	.power_stats = z180_power_stats,
 	.irqctrl = z180_irqctrl,
+	.gpuid = z180_gpuid,
 	/* Optional functions */
 	.drawctxt_create = NULL,
 	.drawctxt_destroy = z180_drawctxt_destroy,
