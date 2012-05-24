@@ -54,6 +54,14 @@ struct clk_pair clks[KGSL_MAX_CLKS] = {
 		.name = "mem_iface_clk",
 		.map = KGSL_CLK_MEM_IFACE,
 	},
+	{
+		.name = "grp_clk",
+		.map = KGSL_CLK_GRP,
+	},
+	{
+		.name = "imem_clk",
+		.map = KGSL_CLK_IMEM,
+	},
 };
 
 void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,

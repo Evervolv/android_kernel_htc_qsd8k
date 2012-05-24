@@ -34,6 +34,10 @@
 #define KGSL_CLK_MEM_IFACE 0x00000010
 #define KGSL_CLK_AXI	0x00000020
 
+/* Arbitrary defines for 8x50 devices using google clock naming / implementation */
+#define KGSL_CLK_GRP	0x00001000
+#define KGSL_CLK_IMEM	0x00010000
+
 /*
  * Reset status values for context
  */
