@@ -331,7 +331,7 @@ static struct android_pmem_platform_data mdp_pmem_pdata = {
 	.start		= MSM_PMEM_MDP_BASE,
 	.size		= MSM_PMEM_MDP_SIZE,
 /*	.no_allocator	= 0,*/
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
+	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
 	.cached		= 1,
 };
 
