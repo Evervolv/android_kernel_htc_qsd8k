@@ -341,11 +341,12 @@ CHECK		= sparse
 
 CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
 		  -Wbitwise -Wno-return-void $(CF)
-CFLAGS_MODULE   =
-AFLAGS_MODULE   =
-LDFLAGS_MODULE  =
-CFLAGS_KERNEL	=
-AFLAGS_KERNEL	=
+SCORPION_FLAGS	= -march=armv7-a -mfpu=neon -ffast-math
+CFLAGS_MODULE	= -DMODULE $(SCORPION_FLAGS)
+AFLAGS_MODULE	= -DMODULE $(SCORPION_FLAGS)
+LDFLAGS_MODULE	= -T $(srctree)/scripts/module-common.lds
+CFLAGS_KERNEL	= $(SCORPION_FLAGS)
+AFLAGS_KERNEL	= $(SCORPION_FLAGS)
 CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 
