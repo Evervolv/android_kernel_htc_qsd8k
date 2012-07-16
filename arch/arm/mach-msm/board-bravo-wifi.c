@@ -17,6 +17,8 @@ int bravo_wifi_power(int on);
 int bravo_wifi_reset(int on);
 int bravo_wifi_set_carddetect(int on);
 
+#if defined(CONFIG_DHD_USE_STATIC_BUF) || defined(CONFIG_BCM4329_DHD_USE_STATIC_BUF)
+
 #define PREALLOC_WLAN_NUMBER_OF_SECTIONS	4
 #define PREALLOC_WLAN_NUMBER_OF_BUFFERS		160
 #define PREALLOC_WLAN_SECTION_HEADER		24
@@ -52,9 +54,11 @@ static void *bravo_wifi_mem_prealloc(int section, unsigned long size)
 		return NULL;
 	return wifi_mem_array[section].mem_ptr;
 }
+#endif
 
 int __init bravo_init_wifi_mem(void)
 {
+#if defined(CONFIG_DHD_USE_STATIC_BUF) || defined(CONFIG_BCM4329_DHD_USE_STATIC_BUF)
 	int i;
 
 	for(i=0;( i < WLAN_SKB_BUF_NUM );i++) {
@@ -69,12 +73,13 @@ int __init bravo_init_wifi_mem(void)
 		if (wifi_mem_array[i].mem_ptr == NULL)
 			return -ENOMEM;
 	}
+#endif
 	return 0;
 }
 
 static struct resource bravo_wifi_resources[] = {
 	[0] = {
-		.name		= "bcm4329_wlan_irq",
+		.name		= "bcmdhd_wlan_irq",
 		.start		= MSM_GPIO_TO_INT(BRAVO_GPIO_WIFI_IRQ),
 		.end		= MSM_GPIO_TO_INT(BRAVO_GPIO_WIFI_IRQ),
 		.flags          = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE,
@@ -85,11 +90,15 @@ static struct wifi_platform_data bravo_wifi_control = {
 	.set_power      = bravo_wifi_power,
 	.set_reset      = bravo_wifi_reset,
 	.set_carddetect = bravo_wifi_set_carddetect,
+#if defined(CONFIG_DHD_USE_STATIC_BUF) || defined(CONFIG_BCM4329_DHD_USE_STATIC_BUF)
 	.mem_prealloc	= bravo_wifi_mem_prealloc,
+#else
+	.mem_prealloc   = NULL,
+#endif
 };
 
 static struct platform_device bravo_wifi_device = {
-        .name           = "bcm4329_wlan",
+        .name           = "bcmdhd_wlan",
         .id             = 1,
         .num_resources  = ARRAY_SIZE(bravo_wifi_resources),
         .resource       = bravo_wifi_resources,
@@ -130,8 +139,6 @@ static unsigned bravo_wifi_update_nvs(char *str, int add_flag)
 
 static int __init bravo_wifi_init(void)
 {
-	int ret;
-
 	if (!machine_is_bravo() && !machine_is_bravoc())
 		return 0;
 
@@ -139,8 +146,7 @@ static int __init bravo_wifi_init(void)
 	bravo_wifi_update_nvs("sd_oobonly=1\r\n", 0);
 	bravo_wifi_update_nvs("btc_params70=0x32\r\n", 1);
 	bravo_init_wifi_mem();
-	ret = platform_device_register(&bravo_wifi_device);
-        return ret;
+	return platform_device_register(&bravo_wifi_device);
 }
 
 late_initcall(bravo_wifi_init);

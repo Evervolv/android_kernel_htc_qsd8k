@@ -204,6 +204,10 @@ static struct embedded_sdio_data bravo_wifi_emb_data = {
 		.high_power	= 1,
 		.high_speed	= 1,
 	},
+	.cis  = {
+		.vendor         = 0x02d0,
+		.device         = 0x4329,
+	},
 };
 
 static int bravo_wifi_cd = 0; /* WIFI virtual 'card detect' status */
