@@ -17,6 +17,8 @@ int supersonic_wifi_power(int on);
 int supersonic_wifi_reset(int on);
 int supersonic_wifi_set_carddetect(int on);
 
+#if defined(CONFIG_DHD_USE_STATIC_BUF) || defined(CONFIG_BCM4329_DHD_USE_STATIC_BUF)
+
 #define PREALLOC_WLAN_NUMBER_OF_SECTIONS	4
 #define PREALLOC_WLAN_NUMBER_OF_BUFFERS		160
 #define PREALLOC_WLAN_SECTION_HEADER		24
@@ -52,9 +54,11 @@ static void *supersonic_wifi_mem_prealloc(int section, unsigned long size)
 		return NULL;
 	return wifi_mem_array[section].mem_ptr;
 }
+#endif
 
 int __init supersonic_init_wifi_mem(void)
 {
+#if defined(CONFIG_DHD_USE_STATIC_BUF) || defined(CONFIG_BCM4329_DHD_USE_STATIC_BUF)
 	int i;
 
 	for(i=0;( i < WLAN_SKB_BUF_NUM );i++) {
@@ -69,12 +73,13 @@ int __init supersonic_init_wifi_mem(void)
 		if (wifi_mem_array[i].mem_ptr == NULL)
 			return -ENOMEM;
 	}
+#endif
 	return 0;
 }
 
 static struct resource supersonic_wifi_resources[] = {
 	[0] = {
-		.name		= "bcm4329_wlan_irq",
+		.name		= "bcmdhd_wlan_irq",
 		.start		= MSM_GPIO_TO_INT(SUPERSONIC_GPIO_WIFI_IRQ),
 		.end		= MSM_GPIO_TO_INT(SUPERSONIC_GPIO_WIFI_IRQ),
 		.flags          = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE,
@@ -85,11 +90,15 @@ static struct wifi_platform_data supersonic_wifi_control = {
 	.set_power      = supersonic_wifi_power,
 	.set_reset      = supersonic_wifi_reset,
 	.set_carddetect = supersonic_wifi_set_carddetect,
+#if defined(CONFIG_DHD_USE_STATIC_BUF) || defined(CONFIG_BCM4329_DHD_USE_STATIC_BUF)
 	.mem_prealloc   = supersonic_wifi_mem_prealloc,
+#else
+	.mem_prealloc   = NULL,
+#endif
 };
 
 static struct platform_device supersonic_wifi_device = {
-        .name           = "bcm4329_wlan",
+        .name           = "bcmdhd_wlan",
         .id             = 1,
         .num_resources  = ARRAY_SIZE(supersonic_wifi_resources),
         .resource       = supersonic_wifi_resources,
@@ -132,8 +141,6 @@ static unsigned supersonic_wifi_update_nvs(char *str, int add_flag)
 
 static int __init supersonic_wifi_init(void)
 {
-	int ret;
-
 	if (!machine_is_supersonic())
 		return 0;
 
@@ -142,8 +149,7 @@ static int __init supersonic_wifi_init(void)
 	supersonic_wifi_update_nvs("btc_params80=0\n", 1);
 	supersonic_wifi_update_nvs("btc_params70=0x32\n", 1);
 	supersonic_init_wifi_mem();
-	ret = platform_device_register(&supersonic_wifi_device);
-        return ret;
+	return platform_device_register(&supersonic_wifi_device);
 }
 
 late_initcall(supersonic_wifi_init);
