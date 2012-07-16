@@ -194,6 +194,10 @@ static struct embedded_sdio_data incrediblec_wifi_emb_data = {
 		.high_power	= 1,
 		.high_speed	= 1,
 	},
+	.cis  = {
+		.vendor         = 0x02d0,
+		.device         = 0x4329,
+	},
 };
 
 static void (*wifi_status_cb)(int card_present, void *dev_id);
