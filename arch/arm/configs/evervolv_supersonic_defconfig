@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux/arm 2.6.38.8 Kernel Configuration
-# Sun Jul 15 12:45:43 2012
+# Sun Jul 15 22:11:52 2012
 #
 CONFIG_ARM=y
 CONFIG_SYS_SUPPORTS_APM_EMULATION=y
@@ -878,17 +878,19 @@ CONFIG_BT_HCIUART_LL=y
 # CONFIG_AF_RXRPC is not set
 CONFIG_FIB_RULES=y
 CONFIG_WIRELESS=y
-CONFIG_WIRELESS_EXT=y
 CONFIG_WEXT_CORE=y
 CONFIG_WEXT_PROC=y
-CONFIG_WEXT_PRIV=y
-# CONFIG_CFG80211 is not set
+CONFIG_CFG80211=y
+CONFIG_NL80211_TESTMODE=y
+# CONFIG_CFG80211_DEVELOPER_WARNINGS is not set
+# CONFIG_CFG80211_REG_DEBUG is not set
+CONFIG_CFG80211_DEFAULT_PS=y
+# CONFIG_CFG80211_DEBUGFS is not set
+# CONFIG_CFG80211_INTERNAL_REGDB is not set
+CONFIG_CFG80211_WEXT=y
 CONFIG_WIRELESS_EXT_SYSFS=y
 # CONFIG_LIB80211 is not set
-
-#
-# CFG80211 needs to be enabled for MAC80211
-#
+# CONFIG_MAC80211 is not set
 
 #
 # Some wireless drivers require a rate control algorithm
@@ -1093,10 +1095,17 @@ CONFIG_MII=y
 # CONFIG_NETDEV_1000 is not set
 # CONFIG_NETDEV_10000 is not set
 CONFIG_WLAN=y
-CONFIG_BCM4329=m
-CONFIG_BCM4329_FW_PATH="/system/etc/firmware/fw_bcm4329.bin"
-CONFIG_BCM4329_NVRAM_PATH="/proc/calibration"
+# CONFIG_ATH_COMMON is not set
+# CONFIG_BCM4329 is not set
+CONFIG_BCMDHD=y
+CONFIG_BCMDHD_FW_PATH="/vendor/firmware/fw_bcmdhd.bin"
+CONFIG_BCMDHD_NVRAM_PATH="/proc/calibration"
+# CONFIG_DHD_USE_STATIC_BUF is not set
+# CONFIG_DHD_USE_SCHED_SCAN is not set
+# CONFIG_DHD_ENABLE_P2P is not set
 # CONFIG_HOSTAP is not set
+# CONFIG_IWM is not set
+# CONFIG_LIBERTAS is not set
 
 #
 # WiMAX Wireless Broadband devices
