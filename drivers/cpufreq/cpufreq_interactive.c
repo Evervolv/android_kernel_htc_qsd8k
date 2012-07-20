@@ -120,11 +120,7 @@ static
 struct cpufreq_governor cpufreq_gov_interactive = {
 	.name = "interactive",
 	.governor = cpufreq_governor_interactive,
-#if defined(CONFIG_ARCH_MSM_SCORPION)
-        .max_transition_latency = 9500000,
-#else
 	.max_transition_latency = 10000000,
-#endif
 	.owner = THIS_MODULE,
 };
 
@@ -419,7 +415,6 @@ static int cpufreq_interactive_up_task(void *data)
 		}
 
 		set_current_state(TASK_RUNNING);
-
 		tmp_mask = up_cpumask;
 		cpumask_clear(&up_cpumask);
 		spin_unlock_irqrestore(&up_cpumask_lock, flags);
@@ -429,7 +424,6 @@ static int cpufreq_interactive_up_task(void *data)
 			unsigned int max_freq = 0;
 
 			pcpu = &per_cpu(cpuinfo, cpu);
-
 			smp_rmb();
 
 			if (!pcpu->governor_enabled)
