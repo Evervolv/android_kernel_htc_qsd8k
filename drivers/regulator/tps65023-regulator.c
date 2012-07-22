@@ -403,6 +403,52 @@ static int tps65023_dcdc_set_voltage(struct regulator_dev *dev,
 	return rv;
 }
 
+/* TPS65023_registers */
+#define TPS65023_VERSION	0
+#define TPS65023_PGOODZ		1
+#define TPS65023_MASK		2
+#define TPS65023_REG_CTRL	3
+#define TPS65023_CON_CTRL	4
+#define TPS65023_CON_CTRL2	5
+#define TPS65023_DEFCORE	6
+#define TPS65023_DEFSLEW	7
+#define TPS65023_LDO_CTRL	8
+#define TPS65023_MAX		9
+
+static struct i2c_client *tpsclient;
+
+int tps65023_set_dcdc1_level(struct regulator_dev *dev, int mvolts)
+{
+	int val;
+	int ret;
+	struct tps_pmic *tps;
+
+	if (!tpsclient) {
+		tps = rdev_get_drvdata(dev);
+		tpsclient = tps->client;
+	}
+
+	if (!tpsclient)
+		return -ENODEV;
+
+	if (mvolts < 800 || mvolts > 1600)
+		return -EINVAL;
+
+	if (mvolts == 1600)
+		val = 0x1F;
+	else
+		val = ((mvolts - 800)/25) & 0x1F;
+
+	ret = i2c_smbus_write_byte_data(tpsclient, TPS65023_DEFCORE, val);
+
+	if (!ret)
+		ret = i2c_smbus_write_byte_data(tpsclient,
+				TPS65023_CON_CTRL2, 0x80);
+
+	return ret;
+}
+EXPORT_SYMBOL(tps65023_set_dcdc1_level);
+
 static int tps65023_ldo_get_voltage(struct regulator_dev *dev)
 {
 	struct tps_pmic *tps = rdev_get_drvdata(dev);
