@@ -67,8 +67,8 @@ static inline void avs_set_tscsr(u32 to_tscsr) {}
 static inline void avs_disable(void) {}
 #endif
 
-/*#define AVSDEBUG(x...) pr_info("AVS: " x);*/
-#define AVSDEBUG(...)
+#define AVSDEBUG(x...) pr_info("AVS: " x);
+//#define AVSDEBUG(...)
 
 #define AVS_DISABLE(cpu) do {			\
 		if (get_cpu() == (cpu))		\
