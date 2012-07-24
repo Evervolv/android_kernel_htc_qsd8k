@@ -141,7 +141,7 @@ static void avs_update_voltage_table(short *vdd_table)
 	cur_voltage = avs_state.vdd;
 
 	avscsr = avs_test_delays();
-	AVSDEBUG("avscsr=%x, avsdscr=%x\n", avscsr, avs_get_avsdscr());
+/*	AVSDEBUG("avscsr=%x, avsdscr=%x\n", avscsr, avs_get_avsdscr());*/
 
 	/*
 	 * Read the results for the various unit's AVS delay circuits
