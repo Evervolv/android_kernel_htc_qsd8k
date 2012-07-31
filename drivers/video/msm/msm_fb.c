@@ -985,7 +985,7 @@ static void setup_fb_info(struct msmfb_info *msmfb)
 	int r;
 
 	/* finish setting up the fb_info struct */
-	strncpy(fb_info->fix.id, "msmfb", 16);
+	strncpy(fb_info->fix.id, "msmfb31_0", 16);
 	fb_info->fix.ypanstep = 1;
 
 	fb_info->fbops = &msmfb_ops;
