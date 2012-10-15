@@ -32,9 +32,7 @@ endif
 
 obj-$(CONFIG_MSM_VIC) += irq-vic.o
 
-ifdef CONFIG_ARCH_QSD8X50
-	obj-$(CONFIG_MSM_SOC_REV_NONE) += acpuclock-8x50.o
-endif
+obj-$(CONFIG_ARCH_QSD8X50) += arch-init-scorpion.o acpuclock-8x50.o
 
 obj-$(CONFIG_SMP) += headsmp.o platsmp.o
 
@@ -86,7 +84,8 @@ obj-$(CONFIG_ARCH_FSM9XXX) += sirc-fsm9xxx.o
 obj-$(CONFIG_MSM_FIQ_SUPPORT) += fiq_glue.o
 obj-$(CONFIG_MACH_TROUT) += board-trout-rfkill.o
 obj-$(CONFIG_MSM_BAM_DMUX) += bam_dmux.o
-obj-$(CONFIG_MSM_SMD) += remote_spinlock.o socinfo.o
+obj-$(CONFIG_MSM_SMD) += smd.o smd_debug.o remote_spinlock.o
+obj-y += socinfo.o
 ifndef CONFIG_ARCH_MSM9615
 ifndef CONFIG_ARCH_APQ8064
 ifndef CONFIG_ARCH_MSM8960
@@ -166,6 +165,7 @@ obj-$(CONFIG_MSM7KV2_AUDIO) += qdsp5v2_2x/
 obj-$(CONFIG_MSM7KV2_AUDIO) += htc_acoustic_7x30.o htc_acdb_7x30.o
 
 obj-$(CONFIG_MSM_QDSP6) += qdsp6/
+obj-$(CONFIG_MSM_QDSP6_1550) += qdsp6_1550/
 obj-$(CONFIG_MSM8X60_AUDIO) += qdsp6v2_1x/
 obj-$(CONFIG_MSM_AUDIO_QDSP6) += qdsp6v2/
 obj-$(CONFIG_MSM_HW3D) += hw3d.o
@@ -292,6 +292,16 @@ obj-$(CONFIG_ARCH_MSM9615) += rpm-regulator.o rpm-regulator-9615.o
 obj-$(CONFIG_ARCH_MSMCOPPER) += board-copper.o board-dt.o
 obj-$(CONFIG_ARCH_MSM8960) += devices_htc.o htc_wifi_nvs.o htc_awb_cal.o
 obj-$(CONFIG_ARCH_MSM8X60) += devices_htc.o htc_wifi_nvs.o sysinfo-8x60.o emmc_partitions.o htc_awb_cal.o
+
+obj-$(CONFIG_MACH_HTCLEO) += board-htcleo.o board-htcleo-panel.o board-htcleo-keypad.o
+obj-$(CONFIG_MACH_HTCLEO) += board-htcleo-ts.o board-htcleo-mmc.o ieee754-df.o
+
+obj-$(CONFIG_MACH_HTCLEO) += board-htcleo-audio.o board-htcleo-acoustic.o
+obj-$(CONFIG_MACH_HTCLEO) += board-htcleo-rfkill.o board-htcleo-wifi.o board-htcleo-microp.o htc_awb_cal.o
+obj-$(CONFIG_MACH_HTCLEO) += board-htcleo-proximity.o board-htcleo-ls.o board-htcleo-gsensor.o
+obj-$(CONFIG_HTCLEO_BACKLIGHT) += board-htcleo-bl.o
+obj-$(CONFIG_HTCLEO_BACKLIGHT_LED) += board-htcleo-bl-led.o
+obj-$(CONFIG_HTCLEO_BTN_BACKLIGHT_MANAGER) += board-htcleo-btn_backlight-manager.o
 
 ifeq ($(CONFIG_ARCH_MSM8X60_LTE),y)
 obj-$(CONFIG_ARCH_MSM8X60_LTE) += 8x60-lte/

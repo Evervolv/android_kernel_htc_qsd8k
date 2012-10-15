@@ -369,6 +369,13 @@ config MACH_PRIMODD
 		help
 			Support for Primodd_ct (PDA phone).
 
+config MACH_HTCLEO
+	depends on ARCH_QSD8X50
+	default y
+	bool "HTC Leo"
+	help
+	  Select this to support the HTC Leo device
+
 config MACH_PRIMODS
 		depends on ARCH_MSM7X27A
 		depends on !MSM_STACKED_MEMORY
@@ -896,6 +903,7 @@ config PHYS_OFFSET
 	default "0x00200000" if !MSM_STACKED_MEMORY
 	default "0x00000000" if ARCH_QSD8X50 && MSM_SOC_REV_A
 	default "0x20000000" if ARCH_QSD8X50
+	default "0x11808000" if MACH_HTCLEO
 	default "0x48000000" if ARCH_MSM8X60
 	default "0x10000000"
 
@@ -934,6 +942,7 @@ config MSM_AMSS_VERSION
 	default 3200 if MSM_AMSS_VERSION_3200
 	default 1170 if MSM_AMSS_VERSION_1170
 	default 1200 if MSM_AMSS_VERSION_1200
+	default 1550 if MSM_AMSS_VERSION_1550
 
 choice
 	prompt "AMSS modem firmware version"
@@ -975,6 +984,9 @@ choice
 
 	config MSM_AMSS_VERSION_1200
 		bool "1.2.00"
+
+	config MSM_AMSS_VERSION_1550
+		bool "1.5.50"
 
 endchoice
 
