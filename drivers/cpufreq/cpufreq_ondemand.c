@@ -849,6 +849,7 @@ static void dbs_refresh_callback(struct work_struct *unused)
 	unlock_policy_rwsem_write(cpu);
 }
 
+#if 0
 static void dbs_input_event(struct input_handle *handle, unsigned int type,
 		unsigned int code, int value)
 {
@@ -914,6 +915,7 @@ static struct input_handler dbs_input_handler = {
 	.name		= "cpufreq_ond",
 	.id_table	= dbs_ids,
 };
+#endif
 
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				   unsigned int event)
