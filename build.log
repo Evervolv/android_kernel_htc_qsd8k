@@ -1,0 +1,5 @@
+scripts/kconfig/conf --silentoldconfig Kconfig
+warning: (ARM_GIC && PMIC8058) selects MSM_SHOW_RESUME_IRQ which has unmet direct dependencies (ARCH_MSM && (ARCH_MSM7X30 || ARCH_MSM8X60 || ARCH_MSM8960 || ARCH_MSMCOPPER))
+warning: (MTD_MSM_NAND && MTD_HTCLEO_NAND && MTD_DOC2000 && MTD_DOC2001 && MTD_DOC2001PLUS) selects MTD_NAND_IDS which has unmet direct dependencies (MTD && MTD_NAND)
+warning: (ARM_GIC && PMIC8058) selects MSM_SHOW_RESUME_IRQ which has unmet direct dependencies (ARCH_MSM && (ARCH_MSM7X30 || ARCH_MSM8X60 || ARCH_MSM8960 || ARCH_MSMCOPPER))
+warning: (MTD_MSM_NAND && MTD_HTCLEO_NAND && MTD_DOC2000 && MTD_DOC2001 && MTD_DOC2001PLUS) selects MTD_NAND_IDS which has unmet direct dependencies (MTD && MTD_NAND)
