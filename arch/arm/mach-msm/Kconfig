@@ -1212,7 +1212,7 @@ config BUILD_OMA_DM
 
 config QSD_SVS
 	bool "QSD Static Voltage Scaling"
-	depends on (MACH_QSD8X50_SURF || MACH_QSD8X50_FFA)
+	depends on ARCH_QSD8X50
 	default y
 	select TPS65023
 	help
@@ -1220,7 +1220,7 @@ config QSD_SVS
 
 config QSD_PMIC_DEFAULT_DCDC1
 	int "PMIC default output voltage"
-	depends on (MACH_QSD8X50_SURF || MACH_QSD8X50_FFA)
+	depends on ARCH_QSD8X50
 	default 1250
 	help
 	  This is the PMIC voltage at Linux kernel boot.
