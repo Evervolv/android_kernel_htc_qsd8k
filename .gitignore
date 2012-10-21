@@ -34,6 +34,11 @@ modules.builtin
 *.gcno
 
 #
+# log files
+#
+build.log
+
+#
 # Top-level generic files
 #
 /tags
