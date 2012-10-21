@@ -32,6 +32,9 @@
 #include <mach/msm_smd.h>
 #include <mach/peripheral-loader.h>
 #include <mach/socinfo.h>
+#ifdef CONFIG_MACH_HTCLEO
+#include "board-htcleo.h"
+#endif
 
 #include "smd_private.h"
 
@@ -76,6 +79,10 @@ struct smd_config {
 	const char *dev_name;
 	uint32_t edge;
 };
+
+/*
+* Leo used to have ID 1 for DATA1 and ID 9 for DATA9
+*/
 
 static struct smd_config smd_configs[] = {
 	{0, "DS", NULL, SMD_APPS_MODEM},
@@ -372,7 +379,17 @@ static void smd_tty_close(struct tty_struct *tty, struct file *f)
 static int smd_tty_write(struct tty_struct *tty, const unsigned char *buf, int len)
 {
 	struct smd_tty_info *info = tty->driver_data;
-	int avail;
+	int avail, ret, runfix = 0;
+#ifdef CONFIG_MACH_HTCLEO
+	static int init = 0;
+	// seems to start the modem
+	const unsigned char* firstcall ="AT@BRIC=0\r";
+	// set functionality to low power mode
+	const unsigned char* secondcall="AT+CFUN=0\r";
+	// deregister from the network
+	const unsigned char* thirdcall ="AT+COPS=2\r";
+	unsigned int call_len;
+#endif
 
 	/* if we're writing to a packet channel we will
 	** never be able to write more data than there
@@ -380,6 +397,32 @@ static int smd_tty_write(struct tty_struct *tty, const unsigned char *buf, int l
 	*/
 	if (is_in_reset(info))
 		return -ENETRESET;
+
+#ifdef CONFIG_MACH_HTCLEO
+	if(len>7 && !init && htcleo_is_nand_boot()) {
+		pr_info("NAND boot, writing additional init commands to /dev/smd0");
+
+		call_len = strlen(firstcall);
+		avail = smd_write_avail(info->ch);
+		if (call_len > avail)
+			call_len = avail;
+		ret = smd_write(info->ch, firstcall, call_len);
+
+		call_len = strlen(secondcall);
+		avail = smd_write_avail(info->ch);
+		if (call_len > avail)
+			call_len = avail;
+		ret = smd_write(info->ch, secondcall, call_len);
+
+		call_len = strlen(thirdcall);
+		avail = smd_write_avail(info->ch);
+		if (call_len > avail)
+			call_len = avail;
+		ret = smd_write(info->ch, thirdcall, call_len);
+
+		init=1;
+	}
+#endif
 
 	avail = smd_write_avail(info->ch);
 	/* if no space, we'll have to setup a notification later to wake up the
