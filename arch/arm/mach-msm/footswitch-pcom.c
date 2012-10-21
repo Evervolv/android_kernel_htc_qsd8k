@@ -22,7 +22,11 @@
 #include "proc_comm.h"
 
 /* PCOM power rail IDs */
+#if defined(CONFIG_MACH_HTCLEO)
+#define PCOM_FS_GRP		0
+#else
 #define PCOM_FS_GRP		8
+#endif
 #define PCOM_FS_GRP_2D		58
 #define PCOM_FS_MDP		14
 #define PCOM_FS_MFC		68
@@ -156,7 +160,7 @@ static struct regulator_ops footswitch_ops = {
 	.disable = footswitch_disable,
 };
 
-#define FOOTSWITCH(_id, _pcom_id, _name, _src_clk, _rate, _ahb_clk) \
+#define FOOTSWITCH(_id, _pcom_id, _name, _src_clk, _rate, _ahb_clk, _is_manual) \
 	[_id] = { \
 		.desc = { \
 			.id = _id, \
@@ -169,22 +173,23 @@ static struct regulator_ops footswitch_ops = {
 		.has_src_clk = _src_clk, \
 		.src_clk_init_rate = _rate, \
 		.has_ahb_clk = _ahb_clk, \
+		.is_manual = _is_manual, \
 	}
 static struct footswitch footswitches[] = {
 	FOOTSWITCH(FS_GFX3D,  PCOM_FS_GRP,
-		"fs_gfx3d",   true, 24576000, true),
+		"fs_gfx3d",   true, 24576000, true, true),
 	FOOTSWITCH(FS_GFX2D0, PCOM_FS_GRP_2D,
-		"fs_gfx2d0", false, 24576000, true),
+		"fs_gfx2d0", false, 24576000, true, true),
 	FOOTSWITCH(FS_MDP,    PCOM_FS_MDP,
-		"fs_mdp",    false, 24576000, true),
+		"fs_mdp",    false, 24576000, true, true),
 	FOOTSWITCH(FS_MFC,    PCOM_FS_MFC,
-		"fs_mfc",    false, 24576000, true),
+		"fs_mfc",    false, 24576000, true, true),
 	FOOTSWITCH(FS_ROT,    PCOM_FS_ROTATOR,
-		"fs_rot",    false,        0, true),
+		"fs_rot",    false,        0, true, true),
 	FOOTSWITCH(FS_VFE,    PCOM_FS_VFE,
-		"fs_vfe",    false, 24576000, true),
+		"fs_vfe",    false, 24576000, true, true),
 	FOOTSWITCH(FS_VPE,    PCOM_FS_VPE,
-		"fs_vpe",    false, 24576000, false),
+		"fs_vpe",    false, 24576000, false, true),
 };
 
 static int get_clocks(struct device *dev, struct footswitch *fs)
@@ -197,9 +202,13 @@ static int get_clocks(struct device *dev, struct footswitch *fs)
 	 * rate-setting instead.
 	 */
 	if (fs->has_src_clk) {
+#ifdef CONFIG_MACH_HTCLEO
+		fs->src_clk = clk_get(dev, "grp_clk");
+#else
 		fs->src_clk = clk_get(dev, "src_clk");
 		if (IS_ERR(fs->src_clk))
 			fs->src_clk = clk_get(dev, "core_clk");
+#endif
 	} else {
 		fs->src_clk = clk_get(dev, "core_clk");
 	}
@@ -208,14 +217,18 @@ static int get_clocks(struct device *dev, struct footswitch *fs)
 		rc = PTR_ERR(fs->src_clk);
 		goto err_src_clk;
 	}
-
+#ifdef CONFIG_MACH_HTCLEO
+	fs->core_clk = clk_get(dev, "grp_clk");
+#else
 	fs->core_clk = clk_get(dev, "core_clk");
+#endif
 	if (IS_ERR(fs->core_clk)) {
 		pr_err("clk_get(core_clk) failed\n");
 		rc = PTR_ERR(fs->core_clk);
 		goto err_core_clk;
 	}
 
+#ifndef CONFIG_MACH_HTCLEO
 	if (fs->has_ahb_clk) {
 		fs->ahb_clk = clk_get(dev, "iface_clk");
 		if (IS_ERR(fs->ahb_clk)) {
@@ -224,11 +237,12 @@ static int get_clocks(struct device *dev, struct footswitch *fs)
 			goto err_ahb_clk;
 		}
 	}
-
+#endif
 	return 0;
-
+#ifndef CONFIG_MACH_HTCLEO
 err_ahb_clk:
 	clk_put(fs->core_clk);
+#endif
 err_core_clk:
 	clk_put(fs->src_clk);
 err_src_clk:
@@ -239,7 +253,9 @@ static void put_clocks(struct footswitch *fs)
 {
 	clk_put(fs->src_clk);
 	clk_put(fs->core_clk);
+#ifndef CONFIG_MACH_HTCLEO
 	clk_put(fs->ahb_clk);
+#endif
 }
 
 static int footswitch_probe(struct platform_device *pdev)
