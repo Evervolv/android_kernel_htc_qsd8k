@@ -206,6 +206,6 @@ enum {
 extern spinlock_t smem_lock;
 
 
-int smd_diag(void);
+void smd_diag(void);
 
 #endif
