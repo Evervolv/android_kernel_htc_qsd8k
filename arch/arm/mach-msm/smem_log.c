@@ -1,63 +1,20 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of Code Aurora Forum nor
- *       the names of its contributors may be used to endorse or promote
- *       products derived from this software without specific prior written
- *       permission.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
  *
- * Alternatively, provided that this notice is retained in full, this software
- * may be relicensed by the recipient under the terms of the GNU General Public
- * License version 2 ("GPL") and only version 2, in which case the provisions of
- * the GPL apply INSTEAD OF those given above.  If the recipient relicenses the
- * software under the GPL, then the identification text in the MODULE_LICENSE
- * macro must be changed to reflect "GPLv2" instead of "Dual BSD/GPL".  Once a
- * recipient changes the license terms to the GPL, subsequent recipients shall
- * not relicense under alternate licensing terms, including the BSD or dual
- * BSD/GPL terms.  In addition, the following license statement immediately
- * below and between the words START and END shall also then apply when this
- * software is relicensed under the GPL:
- *
- * START
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU General Public License version 2 and only version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * END
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
  */
 /*
  * Shared memory logging implementation.
  */
 
+#include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/module.h>
 #include <linux/fs.h>
@@ -69,11 +26,16 @@
 #include <linux/debugfs.h>
 #include <linux/io.h>
 #include <linux/string.h>
+#include <linux/sched.h>
+#include <linux/wait.h>
+#include <linux/delay.h>
 
 #include <mach/msm_iomap.h>
 #include <mach/smem_log.h>
 
 #include "smd_private.h"
+#include "smd_rpc_sym.h"
+#include "modem_notifier.h"
 
 #define DEBUG
 #undef DEBUG
@@ -97,7 +59,12 @@ do { \
 #define D(x...) do {} while (0)
 #endif
 
-#define TIMESTAMP_ADDR (MSM_CSR_BASE + 0x04)
+#if defined(CONFIG_ARCH_MSM7X30) || defined(CONFIG_ARCH_MSM8X60) \
+	|| defined(CONFIG_ARCH_FSM9XXX)
+#define TIMESTAMP_ADDR (MSM_TMR_BASE + 0x08)
+#else
+#define TIMESTAMP_ADDR (MSM_TMR_BASE + 0x04)
+#endif
 
 struct smem_log_item {
 	uint32_t identifier;
@@ -119,23 +86,27 @@ struct smem_log_item {
 #define SMEM_POWER_LOG_EVENTS_SIZE (sizeof(struct smem_log_item) * \
 			      SMEM_LOG_NUM_POWER_ENTRIES)
 
-#if defined(CONFIG_ARCH_MSM7X30)
-#define SMEM_SPINLOCK_SMEM_LOG "S:2"
-#define SMEM_SPINLOCK_STATIC_LOG "S:5"
-#else
-#define SMEM_SPINLOCK_SMEM_LOG 2
-#define SMEM_SPINLOCK_STATIC_LOG 5
-#endif
+#define SMEM_SPINLOCK_SMEM_LOG		"S:2"
+#define SMEM_SPINLOCK_STATIC_LOG	"S:5"
 /* POWER shares with SMEM_SPINLOCK_SMEM_LOG */
 
 static remote_spinlock_t remote_spinlock;
 static remote_spinlock_t remote_spinlock_static;
+static uint32_t smem_log_enable;
+static int smem_log_initialized;
+
+module_param_named(log_enable, smem_log_enable, int,
+		   S_IRUGO | S_IWUSR | S_IWGRP);
+
 
 struct smem_log_inst {
 	int which_log;
 	struct smem_log_item __iomem *events;
 	uint32_t __iomem *idx;
-	int num;
+	uint32_t num;
+	uint32_t read_idx;
+	uint32_t last_read_avail;
+	wait_queue_head_t read_wait;
 	remote_spinlock_t *remote_spinlock;
 };
 
@@ -333,298 +304,6 @@ struct sym event_syms[] = {
 	{ RPC_ROUTER_LOG_EVENT_MID_READ, "MID_READ" },
 	{ RPC_ROUTER_LOG_EVENT_MID_WRITTEN, "MID_WRITTEN" },
 	{ RPC_ROUTER_LOG_EVENT_MID_CFM_REQ, "MID_CFM_REQ" },
-
-};
-
-struct sym oncrpc_syms[] = {
-	{ 0x30000000, "CM" },
-	{ 0x30000001, "DB" },
-	{ 0x30000002, "SND" },
-	{ 0x30000003, "WMS" },
-	{ 0x30000004, "PDSM" },
-	{ 0x30000005, "MISC_MODEM_APIS" },
-	{ 0x30000006, "MISC_APPS_APIS" },
-	{ 0x30000007, "JOYST" },
-	{ 0x30000008, "VJOY" },
-	{ 0x30000009, "JOYSTC" },
-	{ 0x3000000a, "ADSPRTOSATOM" },
-	{ 0x3000000b, "ADSPRTOSMTOA" },
-	{ 0x3000000c, "I2C" },
-	{ 0x3000000d, "TIME_REMOTE" },
-	{ 0x3000000e, "NV" },
-	{ 0x3000000f, "CLKRGM_SEC" },
-	{ 0x30000010, "RDEVMAP" },
-	{ 0x30000011, "FS_RAPI" },
-	{ 0x30000012, "PBMLIB" },
-	{ 0x30000013, "AUDMGR" },
-	{ 0x30000014, "MVS" },
-	{ 0x30000015, "DOG_KEEPALIVE" },
-	{ 0x30000016, "GSDI_EXP" },
-	{ 0x30000017, "AUTH" },
-	{ 0x30000018, "NVRUIMI" },
-	{ 0x30000019, "MMGSDILIB" },
-	{ 0x3000001a, "CHARGER" },
-	{ 0x3000001b, "UIM" },
-	{ 0x3000001C, "ONCRPCTEST" },
-	{ 0x3000001d, "PDSM_ATL" },
-	{ 0x3000001e, "FS_XMOUNT" },
-	{ 0x3000001f, "SECUTIL " },
-	{ 0x30000020, "MCCMEID" },
-	{ 0x30000021, "PM_STROBE_FLASH" },
-	{ 0x30000022, "DS707_EXTIF" },
-	{ 0x30000023, "SMD BRIDGE_MODEM" },
-	{ 0x30000024, "SMD PORT_MGR" },
-	{ 0x30000025, "BUS_PERF" },
-	{ 0x30000026, "BUS_MON" },
-	{ 0x30000027, "MC" },
-	{ 0x30000028, "MCCAP" },
-	{ 0x30000029, "MCCDMA" },
-	{ 0x3000002a, "MCCDS" },
-	{ 0x3000002b, "MCCSCH" },
-	{ 0x3000002c, "MCCSRID" },
-	{ 0x3000002d, "SNM" },
-	{ 0x3000002e, "MCCSYOBJ" },
-	{ 0x3000002f, "DS707_APIS" },
-	{ 0x30000030, "DS_MP_SHIM_APPS_ASYNC" },
-	{ 0x30000031, "DSRLP_APIS" },
-	{ 0x30000032, "RLP_APIS" },
-	{ 0x30000033, "DS_MP_SHIM_MODEM" },
-	{ 0x30000034, "DSHDR_APIS" },
-	{ 0x30000035, "DSHDR_MDM_APIS" },
-	{ 0x30000036, "DS_MP_SHIM_APPS" },
-	{ 0x30000037, "HDRMC_APIS" },
-	{ 0x30000038, "SMD_BRIDGE_MTOA" },
-	{ 0x30000039, "SMD_BRIDGE_ATOM" },
-	{ 0x3000003a, "DPMAPP_OTG" },
-	{ 0x3000003b, "DIAG" },
-	{ 0x3000003c, "GSTK_EXP" },
-	{ 0x3000003d, "DSBC_MDM_APIS" },
-	{ 0x3000003e, "HDRMRLP_MDM_APIS" },
-	{ 0x3000003f, "HDRMRLP_APPS_APIS" },
-	{ 0x30000040, "HDRMC_MRLP_APIS" },
-	{ 0x30000041, "PDCOMM_APP_API" },
-	{ 0x30000042, "DSAT_APIS" },
-	{ 0x30000043, "MISC_RF_APIS" },
-	{ 0x30000044, "CMIPAPP" },
-	{ 0x30000045, "DSMP_UMTS_MODEM_APIS" },
-	{ 0x30000046, "DSMP_UMTS_APPS_APIS" },
-	{ 0x30000047, "DSUCSDMPSHIM" },
-	{ 0x30000048, "TIME_REMOTE_ATOM" },
-	{ 0x3000004a, "SD" },
-	{ 0x3000004b, "MMOC" },
-	{ 0x3000004c, "WLAN_ADP_FTM" },
-	{ 0x3000004d, "WLAN_CP_CM" },
-	{ 0x3000004e, "FTM_WLAN" },
-	{ 0x3000004f, "SDCC_CPRM" },
-	{ 0x30000050, "CPRMINTERFACE" },
-	{ 0x30000051, "DATA_ON_MODEM_MTOA_APIS" },
-	{ 0x30000052, "DATA_ON_APPS_ATOM_APIS" },
-	{ 0x30000053, "MISC_MODEM_APIS_NONWINMOB" },
-	{ 0x30000054, "MISC_APPS_APIS_NONWINMOB" },
-	{ 0x30000055, "PMEM_REMOTE" },
-	{ 0x30000056, "TCXOMGR" },
-	{ 0x30000057, "DSUCSDAPPIF_APIS" },
-	{ 0x30000058, "BT" },
-	{ 0x30000059, "PD_COMMS_API" },
-	{ 0x3000005a, "PD_COMMS_CLIENT_API" },
-	{ 0x3000005b, "PDAPI" },
-	{ 0x3000005c, "LSA_SUPL_DSM" },
-	{ 0x3000005d, "TIME_REMOTE_MTOA" },
-	{ 0x3000005e, "FTM_BT" },
-	{ 0X3000005f, "DSUCSDAPPIF_APIS" },
-	{ 0X30000060, "PMAPP_GEN" },
-	{ 0X30000061, "PM_LIB" },
-	{ 0X30000062, "KEYPAD" },
-	{ 0X30000063, "HSU_APP_APIS" },
-	{ 0X30000064, "HSU_MDM_APIS" },
-	{ 0X30000065, "ADIE_ADC_REMOTE_ATOM " },
-	{ 0X30000066, "TLMM_REMOTE_ATOM" },
-	{ 0X30000067, "UI_CALLCTRL" },
-	{ 0X30000068, "UIUTILS" },
-	{ 0X30000069, "PRL" },
-	{ 0X3000006a, "HW" },
-	{ 0X3000006b, "OEM_RAPI" },
-	{ 0X3000006c, "WMSPM" },
-	{ 0X3000006d, "BTPF" },
-	{ 0X3000006e, "CLKRGM_SYNC_EVENT" },
-	{ 0X3000006f, "USB_APPS_RPC" },
-	{ 0X30000070, "USB_MODEM_RPC" },
-	{ 0X30000071, "ADC" },
-	{ 0X30000072, "CAMERAREMOTED" },
-	{ 0X30000073, "SECAPIREMOTED" },
-	{ 0X30000074, "DSATAPI" },
-	{ 0X30000075, "CLKCTL_RPC" },
-	{ 0X30000076, "BREWAPPCOORD" },
-	{ 0X30000077, "ALTENVSHELL" },
-	{ 0X30000078, "WLAN_TRP_UTILS" },
-	{ 0X30000079, "GPIO_RPC" },
-	{ 0X3000007a, "PING_RPC" },
-	{ 0X3000007b, "DSC_DCM_API" },
-	{ 0X3000007c, "L1_DS" },
-	{ 0X3000007d, "QCHATPK_APIS" },
-	{ 0X3000007e, "GPS_API" },
-	{ 0X3000007f, "OSS_RRCASN_REMOTE" },
-	{ 0X30000080, "PMAPP_OTG_REMOTE" },
-	{ 0X30000081, "PING_MDM_RPC" },
-	{ 0X30000082, "PING_KERNEL_RPC" },
-	{ 0X30000083, "TIMETICK" },
-	{ 0X30000084, "WM_BTHCI_FTM " },
-	{ 0X30000085, "WM_BT_PF" },
-	{ 0X30000086, "IPA_IPC_APIS" },
-	{ 0X30000087, "UKCC_IPC_APIS" },
-	{ 0X30000088, "CMIPSMS " },
-	{ 0X30000089, "VBATT_REMOTE" },
-	{ 0X3000008a, "MFPAL" },
-	{ 0X3000008b, "DSUMTSPDPREG" },
-	{ 0X3000fe00, "RESTART_DAEMON NUMBER 0" },
-	{ 0X3000fe01, "RESTART_DAEMON NUMBER 1" },
-	{ 0X3000feff, "RESTART_DAEMON NUMBER 255" },
-	{ 0X3000fffe, "BACKWARDS_COMPATIBILITY_IN_RPC_CLNT_LOOKUP" },
-	{ 0X3000ffff, "RPC_ROUTER_SERVER_PROGRAM" },
-	{ 0x31000000, "CM CB" },
-	{ 0x31000001, "DB CB" },
-	{ 0x31000002, "SND CB" },
-	{ 0x31000003, "WMS CB" },
-	{ 0x31000004, "PDSM CB" },
-	{ 0x31000005, "MISC_MODEM_APIS CB" },
-	{ 0x31000006, "MISC_APPS_APIS CB" },
-	{ 0x31000007, "JOYST CB" },
-	{ 0x31000008, "VJOY CB" },
-	{ 0x31000009, "JOYSTC CB" },
-	{ 0x3100000a, "ADSPRTOSATOM CB" },
-	{ 0x3100000b, "ADSPRTOSMTOA CB" },
-	{ 0x3100000c, "I2C CB" },
-	{ 0x3100000d, "TIME_REMOTE CB" },
-	{ 0x3100000e, "NV CB" },
-	{ 0x3100000f, "CLKRGM_SEC CB" },
-	{ 0x31000010, "RDEVMAP CB" },
-	{ 0x31000011, "FS_RAPI CB" },
-	{ 0x31000012, "PBMLIB CB" },
-	{ 0x31000013, "AUDMGR CB" },
-	{ 0x31000014, "MVS CB" },
-	{ 0x31000015, "DOG_KEEPALIVE CB" },
-	{ 0x31000016, "GSDI_EXP CB" },
-	{ 0x31000017, "AUTH CB" },
-	{ 0x31000018, "NVRUIMI CB" },
-	{ 0x31000019, "MMGSDILIB CB" },
-	{ 0x3100001a, "CHARGER CB" },
-	{ 0x3100001b, "UIM CB" },
-	{ 0x3100001C, "ONCRPCTEST CB" },
-	{ 0x3100001d, "PDSM_ATL CB" },
-	{ 0x3100001e, "FS_XMOUNT CB" },
-	{ 0x3100001f, "SECUTIL CB" },
-	{ 0x31000020, "MCCMEID" },
-	{ 0x31000021, "PM_STROBE_FLASH CB" },
-	{ 0x31000022, "DS707_EXTIF CB" },
-	{ 0x31000023, "SMD BRIDGE_MODEM CB" },
-	{ 0x31000024, "SMD PORT_MGR CB" },
-	{ 0x31000025, "BUS_PERF CB" },
-	{ 0x31000026, "BUS_MON CB" },
-	{ 0x31000027, "MC CB" },
-	{ 0x31000028, "MCCAP CB" },
-	{ 0x31000029, "MCCDMA CB" },
-	{ 0x3100002a, "MCCDS CB" },
-	{ 0x3100002b, "MCCSCH CB" },
-	{ 0x3100002c, "MCCSRID CB" },
-	{ 0x3100002d, "SNM CB" },
-	{ 0x3100002e, "MCCSYOBJ CB" },
-	{ 0x3100002f, "DS707_APIS CB" },
-	{ 0x31000030, "DS_MP_SHIM_APPS_ASYNC CB" },
-	{ 0x31000031, "DSRLP_APIS CB" },
-	{ 0x31000032, "RLP_APIS CB" },
-	{ 0x31000033, "DS_MP_SHIM_MODEM CB" },
-	{ 0x31000034, "DSHDR_APIS CB" },
-	{ 0x31000035, "DSHDR_MDM_APIS CB" },
-	{ 0x31000036, "DS_MP_SHIM_APPS CB" },
-	{ 0x31000037, "HDRMC_APIS CB" },
-	{ 0x31000038, "SMD_BRIDGE_MTOA CB" },
-	{ 0x31000039, "SMD_BRIDGE_ATOM CB" },
-	{ 0x3100003a, "DPMAPP_OTG CB" },
-	{ 0x3100003b, "DIAG CB" },
-	{ 0x3100003c, "GSTK_EXP CB" },
-	{ 0x3100003d, "DSBC_MDM_APIS CB" },
-	{ 0x3100003e, "HDRMRLP_MDM_APIS CB" },
-	{ 0x3100003f, "HDRMRLP_APPS_APIS CB" },
-	{ 0x31000040, "HDRMC_MRLP_APIS CB" },
-	{ 0x31000041, "PDCOMM_APP_API CB" },
-	{ 0x31000042, "DSAT_APIS CB" },
-	{ 0x31000043, "MISC_RF_APIS CB" },
-	{ 0x31000044, "CMIPAPP CB" },
-	{ 0x31000045, "DSMP_UMTS_MODEM_APIS CB" },
-	{ 0x31000046, "DSMP_UMTS_APPS_APIS CB" },
-	{ 0x31000047, "DSUCSDMPSHIM CB" },
-	{ 0x31000048, "TIME_REMOTE_ATOM CB" },
-	{ 0x3100004a, "SD CB" },
-	{ 0x3100004b, "MMOC CB" },
-	{ 0x3100004c, "WLAN_ADP_FTM CB" },
-	{ 0x3100004d, "WLAN_CP_CM CB" },
-	{ 0x3100004e, "FTM_WLAN CB" },
-	{ 0x3100004f, "SDCC_CPRM CB" },
-	{ 0x31000050, "CPRMINTERFACE CB" },
-	{ 0x31000051, "DATA_ON_MODEM_MTOA_APIS CB" },
-	{ 0x31000052, "DATA_ON_APPS_ATOM_APIS CB" },
-	{ 0x31000053, "MISC_APIS_NONWINMOB CB" },
-	{ 0x31000054, "MISC_APPS_APIS_NONWINMOB CB" },
-	{ 0x31000055, "PMEM_REMOTE CB" },
-	{ 0x31000056, "TCXOMGR CB" },
-	{ 0x31000057, "DSUCSDAPPIF_APIS CB" },
-	{ 0x31000058, "BT CB" },
-	{ 0x31000059, "PD_COMMS_API CB" },
-	{ 0x3100005a, "PD_COMMS_CLIENT_API CB" },
-	{ 0x3100005b, "PDAPI CB" },
-	{ 0x3100005c, "LSA_SUPL_DSM CB" },
-	{ 0x3100005d, "TIME_REMOTE_MTOA CB" },
-	{ 0x3100005e, "FTM_BT CB" },
-	{ 0X3100005f, "DSUCSDAPPIF_APIS CB" },
-	{ 0X31000060, "PMAPP_GEN CB" },
-	{ 0X31000061, "PM_LIB CB" },
-	{ 0X31000062, "KEYPAD CB" },
-	{ 0X31000063, "HSU_APP_APIS CB" },
-	{ 0X31000064, "HSU_MDM_APIS CB" },
-	{ 0X31000065, "ADIE_ADC_REMOTE_ATOM CB" },
-	{ 0X31000066, "TLMM_REMOTE_ATOM CB" },
-	{ 0X31000067, "UI_CALLCTRL CB" },
-	{ 0X31000068, "UIUTILS CB" },
-	{ 0X31000069, "PRL CB" },
-	{ 0X3100006a, "HW CB" },
-	{ 0X3100006b, "OEM_RAPI CB" },
-	{ 0X3100006c, "WMSPM CB" },
-	{ 0X3100006d, "BTPF CB" },
-	{ 0X3100006e, "CLKRGM_SYNC_EVENT CB" },
-	{ 0X3100006f, "USB_APPS_RPC CB" },
-	{ 0X31000070, "USB_MODEM_RPC CB" },
-	{ 0X31000071, "ADC CB" },
-	{ 0X31000072, "CAMERAREMOTED CB" },
-	{ 0X31000073, "SECAPIREMOTED CB" },
-	{ 0X31000074, "DSATAPI CB" },
-	{ 0X31000075, "CLKCTL_RPC CB" },
-	{ 0X31000076, "BREWAPPCOORD CB" },
-	{ 0X31000077, "ALTENVSHELL CB" },
-	{ 0X31000078, "WLAN_TRP_UTILS CB" },
-	{ 0X31000079, "GPIO_RPC CB" },
-	{ 0X3100007a, "PING_RPC CB" },
-	{ 0X3100007b, "DSC_DCM_API CB" },
-	{ 0X3100007c, "L1_DS CB" },
-	{ 0X3100007d, "QCHATPK_APIS CB" },
-	{ 0X3100007e, "GPS_API CB" },
-	{ 0X3100007f, "OSS_RRCASN_REMOTE CB" },
-	{ 0X31000080, "PMAPP_OTG_REMOTE CB" },
-	{ 0X31000081, "PING_MDM_RPC CB" },
-	{ 0X31000082, "PING_KERNEL_RPC CB" },
-	{ 0X31000083, "TIMETICK CB" },
-	{ 0X31000084, "WM_BTHCI_FTM CB" },
-	{ 0X31000085, "WM_BT_PF CB" },
-	{ 0X31000086, "IPA_IPC_APIS CB" },
-	{ 0X31000087, "UKCC_IPC_APIS CB" },
-	{ 0X31000088, "CMIPSMS CB" },
-	{ 0X31000089, "VBATT_REMOTE CB" },
-	{ 0X3100008a, "MFPAL CB" },
-	{ 0X3100008b, "DSUMTSPDPREG CB" },
-	{ 0X3100fe00, "RESTART_DAEMON NUMBER 0 CB" },
-	{ 0X3100fe01, "RESTART_DAEMON NUMBER 1 CB" },
-	{ 0X3100feff, "RESTART_DAEMON NUMBER 255 CB" },
-	{ 0X3100fffe, "BACKWARDS_COMPATIBILITY_IN_RPC_CLNT_LOOKUP CB" },
-	{ 0X3100ffff, "RPC_ROUTER_SERVER_PROGRAM CB" },
 };
 
 struct sym wakeup_syms[] = {
@@ -852,16 +531,15 @@ struct sym smsm_state_syms[] = {
 #define ID_SYM 0
 #define BASE_SYM 1
 #define EVENT_SYM 2
-#define ONCRPC_SYM 3
-#define WAKEUP_SYM 4
-#define WAKEUP_INT_SYM 5
-#define SMSM_SYM 6
-#define VOTER_D2_SYM 7
-#define VOTER_D3_SYM 8
-#define DEM_STATE_MASTER_SYM 9
-#define DEM_STATE_SLAVE_SYM 10
-#define SMSM_ENTRY_TYPE_SYM 11
-#define SMSM_STATE_SYM 12
+#define WAKEUP_SYM 3
+#define WAKEUP_INT_SYM 4
+#define SMSM_SYM 5
+#define VOTER_D2_SYM 6
+#define VOTER_D3_SYM 7
+#define DEM_STATE_MASTER_SYM 8
+#define DEM_STATE_SLAVE_SYM 9
+#define SMSM_ENTRY_TYPE_SYM 10
+#define SMSM_STATE_SYM 11
 
 static struct sym_tbl {
 	struct sym *data;
@@ -871,7 +549,6 @@ static struct sym_tbl {
 	{ id_syms, ARRAY_SIZE(id_syms) },
 	{ base_syms, ARRAY_SIZE(base_syms) },
 	{ event_syms, ARRAY_SIZE(event_syms) },
-	{ oncrpc_syms, ARRAY_SIZE(oncrpc_syms) },
 	{ wakeup_syms, ARRAY_SIZE(wakeup_syms) },
 	{ wakeup_int_syms, ARRAY_SIZE(wakeup_int_syms) },
 	{ smsm_syms, ARRAY_SIZE(smsm_syms) },
@@ -889,7 +566,7 @@ static void find_voters(void)
 	unsigned size;
 	int i = 0, j = 0;
 
-	x = smem_item(SMEM_SLEEP_STATIC, &size);
+	x = smem_get_entry(SMEM_SLEEP_STATIC, &size);
 	next = x;
 	while (next && (next < (x + size)) &&
 	       ((i + j) < (ARRAY_SIZE(voter_d3_syms) +
@@ -949,9 +626,13 @@ static inline unsigned int read_timestamp(void)
 {
 	unsigned int tick = 0;
 
+	/* no barriers necessary as the read value is a dependency for the
+	 * comparison operation so the processor shouldn't be able to
+	 * reorder things
+	 */
 	do {
-		tick = readl(TIMESTAMP_ADDR);
-	} while (tick != readl(TIMESTAMP_ADDR));
+		tick = __raw_readl(TIMESTAMP_ADDR);
+	} while (tick != __raw_readl(TIMESTAMP_ADDR));
 
 	return tick;
 }
@@ -1002,11 +683,11 @@ static void smem_log_event_from_user(struct smem_log_inst *inst,
 		if (next_idx >= inst->num)
 			next_idx = 0;
 		*inst->idx = next_idx;
-
 		buf += sizeof(struct smem_log_item);
 	}
 
  out:
+	wmb();
 	remote_spin_unlock_irqrestore(inst->remote_spinlock, flags);
 }
 
@@ -1042,6 +723,7 @@ static void _smem_log_event(
 	if (next_idx >= num)
 		next_idx = 0;
 	*_idx = next_idx;
+	wmb();
 
 	remote_spin_unlock_irqrestore(lock, flags);
 }
@@ -1075,9 +757,10 @@ static void _smem_log_event6(
 
 	idx = *_idx;
 
+	/* FIXME: Wrap around */
 	if (idx < (num-1)) {
 		memcpy(&events[idx],
-		       &item, sizeof(item));
+			&item, sizeof(item));
 	}
 
 	next_idx = idx + 2;
@@ -1085,56 +768,69 @@ static void _smem_log_event6(
 		next_idx = 0;
 	*_idx = next_idx;
 
+	wmb();
 	remote_spin_unlock_irqrestore(lock, flags);
 }
 
 void smem_log_event(uint32_t id, uint32_t data1, uint32_t data2,
 		    uint32_t data3)
 {
-	_smem_log_event(inst[GEN].events, inst[GEN].idx,
-			inst[GEN].remote_spinlock, SMEM_LOG_NUM_ENTRIES,
-			id, data1, data2, data3);
+	if (smem_log_enable)
+		_smem_log_event(inst[GEN].events, inst[GEN].idx,
+				inst[GEN].remote_spinlock,
+				SMEM_LOG_NUM_ENTRIES, id,
+				data1, data2, data3);
 }
 
 void smem_log_event6(uint32_t id, uint32_t data1, uint32_t data2,
 		     uint32_t data3, uint32_t data4, uint32_t data5,
 		     uint32_t data6)
 {
-	_smem_log_event6(inst[GEN].events, inst[GEN].idx,
-			 inst[GEN].remote_spinlock, SMEM_LOG_NUM_ENTRIES,
-			 id, data1, data2, data3, data4, data5, data6);
+	if (smem_log_enable)
+		_smem_log_event6(inst[GEN].events, inst[GEN].idx,
+				 inst[GEN].remote_spinlock,
+				 SMEM_LOG_NUM_ENTRIES, id,
+				 data1, data2, data3, data4, data5, data6);
 }
 
 void smem_log_event_to_static(uint32_t id, uint32_t data1, uint32_t data2,
 		    uint32_t data3)
 {
-	_smem_log_event(inst[STA].events, inst[STA].idx,
-			inst[STA].remote_spinlock, SMEM_LOG_NUM_STATIC_ENTRIES,
-			id, data1, data2, data3);
+	if (smem_log_enable)
+		_smem_log_event(inst[STA].events, inst[STA].idx,
+				inst[STA].remote_spinlock,
+				SMEM_LOG_NUM_STATIC_ENTRIES, id,
+				data1, data2, data3);
 }
 
 void smem_log_event6_to_static(uint32_t id, uint32_t data1, uint32_t data2,
 		     uint32_t data3, uint32_t data4, uint32_t data5,
 		     uint32_t data6)
 {
-	_smem_log_event6(inst[STA].events, inst[STA].idx,
-			 inst[STA].remote_spinlock, SMEM_LOG_NUM_STATIC_ENTRIES,
-			 id, data1, data2, data3, data4, data5, data6);
+	if (smem_log_enable)
+		_smem_log_event6(inst[STA].events, inst[STA].idx,
+				 inst[STA].remote_spinlock,
+				 SMEM_LOG_NUM_STATIC_ENTRIES, id,
+				 data1, data2, data3, data4, data5, data6);
 }
 
 static int _smem_log_init(void)
 {
+	int ret;
+
 	inst[GEN].which_log = GEN;
 	inst[GEN].events =
 		(struct smem_log_item *)smem_alloc(SMEM_SMEM_LOG_EVENTS,
 						  SMEM_LOG_EVENTS_SIZE);
 	inst[GEN].idx = (uint32_t *)smem_alloc(SMEM_SMEM_LOG_IDX,
 					     sizeof(uint32_t));
-	if (!inst[GEN].events || !inst[GEN].idx) {
-		pr_err("%s: no log or log_idx allocated, "
-		       "smem_log disabled\n", __func__);
-	}
+	if (!inst[GEN].events || !inst[GEN].idx)
+		pr_info("%s: no log or log_idx allocated\n", __func__);
+
 	inst[GEN].num = SMEM_LOG_NUM_ENTRIES;
+	inst[GEN].read_idx = 0;
+	inst[GEN].last_read_avail = SMEM_LOG_NUM_ENTRIES;
+	init_waitqueue_head(&inst[GEN].read_wait);
 	inst[GEN].remote_spinlock = &remote_spinlock;
 
 	inst[STA].which_log = STA;
@@ -1144,39 +840,47 @@ static int _smem_log_init(void)
 			   SMEM_STATIC_LOG_EVENTS_SIZE);
 	inst[STA].idx = (uint32_t *)smem_alloc(SMEM_SMEM_STATIC_LOG_IDX,
 						     sizeof(uint32_t));
-	if (!inst[STA].events || !inst[STA].idx) {
-		pr_err("%s: no static log or log_idx "
-		       "allocated, smem_log disabled\n", __func__);
-	}
+	if (!inst[STA].events || !inst[STA].idx)
+		pr_info("%s: no static log or log_idx allocated\n", __func__);
+
 	inst[STA].num = SMEM_LOG_NUM_STATIC_ENTRIES;
+	inst[STA].read_idx = 0;
+	inst[STA].last_read_avail = SMEM_LOG_NUM_ENTRIES;
+	init_waitqueue_head(&inst[STA].read_wait);
 	inst[STA].remote_spinlock = &remote_spinlock_static;
 
 	inst[POW].which_log = POW;
-#ifdef CONFIG_MSM_N_WAY_SMD
-
 	inst[POW].events =
 		(struct smem_log_item *)
 		smem_alloc(SMEM_SMEM_LOG_POWER_EVENTS,
 			   SMEM_POWER_LOG_EVENTS_SIZE);
 	inst[POW].idx = (uint32_t *)smem_alloc(SMEM_SMEM_LOG_POWER_IDX,
 						     sizeof(uint32_t));
-#else
-	inst[POW].events = NULL;
-	inst[POW].idx = NULL;
-#endif
-	if (!inst[POW].events || !inst[POW].idx) {
-		pr_err("%s: no power log or log_idx "
-		       "allocated, smem_log disabled\n", __func__);
-	}
+	if (!inst[POW].events || !inst[POW].idx)
+		pr_info("%s: no power log or log_idx allocated\n", __func__);
+
 	inst[POW].num = SMEM_LOG_NUM_POWER_ENTRIES;
+	inst[POW].read_idx = 0;
+	inst[POW].last_read_avail = SMEM_LOG_NUM_ENTRIES;
+	init_waitqueue_head(&inst[POW].read_wait);
 	inst[POW].remote_spinlock = &remote_spinlock;
 
-	remote_spin_lock_init(&remote_spinlock,
+	ret = remote_spin_lock_init(&remote_spinlock,
 			      SMEM_SPINLOCK_SMEM_LOG);
-	remote_spin_lock_init(&remote_spinlock_static,
+	if (ret) {
+		mb();
+		return ret;
+	}
+
+	ret = remote_spin_lock_init(&remote_spinlock_static,
 			      SMEM_SPINLOCK_STATIC_LOG);
+	if (ret) {
+		mb();
+		return ret;
+	}
 
 	init_syms();
+	mb();
 
 	return 0;
 }
@@ -1189,19 +893,19 @@ static ssize_t smem_log_read_bin(struct file *fp, char __user *buf,
 	unsigned long flags;
 	int ret;
 	int tot_bytes = 0;
-	struct smem_log_inst *inst;
+	struct smem_log_inst *local_inst;
 
-	inst = fp->private_data;
+	local_inst = fp->private_data;
 
-	remote_spin_lock_irqsave(inst->remote_spinlock, flags);
+	remote_spin_lock_irqsave(local_inst->remote_spinlock, flags);
 
-	orig_idx = *inst->idx;
+	orig_idx = *local_inst->idx;
 	idx = orig_idx;
 
 	while (1) {
 		idx--;
 		if (idx < 0)
-			idx = inst->num - 1;
+			idx = local_inst->num - 1;
 		if (idx == orig_idx) {
 			ret = tot_bytes;
 			break;
@@ -1212,7 +916,7 @@ static ssize_t smem_log_read_bin(struct file *fp, char __user *buf,
 			break;
 		}
 
-		ret = copy_to_user(buf, &inst[GEN].events[idx],
+		ret = copy_to_user(buf, &local_inst->events[idx],
 				   sizeof(struct smem_log_item));
 		if (ret) {
 			ret = -EIO;
@@ -1224,7 +928,7 @@ static ssize_t smem_log_read_bin(struct file *fp, char __user *buf,
 		buf += sizeof(struct smem_log_item);
 	}
 
-	remote_spin_unlock_irqrestore(inst->remote_spinlock, flags);
+	remote_spin_unlock_irqrestore(local_inst->remote_spinlock, flags);
 
 	return ret;
 }
@@ -1296,10 +1000,10 @@ static ssize_t smem_log_write_bin(struct file *fp, const char __user *buf,
 	if (count < sizeof(struct smem_log_item))
 		return -EINVAL;
 
-	smem_log_event_from_user(fp->private_data, buf,
-				 sizeof(struct smem_log_item),
-				 count / sizeof(struct smem_log_item));
-
+	if (smem_log_enable)
+		smem_log_event_from_user(fp->private_data, buf,
+					sizeof(struct smem_log_item),
+					count / sizeof(struct smem_log_item));
 	return count;
 }
 
@@ -1309,7 +1013,7 @@ static ssize_t smem_log_write(struct file *fp, const char __user *buf,
 	int ret;
 	const char delimiters[] = " ,;";
 	char locbuf[256] = {0};
-	uint32_t val[10];
+	uint32_t val[10] = {0};
 	int vals = 0;
 	char *token;
 	char *running;
@@ -1318,13 +1022,10 @@ static ssize_t smem_log_write(struct file *fp, const char __user *buf,
 
 	inst = fp->private_data;
 
-	if (count < 0) {
-		printk(KERN_ERR "ERROR: %s passed neg count = %i\n",
-		       __func__, count);
-		return -EINVAL;
-	}
-
 	count = count > 255 ? 255 : count;
+
+	if (!smem_log_enable)
+		return count;
 
 	locbuf[count] = '\0';
 
@@ -1393,8 +1094,8 @@ static int smem_log_release(struct inode *ip, struct file *fp)
 	return 0;
 }
 
-static int smem_log_ioctl(struct inode *ip, struct file *fp,
-			  unsigned int cmd, unsigned long arg);
+static long smem_log_ioctl(struct file *fp, unsigned int cmd,
+					   unsigned long arg);
 
 static const struct file_operations smem_log_fops = {
 	.owner = THIS_MODULE,
@@ -1402,7 +1103,7 @@ static const struct file_operations smem_log_fops = {
 	.write = smem_log_write,
 	.open = smem_log_open,
 	.release = smem_log_release,
-	.ioctl = smem_log_ioctl,
+	.unlocked_ioctl = smem_log_ioctl,
 };
 
 static const struct file_operations smem_log_bin_fops = {
@@ -1411,16 +1112,12 @@ static const struct file_operations smem_log_bin_fops = {
 	.write = smem_log_write_bin,
 	.open = smem_log_open,
 	.release = smem_log_release,
-	.ioctl = smem_log_ioctl,
+	.unlocked_ioctl = smem_log_ioctl,
 };
 
-static int smem_log_ioctl(struct inode *ip, struct file *fp,
+static long smem_log_ioctl(struct file *fp,
 			  unsigned int cmd, unsigned long arg)
 {
-	struct smem_log_inst *inst;
-
-	inst = fp->private_data;
-
 	switch (cmd) {
 	default:
 		return -ENOTTY;
@@ -1437,12 +1134,19 @@ static int smem_log_ioctl(struct inode *ip, struct file *fp,
 		}
 		break;
 	case SMIOC_SETLOG:
-		if (arg == SMIOC_LOG)
-			fp->private_data = &inst[GEN];
-		else if (arg == SMIOC_STATIC_LOG)
-			fp->private_data = &inst[STA];
-		else
+		if (arg == SMIOC_LOG) {
+			if (inst[GEN].events)
+				fp->private_data = &inst[GEN];
+			else
+				return -ENODEV;
+		} else if (arg == SMIOC_STATIC_LOG) {
+			if (inst[STA].events)
+				fp->private_data = &inst[STA];
+			else
+				return -ENODEV;
+		} else {
 			return -EINVAL;
+		}
 		break;
 	}
 
@@ -1457,75 +1161,123 @@ static struct miscdevice smem_log_dev = {
 
 #if defined(CONFIG_DEBUG_FS)
 
-static int _debug_dump(int log, char *buf, int max)
+#define SMEM_LOG_ITEM_PRINT_SIZE 160
+
+#define EVENTS_PRINT_SIZE \
+(SMEM_LOG_ITEM_PRINT_SIZE * SMEM_LOG_NUM_ENTRIES)
+
+static uint32_t smem_log_timeout_ms;
+module_param_named(timeout_ms, smem_log_timeout_ms,
+		   int, S_IRUGO | S_IWUSR | S_IWGRP);
+
+static int smem_log_debug_mask;
+module_param_named(debug_mask, smem_log_debug_mask, int,
+		   S_IRUGO | S_IWUSR | S_IWGRP);
+
+#define DBG(x...) do {\
+	if (smem_log_debug_mask) \
+		printk(KERN_DEBUG x);\
+	} while (0)
+
+static int update_read_avail(struct smem_log_inst *inst)
+{
+	int curr_read_avail;
+	unsigned long flags = 0;
+
+	remote_spin_lock_irqsave(inst->remote_spinlock, flags);
+
+	curr_read_avail = (*inst->idx - inst->read_idx);
+	if (curr_read_avail < 0)
+		curr_read_avail = inst->num - inst->read_idx + *inst->idx;
+
+	DBG("%s: read = %d write = %d curr = %d last = %d\n", __func__,
+	    inst->read_idx, *inst->idx, curr_read_avail, inst->last_read_avail);
+
+	if (curr_read_avail < inst->last_read_avail) {
+		if (inst->last_read_avail != inst->num)
+			pr_info("smem_log: skipping %d log entries\n",
+				inst->last_read_avail);
+		inst->read_idx = *inst->idx + 1;
+		inst->last_read_avail = inst->num - 1;
+	} else
+		inst->last_read_avail = curr_read_avail;
+
+	remote_spin_unlock_irqrestore(inst->remote_spinlock, flags);
+
+	DBG("%s: read = %d write = %d curr = %d last = %d\n", __func__,
+	    inst->read_idx, *inst->idx, curr_read_avail, inst->last_read_avail);
+
+	return inst->last_read_avail;
+}
+
+static int _debug_dump(int log, char *buf, int max, uint32_t cont)
 {
 	unsigned int idx;
-	int orig_idx;
+	int write_idx, read_avail = 0;
 	unsigned long flags;
 	int i = 0;
 
 	if (!inst[log].events)
+		return 0;
+
+	if (cont && update_read_avail(&inst[log]) == 0)
 		return 0;
 
 	remote_spin_lock_irqsave(inst[log].remote_spinlock, flags);
 
-	orig_idx = *inst[log].idx;
-	idx = orig_idx;
+	if (cont) {
+		idx = inst[log].read_idx;
+		write_idx = (inst[log].read_idx + inst[log].last_read_avail);
+		if (write_idx >= inst[log].num)
+			write_idx -= inst[log].num;
+	} else {
+		write_idx = *inst[log].idx;
+		idx = (write_idx + 1);
+	}
 
-	while (1) {
-		idx++;
-		if (idx > inst[log].num - 1)
+	DBG("%s: read %d write %d idx %d num %d\n", __func__,
+	    inst[log].read_idx, write_idx, idx, inst[log].num - 1);
+
+	while ((max - i) > 50) {
+		if ((inst[log].num - 1) < idx)
 			idx = 0;
-		if (idx == orig_idx)
+
+		if (idx == write_idx)
 			break;
 
-		if (idx < inst[log].num) {
-			if (!inst[log].events[idx].identifier)
-				continue;
+		if (inst[log].events[idx].identifier) {
 
 			i += scnprintf(buf + i, max - i,
-			       "%08x %08x %08x %08x %08x\n",
-			       inst[log].events[idx].identifier,
-			       inst[log].events[idx].timetick,
-			       inst[log].events[idx].data1,
-			       inst[log].events[idx].data2,
-			       inst[log].events[idx].data3);
+				       "%08x %08x %08x %08x %08x\n",
+				       inst[log].events[idx].identifier,
+				       inst[log].events[idx].timetick,
+				       inst[log].events[idx].data1,
+				       inst[log].events[idx].data2,
+				       inst[log].events[idx].data3);
 		}
+		idx++;
+	}
+	if (cont) {
+		inst[log].read_idx = idx;
+		read_avail = (write_idx - inst[log].read_idx);
+		if (read_avail < 0)
+			read_avail = inst->num - inst->read_idx + write_idx;
+		inst[log].last_read_avail = read_avail;
 	}
 
 	remote_spin_unlock_irqrestore(inst[log].remote_spinlock, flags);
 
+	DBG("%s: read %d write %d idx %d num %d\n", __func__,
+	    inst[log].read_idx, write_idx, idx, inst[log].num);
+
 	return i;
 }
 
-static int _debug_dump_sym(int log, char *buf, int max)
+static int _debug_dump_voters(char *buf, int max)
 {
-	unsigned int idx;
-	int orig_idx;
-	unsigned long flags;
-	int i = 0;
+	int k, i = 0;
 
-	char *proc;
-	char *sub;
-	char *id;
-	char *sym = NULL;
-
-	uint32_t data[3];
-
-	uint32_t proc_val = 0;
-	uint32_t sub_val = 0;
-	uint32_t id_val = 0;
-	uint32_t id_only_val = 0;
-	uint32_t data1 = 0;
-	uint32_t data2 = 0;
-	uint32_t data3 = 0;
-
-	int k;
-
-	if (!inst[log].events)
-		return 0;
-
-	find_voters(); /* need to call each time in case voters come and go */
+	find_voters();
 
 	i += scnprintf(buf + i, max - i, "Voters:\n");
 	for (k = 0; k < ARRAY_SIZE(voter_d3_syms); ++k)
@@ -1538,19 +1290,61 @@ static int _debug_dump_sym(int log, char *buf, int max)
 				       voter_d2_syms[k].str);
 	i += scnprintf(buf + i, max - i, "\n");
 
+	return i;
+}
+
+static int _debug_dump_sym(int log, char *buf, int max, uint32_t cont)
+{
+	unsigned int idx;
+	int write_idx, read_avail = 0;
+	unsigned long flags;
+	int i = 0;
+
+	char *proc;
+	char *sub;
+	char *id;
+	const char *sym = NULL;
+
+	uint32_t data[3];
+
+	uint32_t proc_val = 0;
+	uint32_t sub_val = 0;
+	uint32_t id_val = 0;
+	uint32_t id_only_val = 0;
+	uint32_t data1 = 0;
+	uint32_t data2 = 0;
+	uint32_t data3 = 0;
+
+	if (!inst[log].events)
+		return 0;
+
+	find_voters();
+
+	if (cont && update_read_avail(&inst[log]) == 0)
+		return 0;
+
 	remote_spin_lock_irqsave(inst[log].remote_spinlock, flags);
 
-	orig_idx = *inst[log].idx;
-	idx = orig_idx;
+	if (cont) {
+		idx = inst[log].read_idx;
+		write_idx = (inst[log].read_idx + inst[log].last_read_avail);
+		if (write_idx >= inst[log].num)
+			write_idx -= inst[log].num;
+	} else {
+		write_idx = *inst[log].idx;
+		idx = (write_idx + 1);
+	}
 
-	while (1) {
-		idx++;
-		if (idx > inst[log].num - 1)
+	DBG("%s: read %d write %d idx %d num %d\n", __func__,
+	    inst[log].read_idx, write_idx, idx, inst[log].num - 1);
+
+	for (; (max - i) > SMEM_LOG_ITEM_PRINT_SIZE; idx++) {
+		if (idx > (inst[log].num - 1))
 			idx = 0;
-		if (idx == orig_idx) {
-			i += scnprintf(buf + i, max - i, "\n");
+
+		if (idx == write_idx)
 			break;
-		}
+
 		if (idx < inst[log].num) {
 			if (!inst[log].events[idx].identifier)
 				continue;
@@ -1570,8 +1364,7 @@ static int _debug_dump_sym(int log, char *buf, int max)
 
 				if (proc)
 					i += scnprintf(buf + i, max - i,
-						       "%4s: ",
-						       proc);
+						       "%4s: ", proc);
 				else
 					i += scnprintf(buf + i, max - i,
 						       "%04x: ",
@@ -1579,31 +1372,26 @@ static int _debug_dump_sym(int log, char *buf, int max)
 						       inst[log].events[idx].
 						       identifier);
 
-				i += scnprintf(buf + i, max - i,
-					       "%10u ",
+				i += scnprintf(buf + i, max - i, "%10u ",
 					       inst[log].events[idx].timetick);
 
 				sub = find_sym(BASE_SYM, sub_val);
 
 				if (sub)
 					i += scnprintf(buf + i, max - i,
-						       "%9s: ",
-						       sub);
+						       "%9s: ", sub);
 				else
 					i += scnprintf(buf + i, max - i,
-						       "%08x: ",
-						       sub_val);
+						       "%08x: ", sub_val);
 
 				id = find_sym(EVENT_SYM, id_val);
 
 				if (id)
 					i += scnprintf(buf + i, max - i,
-						       "%11s: ",
-						       id);
+						       "%11s: ", id);
 				else
 					i += scnprintf(buf + i, max - i,
-						       "%08x: ",
-						       id_only_val);
+						       "%08x: ", id_only_val);
 			}
 
 			if ((proc_val & SMEM_LOG_CONT) &&
@@ -1613,60 +1401,45 @@ static int _debug_dump_sym(int log, char *buf, int max)
 				data[1] = data2;
 				data[2] = data3;
 				i += scnprintf(buf + i, max - i,
-					       " %.16s",
-					       (char *) data);
+					       " %.16s", (char *) data);
 			} else if (proc_val & SMEM_LOG_CONT) {
 				i += scnprintf(buf + i, max - i,
 					       " %08x %08x %08x",
-					       data1,
-					       data2,
-					       data3);
+					       data1, data2, data3);
 			} else if (id_val == ONCRPC_LOG_EVENT_STD_CALL) {
-				sym = find_sym(ONCRPC_SYM, data2);
+				sym = smd_rpc_get_sym(data2);
 
 				if (sym)
 					i += scnprintf(buf + i, max - i,
 						       "xid:%4i %8s proc:%3i",
-						       data1,
-						       sym,
-						       data3);
+						       data1, sym, data3);
 				else
 					i += scnprintf(buf + i, max - i,
 						       "xid:%4i %08x proc:%3i",
-						       data1,
-						       data2,
-						       data3);
+						       data1, data2, data3);
 #if defined(CONFIG_MSM_N_WAY_SMSM)
 			} else if (id_val == DEM_STATE_CHANGE) {
 				if (data1 == 1) {
-					i += scnprintf(buf + i,
-						       max - i,
+					i += scnprintf(buf + i, max - i,
 						       "MASTER: ");
 					sym = find_sym(DEM_STATE_MASTER_SYM,
 						       data2);
 				} else if (data1 == 0) {
-					i += scnprintf(buf + i,
-						       max - i,
+					i += scnprintf(buf + i, max - i,
 						       " SLAVE: ");
 					sym = find_sym(DEM_STATE_SLAVE_SYM,
 						       data2);
 				} else {
-					i += scnprintf(buf + i,
-						       max - i,
-						       "%x: ",
-						       data1);
+					i += scnprintf(buf + i, max - i,
+						       "%x: ",  data1);
 					sym = NULL;
 				}
 				if (sym)
-					i += scnprintf(buf + i,
-						       max - i,
-						       "from:%s ",
-						       sym);
+					i += scnprintf(buf + i, max - i,
+						       "from:%s ", sym);
 				else
-					i += scnprintf(buf + i,
-						       max - i,
-						       "from:0x%x ",
-						       data2);
+					i += scnprintf(buf + i, max - i,
+						       "from:0x%x ", data2);
 
 				if (data1 == 1)
 					sym = find_sym(DEM_STATE_MASTER_SYM,
@@ -1677,19 +1450,14 @@ static int _debug_dump_sym(int log, char *buf, int max)
 				else
 					sym = NULL;
 				if (sym)
-					i += scnprintf(buf + i,
-						       max - i,
-						       "to:%s ",
-						       sym);
+					i += scnprintf(buf + i, max - i,
+						       "to:%s ", sym);
 				else
-					i += scnprintf(buf + i,
-						       max - i,
-						       "to:0x%x ",
-						       data3);
+					i += scnprintf(buf + i, max - i,
+						       "to:0x%x ", data3);
 
 			} else if (id_val == DEM_STATE_MACHINE_ENTER) {
-				i += scnprintf(buf + i,
-					       max - i,
+				i += scnprintf(buf + i, max - i,
 					       "swfi:%i timer:%i manexit:%i",
 					       data1, data2, data3);
 
@@ -1699,27 +1467,21 @@ static int _debug_dump_sym(int log, char *buf, int max)
 				sym = find_sym(SMSM_ENTRY_TYPE_SYM,
 					       data1);
 				if (sym)
-					i += scnprintf(buf + i,
-						       max - i,
-						       "hostid:%s",
-						       sym);
+					i += scnprintf(buf + i, max - i,
+						       "hostid:%s", sym);
 				else
-					i += scnprintf(buf + i,
-						       max - i,
-						       "hostid:%x",
-						       data1);
+					i += scnprintf(buf + i, max - i,
+						       "hostid:%x", data1);
 
 			} else if (id_val == DEM_TIME_SYNC_START ||
 				   id_val == DEM_TIME_SYNC_SEND_VALUE) {
 				unsigned mask = 0x1;
 				unsigned tmp = 0;
 				if (id_val == DEM_TIME_SYNC_START)
-					i += scnprintf(buf + i,
-						       max - i,
+					i += scnprintf(buf + i, max - i,
 						       "req:");
 				else
-					i += scnprintf(buf + i,
-						       max - i,
+					i += scnprintf(buf + i, max - i,
 						       "pol:");
 				while (mask) {
 					if (mask & data1) {
@@ -1741,10 +1503,8 @@ static int _debug_dump_sym(int log, char *buf, int max)
 					tmp++;
 				}
 				if (id_val == DEM_TIME_SYNC_SEND_VALUE)
-					i += scnprintf(buf + i,
-						       max - i,
-						       "tick:%x",
-						       data2);
+					i += scnprintf(buf + i, max - i,
+						       "tick:%x", data2);
 			} else if (id_val == DEM_SMSM_ISR) {
 				unsigned vals[] = {data2, data3};
 				unsigned j;
@@ -1754,15 +1514,11 @@ static int _debug_dump_sym(int log, char *buf, int max)
 				sym = find_sym(SMSM_ENTRY_TYPE_SYM,
 					       data1);
 				if (sym)
-					i += scnprintf(buf + i,
-						       max - i,
-						       "%s ",
-						       sym);
+					i += scnprintf(buf + i, max - i,
+						       "%s ", sym);
 				else
-					i += scnprintf(buf + i,
-						       max - i,
-						       "%x ",
-						       data1);
+					i += scnprintf(buf + i, max - i,
+						       "%x ", data1);
 
 				for (j = 0; j < ARRAY_SIZE(vals); ++j) {
 					i += scnprintf(buf + i, max - i, "[");
@@ -1816,24 +1572,18 @@ static int _debug_dump_sym(int log, char *buf, int max)
 							       tmp);
 				}
 				i += scnprintf(buf + i, max - i,
-					       "%08x %08x",
-					       data2,
-					       data3);
+					       "%08x %08x", data2, data3);
 			} else if (id_val == DEMMOD_APPS_WAKEUP_INT) {
 				sym = find_sym(WAKEUP_INT_SYM, data1);
 
 				if (sym)
 					i += scnprintf(buf + i, max - i,
 						       "%s %08x %08x",
-						       sym,
-						       data2,
-						       data3);
+						       sym, data2, data3);
 				else
 					i += scnprintf(buf + i, max - i,
 						       "%08x %08x %08x",
-						       data1,
-						       data2,
-						       data3);
+						       data1, data2, data3);
 			} else if (id_val == DEM_NO_SLEEP ||
 				   id_val == NO_SLEEP_NEW) {
 				unsigned vals[] = {data3, data2};
@@ -1920,62 +1670,183 @@ static int _debug_dump_sym(int log, char *buf, int max)
 			} else {
 				i += scnprintf(buf + i, max - i,
 					       "%08x %08x %08x",
-					       data1,
-					       data2,
-					       data3);
+					       data1, data2, data3);
 			}
 		}
+	}
+	if (cont) {
+		inst[log].read_idx = idx;
+		read_avail = (write_idx - inst[log].read_idx);
+		if (read_avail < 0)
+			read_avail = inst->num - inst->read_idx + write_idx;
+		inst[log].last_read_avail = read_avail;
 	}
 
 	remote_spin_unlock_irqrestore(inst[log].remote_spinlock, flags);
 
+	DBG("%s: read %d write %d idx %d num %d\n", __func__,
+	    inst[log].read_idx, write_idx, idx, inst[log].num);
+
 	return i;
 }
 
-static int debug_dump(char *buf, int max)
+static int debug_dump(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump(GEN, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[GEN]);
+		r = wait_event_interruptible_timeout(inst[GEN].read_wait,
+						     inst[GEN].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: read available %d\n", __func__,
+		    inst[GEN].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[GEN].last_read_avail)
+			break;
+	}
+
+	return _debug_dump(GEN, buf, max, cont);
 }
 
-static int debug_dump_sym(char *buf, int max)
+static int debug_dump_sym(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump_sym(GEN, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[GEN]);
+		r = wait_event_interruptible_timeout(inst[GEN].read_wait,
+						     inst[GEN].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: readavailable %d\n", __func__,
+		    inst[GEN].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[GEN].last_read_avail)
+			break;
+	}
+
+	return _debug_dump_sym(GEN, buf, max, cont);
 }
 
-static int debug_dump_static(char *buf, int max)
+static int debug_dump_static(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump(STA, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[STA]);
+		r = wait_event_interruptible_timeout(inst[STA].read_wait,
+						     inst[STA].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: readavailable %d\n", __func__,
+		    inst[STA].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[STA].last_read_avail)
+			break;
+	}
+
+	return _debug_dump(STA, buf, max, cont);
 }
 
-static int debug_dump_static_sym(char *buf, int max)
+static int debug_dump_static_sym(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump_sym(STA, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[STA]);
+		r = wait_event_interruptible_timeout(inst[STA].read_wait,
+						     inst[STA].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: readavailable %d\n", __func__,
+		    inst[STA].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[STA].last_read_avail)
+			break;
+	}
+
+	return _debug_dump_sym(STA, buf, max, cont);
 }
 
-static int debug_dump_power(char *buf, int max)
+static int debug_dump_power(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump(POW, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[POW]);
+		r = wait_event_interruptible_timeout(inst[POW].read_wait,
+						     inst[POW].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: readavailable %d\n", __func__,
+		    inst[POW].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[POW].last_read_avail)
+			break;
+	}
+
+	return _debug_dump(POW, buf, max, cont);
 }
 
-static int debug_dump_power_sym(char *buf, int max)
+static int debug_dump_power_sym(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump_sym(POW, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[POW]);
+		r = wait_event_interruptible_timeout(inst[POW].read_wait,
+						     inst[POW].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: readavailable %d\n", __func__,
+		    inst[POW].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[POW].last_read_avail)
+			break;
+	}
+
+	return _debug_dump_sym(POW, buf, max, cont);
 }
 
-#define SMEM_LOG_ITEM_PRINT_SIZE 160
-
-#define EVENTS_PRINT_SIZE \
-(SMEM_LOG_ITEM_PRINT_SIZE * SMEM_LOG_NUM_ENTRIES)
+static int debug_dump_voters(char *buf, int max, uint32_t cont)
+{
+	return _debug_dump_voters(buf, max);
+}
 
 static char debug_buffer[EVENTS_PRINT_SIZE];
 
 static ssize_t debug_read(struct file *file, char __user *buf,
 			  size_t count, loff_t *ppos)
 {
-	int (*fill)(char *buf, int max) = file->private_data;
-	int bsize = fill(debug_buffer, EVENTS_PRINT_SIZE);
-	return simple_read_from_buffer(buf, count, ppos, debug_buffer,
-				       bsize);
+	int r;
+	static int bsize;
+	int (*fill)(char *, int, uint32_t) = file->private_data;
+	if (!(*ppos))
+		bsize = fill(debug_buffer, EVENTS_PRINT_SIZE, 0);
+	DBG("%s: count %d ppos %d\n", __func__, count, (unsigned int)*ppos);
+	r =  simple_read_from_buffer(buf, count, ppos, debug_buffer,
+				     bsize);
+	return r;
+}
+
+static ssize_t debug_read_cont(struct file *file, char __user *buf,
+			       size_t count, loff_t *ppos)
+{
+	int (*fill)(char *, int, uint32_t) = file->private_data;
+	char *buffer = kmalloc(count, GFP_KERNEL);
+	int bsize;
+	if (!buffer)
+		return -ENOMEM;
+	bsize = fill(buffer, count, 1);
+	DBG("%s: count %d bsize %d\n", __func__, count, bsize);
+	if (copy_to_user(buf, buffer, bsize)) {
+		kfree(buffer);
+		return -EFAULT;
+	}
+	kfree(buffer);
+	return bsize;
 }
 
 static int debug_open(struct inode *inode, struct file *file)
@@ -1989,11 +1860,17 @@ static const struct file_operations debug_ops = {
 	.open = debug_open,
 };
 
+static const struct file_operations debug_ops_cont = {
+	.read = debug_read_cont,
+	.open = debug_open,
+};
+
 static void debug_create(const char *name, mode_t mode,
 			 struct dentry *dent,
-			 int (*fill)(char *buf, int max))
+			 int (*fill)(char *buf, int max, uint32_t cont),
+			 const struct file_operations *fops)
 {
-	debugfs_create_file(name, mode, dent, fill, &debug_ops);
+	debugfs_create_file(name, mode, dent, fill, fops);
 }
 
 static void smem_log_debugfs_init(void)
@@ -2004,28 +1881,80 @@ static void smem_log_debugfs_init(void)
 	if (IS_ERR(dent))
 		return;
 
-	debug_create("dump", 0444, dent, debug_dump);
-	debug_create("dump_sym", 0444, dent, debug_dump_sym);
-	debug_create("dump_static", 0444, dent, debug_dump_static);
-	debug_create("dump_static_sym", 0444, dent, debug_dump_static_sym);
-	debug_create("dump_power", 0444, dent, debug_dump_power);
-	debug_create("dump_power_sym", 0444, dent, debug_dump_power_sym);
+	debug_create("dump", 0444, dent, debug_dump, &debug_ops);
+	debug_create("dump_sym", 0444, dent, debug_dump_sym, &debug_ops);
+	debug_create("dump_static", 0444, dent, debug_dump_static, &debug_ops);
+	debug_create("dump_static_sym", 0444, dent,
+		     debug_dump_static_sym, &debug_ops);
+	debug_create("dump_power", 0444, dent, debug_dump_power, &debug_ops);
+	debug_create("dump_power_sym", 0444, dent,
+		     debug_dump_power_sym, &debug_ops);
+	debug_create("dump_voters", 0444, dent,
+		     debug_dump_voters, &debug_ops);
+
+	debug_create("dump_cont", 0444, dent, debug_dump, &debug_ops_cont);
+	debug_create("dump_sym_cont", 0444, dent,
+		     debug_dump_sym, &debug_ops_cont);
+	debug_create("dump_static_cont", 0444, dent,
+		     debug_dump_static, &debug_ops_cont);
+	debug_create("dump_static_sym_cont", 0444, dent,
+		     debug_dump_static_sym, &debug_ops_cont);
+	debug_create("dump_power_cont", 0444, dent,
+		     debug_dump_power, &debug_ops_cont);
+	debug_create("dump_power_sym_cont", 0444, dent,
+		     debug_dump_power_sym, &debug_ops_cont);
+
+	smem_log_timeout_ms = 500;
+	smem_log_debug_mask = 0;
 }
 #else
 static void smem_log_debugfs_init(void) {}
 #endif
 
-static int __init smem_log_init(void)
+static int smem_log_initialize(void)
 {
 	int ret;
 
 	ret = _smem_log_init();
-	if (ret < 0)
+	if (ret < 0) {
+		pr_err("%s: init failed %d\n", __func__, ret);
 		return ret;
+	}
 
+	ret = misc_register(&smem_log_dev);
+	if (ret < 0) {
+		pr_err("%s: device register failed %d\n", __func__, ret);
+		return ret;
+	}
+
+	smem_log_enable = 1;
+	smem_log_initialized = 1;
 	smem_log_debugfs_init();
+	return ret;
+}
 
-	return misc_register(&smem_log_dev);
+static int modem_notifier(struct notifier_block *this,
+			  unsigned long code,
+			  void *_cmd)
+{
+	switch (code) {
+	case MODEM_NOTIFIER_SMSM_INIT:
+		if (!smem_log_initialized)
+			smem_log_initialize();
+		break;
+	default:
+		break;
+	}
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block nb = {
+	.notifier_call = modem_notifier,
+};
+
+static int __init smem_log_init(void)
+{
+	return modem_register_notifier(&nb);
 }
 
 
