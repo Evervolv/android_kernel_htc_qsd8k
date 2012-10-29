@@ -637,7 +637,7 @@ static ssize_t store_boostpulse(struct kobject *kobj, struct attribute *attr,
 	if (val > MAX_BOOSTPULSE_DURATION)
 		val = MAX_BOOSTPULSE_DURATION;
 
-	if (val > 1)
+	if (val > DEFAULT_BOOSTPULSE_DURATION)
 		boostpulse_duration = val;
 	else
 		boostpulse_duration = DEFAULT_BOOSTPULSE_DURATION;
