@@ -633,7 +633,11 @@ static ssize_t store_boostpulse(struct kobject *kobj, struct attribute *attr,
 		return ret;
 
 	boostpulse_boosted_time = ktime_to_us(ktime_get());
-	if (val > 1 && val <= MAX_BOOSTPULSE_DURATION)
+
+	if (val > MAX_BOOSTPULSE_DURATION)
+		val = MAX_BOOSTPULSE_DURATION;
+
+	if (val > 1)
 		boostpulse_duration = val;
 	else
 		boostpulse_duration = DEFAULT_BOOSTPULSE_DURATION;
