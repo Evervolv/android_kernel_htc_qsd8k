@@ -150,6 +150,9 @@ static struct mmc_platform_data htcleo_sdslot_data =
 	.status			= htcleo_sdslot_status,
 	.register_status_notify	= NULL,
 	.translate_vdd		= htcleo_sdslot_switchvdd,
+	.msmsdcc_fmin	= 144000,
+	.msmsdcc_fmid	= 25000000,
+	.msmsdcc_fmax	= 49152000,
 };
 
 static uint32_t wifi_on_gpio_table[] =
@@ -223,6 +226,9 @@ static struct mmc_platform_data htcleo_wifi_data = {
 	.status			= htcleo_wifi_status,
 	.register_status_notify	= htcleo_wifi_status_register,
 	.embedded_sdio		= &htcleo_wifi_emb_data,
+	.msmsdcc_fmin	= 144000,
+	.msmsdcc_fmid	= 25000000,
+	.msmsdcc_fmax	= 49152000,
 };
 
 int htcleo_wifi_set_carddetect(int val)
@@ -302,7 +308,7 @@ int __init htcleo_init_mmc(unsigned debug_uart)
 	if (IS_ERR(wlan_vreg_3))
 		return PTR_ERR(wlan_vreg_3);
 
-	set_irq_wake(MSM_GPIO_TO_INT(HTCLEO_GPIO_SD_STATUS), 1);
+	//set_irq_wake(MSM_GPIO_TO_INT(HTCLEO_GPIO_SD_STATUS), 1);
 	msm_add_sdcc(2, &htcleo_sdslot_data,
 		      MSM_GPIO_TO_INT(HTCLEO_GPIO_SD_STATUS),
 		      IORESOURCE_IRQ_LOWEDGE | IORESOURCE_IRQ_HIGHEDGE);

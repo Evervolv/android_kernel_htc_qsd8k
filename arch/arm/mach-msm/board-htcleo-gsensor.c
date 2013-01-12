@@ -435,7 +435,7 @@ static struct file_operations spi_bma_fops = {
 	.owner = THIS_MODULE,
 	.open = spi_bma150_open,
 	.release = spi_bma150_release,
-	.ioctl = spi_bma150_ioctl,
+	.unlocked_ioctl = spi_bma150_ioctl,
 };
 
 static struct miscdevice spi_bma_device = {

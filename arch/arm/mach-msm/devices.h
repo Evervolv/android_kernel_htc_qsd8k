@@ -132,6 +132,7 @@ extern struct platform_device msm_device_dmov_adm1;
 extern struct platform_device msm_device_nand;
 
 extern struct platform_device msm_device_tssc;
+extern struct platform_device msm_device_mdp;
 
 extern struct platform_device msm_rotator_device;
 
