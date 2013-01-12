@@ -63,6 +63,7 @@
 #include <mach/board-htcleo-ts.h>
 #include <mach/socinfo.h>
 
+#include "acpuclock.h"
 #include "board-htcleo.h"
 #include "devices.h"
 #include "proc_comm.h"
@@ -455,9 +456,11 @@ static uint32_t camera_on_gpio_table[] =
 	PCOM_GPIO_CFG(15, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), /* MCLK */
 };
 
-void config_camera_on_gpios(void)
+int config_camera_on_gpios(void)
 {
 	config_gpio_table(camera_on_gpio_table, ARRAY_SIZE(camera_on_gpio_table));
+
+	return 0;
 }
 
 void config_camera_off_gpios(void)
@@ -948,7 +951,7 @@ static void __init msm_device_i2c_init(void)
 ///////////////////////////////////////////////////////////////////////
 // Clocks
 ///////////////////////////////////////////////////////////////////////
-
+/*
 static struct msm_acpu_clock_platform_data htcleo_clock_data = {
 	.acpu_switch_time_us	= 20,
 	.max_speed_delta_khz	= 256000,
@@ -957,7 +960,7 @@ static struct msm_acpu_clock_platform_data htcleo_clock_data = {
 	.wait_for_irq_khz	= 128000,
 //	.wait_for_irq_khz	= 19200,   // TCXO
 };
-
+*/
 static unsigned htcleo_perf_acpu_table[] = {
 	245000000,
 	576000000,
@@ -1019,11 +1022,9 @@ static void __init htcleo_init(void)
 
 	do_grp_reset();
 	do_sdc1_reset();
-
-	msm_acpu_clock_init(&htcleo_clock_data);
-
-	perflock_init(&htcleo_perflock_data);
-
+	msm_clock_init(&qds8x50_clock_init_data);
+	acpuclk_init(&acpuclk_8x50_soc_data);
+	
 	init_dex_comm();
 
 #ifdef CONFIG_SERIAL_MSM_HS
@@ -1071,7 +1072,7 @@ static void __init htcleo_fixup(struct machine_desc *desc, struct tag *tags,
 	/* Blink the camera LED shortly to show that we're alive! */
 	mi->nr_banks = 1;
 	mi->bank[0].start = MSM_EBI1_BANK0_BASE;
-	mi->bank[0].node = PHYS_TO_NID(MSM_EBI1_BANK0_BASE);
+	//mi->bank[0].node = PHYS_TO_NID(MSM_EBI1_BANK0_BASE);
 	mi->bank[0].size = MSM_EBI1_BANK0_SIZE;
 }
 
@@ -1112,9 +1113,9 @@ static void __init htcleo_allocate_memory_regions(void)
 }
 static void __init htcleo_map_io(void)
 {
-	msm_map_common_io();
+	msm_map_qsd8x50_io();
 	htcleo_allocate_memory_regions();
-	msm_clock_init();
+	//msm_clock_init();
 	if (socinfo_init() < 0)
 		printk(KERN_ERR "%s: socinfo_init() failed!\n",__func__);
 	

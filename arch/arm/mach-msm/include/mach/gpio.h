@@ -26,6 +26,13 @@
 
 #define FIRST_BOARD_GPIO	NR_GPIO_IRQS
 
+/* 
+ * see /arch/arm/mach-msm/gpio.c for implementation
+ * it's not generic_gpio.c as stated in older files
+ */
+extern void config_gpio_table(uint32_t *table, int len);
+extern int gpio_configure(unsigned int gpio, unsigned long flags);
+
 extern struct irq_chip msm_gpio_irq_extn;
 
 extern void register_gpio_int_mask(unsigned int gpio, unsigned int idle);

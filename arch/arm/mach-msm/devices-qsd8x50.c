@@ -17,6 +17,7 @@
 #include <linux/platform_device.h>
 #include <linux/clkdev.h>
 #include <linux/dma-mapping.h>
+#include <linux/gpio.h>
 
 #include <mach/irqs.h>
 #include <mach/msm_iomap.h>
@@ -315,62 +316,69 @@ int __init msm_add_sdcc(unsigned int controller,
 	return platform_device_register(pdev);
 }
 
-struct clk_lookup msm_clocks_8x50[] = {
-	CLK_PCOM("adm_clk",	ADM_CLK,	NULL, 0),
-	CLK_PCOM("ce_clk",	CE_CLK,		NULL, 0),
-	CLK_PCOM("ebi1_clk",	EBI1_CLK,	NULL, CLK_MIN),
-	CLK_PCOM("ebi2_clk",	EBI2_CLK,	NULL, 0),
-	CLK_PCOM("ecodec_clk",	ECODEC_CLK,	NULL, 0),
-	CLK_PCOM("emdh_clk",	EMDH_CLK,	NULL, OFF | CLK_MINMAX),
-	CLK_PCOM("gp_clk",	GP_CLK,		NULL, 0),
-	CLK_PCOM("grp_clk",	GRP_3D_CLK,	NULL, 0),
-	CLK_PCOM("i2c_clk",	I2C_CLK,	NULL, 0),
-	CLK_PCOM("icodec_rx_clk",	ICODEC_RX_CLK,	NULL, 0),
-	CLK_PCOM("icodec_tx_clk",	ICODEC_TX_CLK,	NULL, 0),
-	CLK_PCOM("imem_clk",	IMEM_CLK,	NULL, OFF),
-	CLK_PCOM("mdc_clk",	MDC_CLK,	NULL, 0),
-	CLK_PCOM("mddi_clk",	PMDH_CLK,	NULL, OFF | CLK_MINMAX),
-	CLK_PCOM("mdp_clk",	MDP_CLK,	NULL, OFF),
-	CLK_PCOM("mdp_lcdc_pclk_clk", MDP_LCDC_PCLK_CLK, NULL, 0),
-	CLK_PCOM("mdp_lcdc_pad_pclk_clk", MDP_LCDC_PAD_PCLK_CLK, NULL, 0),
-	CLK_PCOM("mdp_vsync_clk",	MDP_VSYNC_CLK,	NULL, 0),
-	CLK_PCOM("pbus_clk",	PBUS_CLK,	NULL, CLK_MIN),
-	CLK_PCOM("pcm_clk",	PCM_CLK,	NULL, 0),
-	CLK_PCOM("sdac_clk",	SDAC_CLK,	NULL, OFF),
-	CLK_PCOM("sdc_clk",	SDC1_CLK,	"msm_sdcc.1", OFF),
-	CLK_PCOM("sdc_pclk",	SDC1_P_CLK,	"msm_sdcc.1", OFF),
-	CLK_PCOM("sdc_clk",	SDC2_CLK,	"msm_sdcc.2", OFF),
-	CLK_PCOM("sdc_pclk",	SDC2_P_CLK,	"msm_sdcc.2", OFF),
-	CLK_PCOM("sdc_clk",	SDC3_CLK,	"msm_sdcc.3", OFF),
-	CLK_PCOM("sdc_pclk",	SDC3_P_CLK,	"msm_sdcc.3", OFF),
-	CLK_PCOM("sdc_clk",	SDC4_CLK,	"msm_sdcc.4", OFF),
-	CLK_PCOM("sdc_pclk",	SDC4_P_CLK,	"msm_sdcc.4", OFF),
-	CLK_PCOM("spi_clk",	SPI_CLK,	NULL, 0),
-	CLK_PCOM("tsif_clk",	TSIF_CLK,	NULL, 0),
-	CLK_PCOM("tsif_ref_clk",	TSIF_REF_CLK,	NULL, 0),
-	CLK_PCOM("tv_dac_clk",	TV_DAC_CLK,	NULL, 0),
-	CLK_PCOM("tv_enc_clk",	TV_ENC_CLK,	NULL, 0),
-	CLK_PCOM("uart_clk",	UART1_CLK,	NULL, OFF),
-	CLK_PCOM("uart_clk",	UART2_CLK,	NULL, 0),
-	CLK_PCOM("uart_clk",	UART3_CLK,	"msm_serial.2", OFF),
-	CLK_PCOM("uartdm_clk",	UART1DM_CLK,	NULL, OFF),
-	CLK_PCOM("uartdm_clk",	UART2DM_CLK,	NULL, 0),
-	CLK_PCOM("usb_hs_clk",	USB_HS_CLK,	NULL, OFF),
-	CLK_PCOM("usb_hs_pclk",	USB_HS_P_CLK,	NULL, OFF),
-	CLK_PCOM("usb_otg_clk",	USB_OTG_CLK,	NULL, 0),
-	CLK_PCOM("vdc_clk",	VDC_CLK,	NULL, OFF | CLK_MIN),
-	CLK_PCOM("vfe_clk",	VFE_CLK,	NULL, OFF),
-	CLK_PCOM("vfe_mdc_clk",	VFE_MDC_CLK,	NULL, OFF),
-	CLK_PCOM("vfe_axi_clk",	VFE_AXI_CLK,	NULL, OFF),
-	CLK_PCOM("usb_hs2_clk",	USB_HS2_CLK,	NULL, OFF),
-	CLK_PCOM("usb_hs2_pclk",	USB_HS2_P_CLK,	NULL, OFF),
-	CLK_PCOM("usb_hs3_clk",	USB_HS3_CLK,	NULL, OFF),
-	CLK_PCOM("usb_hs3_pclk",	USB_HS3_P_CLK,	NULL, OFF),
-	CLK_PCOM("usb_phy_clk",	USB_PHY_CLK,	NULL, 0),
-#ifdef CONFIG_MACH_HTCLEO
-	CLOCK(NULL, 0, NULL, 0),
-#endif
+static DEFINE_CLK_PCOM(adm_clk,		ADM_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(adsp_clk,	ADSP_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(ahb_m_clk,	AHB_M_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(ahb_s_clk,	AHB_S_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(cam_m_clk,	CAM_M_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(axi_rotator_clk,	AXI_ROTATOR_CLK, 0);
+static DEFINE_CLK_PCOM(ce_clk,		CE_CLK,		CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(csi0_clk,	CSI0_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(csi0_p_clk,	CSI0_P_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(csi0_vfe_clk,	CSI0_VFE_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(csi1_clk,	CSI1_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(csi1_p_clk,	CSI1_P_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+static DEFINE_CLK_PCOM(csi1_vfe_clk,	CSI1_VFE_CLK,	CLKFLAG_SKIP_AUTO_OFF);
+
+static struct pcom_clk dsi_byte_clk = {
+	.id = P_DSI_BYTE_CLK,
+	.c = {
+		.ops = &clk_ops_pcom_ext_config,
+		.dbg_name = "dsi_byte_clk",
+		CLK_INIT(dsi_byte_clk.c),
+	},
 };
 
-unsigned msm_num_clocks_8x50 = ARRAY_SIZE(msm_clocks_8x50);
+static struct pcom_clk dsi_clk = {
+	.id = P_DSI_CLK,
+	.c = {
+		.ops = &clk_ops_pcom_ext_config,
+		.dbg_name = "dsi_clk",
+		CLK_INIT(dsi_clk.c),
+	},
+};
 
+static struct pcom_clk dsi_esc_clk = {
+	.id = P_DSI_ESC_CLK,
+	.c = {
+		.ops = &clk_ops_pcom_ext_config,
+		.dbg_name = "dsi_esc_clk",
+		CLK_INIT(dsi_esc_clk.c),
+	},
+};
+
+static struct pcom_clk dsi_pixel_clk = {
+	.id = P_DSI_PIXEL_CLK,
+	.c = {
+		.ops = &clk_ops_pcom_ext_config,
+		.dbg_name = "dsi_pixel_clk",
+		CLK_INIT(dsi_pixel_clk.c),
+	},
+};
+
+#if defined(CONFIG_ARCH_MSM7X30)
+#define GPIO_I2C_CLK 70
+#define GPIO_I2C_DAT 71
+#elif defined(CONFIG_ARCH_QSD8X50)
+#define GPIO_I2C_CLK 95
+#define GPIO_I2C_DAT 96
+#else
+#define GPIO_I2C_CLK 60
+#define GPIO_I2C_DAT 61
+#endif
+
+void msm_i2c_gpio_init(void)
+{
+	gpio_request(GPIO_I2C_CLK, "i2c_clk");
+	gpio_request(GPIO_I2C_DAT, "i2c_data");
+}
