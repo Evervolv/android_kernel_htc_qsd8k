@@ -15,26 +15,36 @@
 #define _HTC_BATTERY_H_
 #include <linux/notifier.h>
 #include <linux/power_supply.h>
-#include <mach/htc_battery_common.h>
 
+#define BATT_EVENT_SUSPEND	0x01
+
+#define CHECK_CHG           0X64
+#define SET_ICL500		0X65
+#define SET_ICL100		0X66
+#define CHECK_INT2		0X67
+#define OVERTEMP_VREG_4060	0XC8
+#define NORMALTEMP_VREG_4200	0XC9
+#define CHECK_INT1		0XCA
+#define CHECK_CONTROL           0xCB
 /* information about the system we're running on */
 extern unsigned int system_rev;
 
 enum batt_ctl_t {
 	DISABLE = 0,
 	ENABLE_SLOW_CHG,
-	ENABLE_FAST_CHG,
-	ENABLE_SUPER_CHG,
-	ENABLE_WIRELESS_CHG,
-	CHARGER_CHK,
-	TOGGLE_CHARGER,
-	ENABLE_MIN_TAPER,
-	DISABLE_MIN_TAPER
+	ENABLE_FAST_CHG
 };
 
 /* This order is the same as htc_power_supplies[]
  * And it's also the same as htc_cable_status_update()
  */
+enum charger_type_t {
+	CHARGER_UNKNOWN = -1,
+	CHARGER_BATTERY = 0,
+	CHARGER_USB,
+	CHARGER_AC
+};
+
 enum {
 	GUAGE_NONE,
 	GUAGE_MODEM,
@@ -45,11 +55,6 @@ enum {
 enum {
 	LINEAR_CHARGER,
 	SWITCH_CHARGER,
-	SWITCH_CHARGER_TPS65200,
-};
-
-enum {
-	OPTION_FLAG_BT_DOCK_CHARGE_CTL = 1,
 };
 
 struct battery_info_reply {
@@ -64,7 +69,12 @@ struct battery_info_reply {
 	u32 full_level;		/* Full Level */
 	u32 over_vchg;		/* 0:normal, 1:over voltage charger */
 	s32 eval_current;	/* System loading current from ADC */
-	u32 temp_fault;		/* Battery temperature fault */
+};
+
+struct htc_battery_tps65200_int {
+	int chg_int;
+	int tps65200_reg;
+	struct delayed_work int_work;
 };
 
 struct htc_battery_platform_data {
@@ -74,36 +84,46 @@ struct htc_battery_platform_data {
 	int gpio_usb_id;
 	int gpio_mchg_en_n;
 	int gpio_iset;
-	int gpio_adp_9v;
+	int gpio_power;
 	int guage_driver;
 	int m2a_cable_detect;
 	int charger;
-	unsigned int option_flag;
-	int (*func_is_support_super_charger)(void);
-	int (*func_battery_charging_ctrl)(enum batt_ctl_t ctl);
-	int (*func_battery_gpio_init)(void);
+	struct htc_battery_tps65200_int int_data;
+	int force_no_rpc;
 };
 
+#if CONFIG_HTC_BATTCHG
 extern int register_notifier_cable_status(struct notifier_block *nb);
 extern int unregister_notifier_cable_status(struct notifier_block *nb);
-
-extern int register_notifier_wireless_charger(struct notifier_block *nb);
-extern int unregister_notifier_wireless_charger(struct notifier_block *nb);
-
-extern int register_notifier_cable_rpc(struct notifier_block *nb);
-extern int unregister_notifier_cable_rpc(struct notifier_block *nb);
-
-extern int htc_is_wireless_charger(void);
+#else
+static int register_notifier_cable_status(struct notifier_block *nb) { return 0; }
+static int unregister_notifier_cable_status(struct notifier_block *nb) { return 0; }
+#endif
 
 #ifdef CONFIG_BATTERY_DS2784
 extern int battery_charging_ctrl(enum batt_ctl_t ctl);
 #endif
 extern int get_cable_status(void);
+#ifdef CONFIG_HTC_BATTCHG
+extern int batt_register_client(struct notifier_block *nb);
+extern int batt_unregister_client(struct notifier_block *nb);
+extern int batt_notifier_call_chain(unsigned long val, void *v);
+#else
+static int batt_register_client(struct notifier_block *nb)
+{
+	return 0;
+}
 
-extern unsigned int batt_get_status(enum power_supply_property psp);
+static int batt_unregister_client(struct notifier_block *nb)
+{
+	return 0;
+}
 
-#ifdef CONFIG_BATTERY_DS2746
-int htc_battery_update_change(void);
+static int batt_notifier_call_chain(unsigned long val, void *v)
+{
+	return 0;
+}
 #endif
 
+extern unsigned int batt_get_status(enum power_supply_property psp);
 #endif
