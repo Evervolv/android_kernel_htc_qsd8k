@@ -2,9 +2,9 @@
  *
  * /arch/arm/mach-msm/htc_headset_gpio.c
  *
- * HTC GPIO headset driver.
+ *  HTC GPIO headset detection driver.
  *
- * Copyright (C) 2010 HTC, Inc.
+ *  Copyright (C) 2010 HTC, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -17,337 +17,448 @@
  *
  */
 
-#include <linux/gpio.h>
+#include <linux/module.h>
+#include <linux/sysdev.h>
+#include <linux/device.h>
+#include <linux/interrupt.h>
 #include <linux/irq.h>
-#include <linux/rtc.h>
-#include <linux/slab.h>
+#include <linux/types.h>
+#include <linux/input.h>
+#include <linux/platform_device.h>
+#include <linux/earlysuspend.h>
+#include <linux/errno.h>
+#include <linux/err.h>
+#include <linux/hrtimer.h>
 #include <linux/workqueue.h>
+#include <linux/wakelock.h>
+#include <linux/delay.h>
+#include <linux/gpio.h>
+#include <linux/slab.h>
+#include <mach/board-htcleo-microp.h>
 
 #include <mach/htc_headset_mgr.h>
 #include <mach/htc_headset_gpio.h>
 
 #define DRIVER_NAME "HS_GPIO"
 
-static struct workqueue_struct *detect_wq;
-static void detect_gpio_work_func(struct work_struct *work);
-static DECLARE_DELAYED_WORK(detect_gpio_work, detect_gpio_work_func);
+/* #define DEBUG */
 
-static void irq_init_work_func(struct work_struct *work);
-static DECLARE_DELAYED_WORK(irq_init_work, irq_init_work_func);
+#ifdef DEBUG
+#define AJ_DBG(fmt, arg...) \
+	printk(KERN_INFO "[Audio Jack] %s " fmt "\r\n", __func__, ## arg)
+#else
+#define AJ_DBG(fmt, arg...) do {} while (0)
+#endif
 
-static struct workqueue_struct *button_wq;
-static void button_gpio_work_func(struct work_struct *work);
-static DECLARE_DELAYED_WORK(button_gpio_work, button_gpio_work_func);
+int microp_get_remote_adc(uint32_t *val);
+int microp_set_adc_req(uint8_t channel);
 
-static struct htc_headset_gpio_info *hi;
+struct audio_jack_info {
+	unsigned int irq_jack;
+	unsigned int irq_mic;
+	int audio_jack_detect;
+	int key_enable_gpio;
+	int mic_select_gpio;
+	int audio_jack_flag;
+	int mic_detect;
+	int last_pressed_key;
+	int microp_channel;
 
-static int hs_gpio_hpin_state(void)
+	struct hrtimer detection_timer;
+	ktime_t debounce_time;
+
+	struct work_struct work;
+	struct work_struct mic_work;
+	spinlock_t spin_lock;
+
+	struct wake_lock audiojack_wake_lock;
+};
+
+static struct audio_jack_info *pjack_info;
+
+int microp_set_adc_req(uint8_t value)
 {
-	HS_DBG();
+	int ret;
+	uint8_t cmd[1];
 
-	return gpio_get_value(hi->pdata.hpin_gpio);
+	cmd[0] = value; //value; TODO finish code... now only keys ADC
+	ret = microp_i2c_write(MICROP_I2C_WCMD_ADC_REQ, cmd, 1);
+	if (ret < 0) 
+	{
+		pr_err("%s: request adc fail\n", __func__);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+int microp_get_remote_adc(uint32_t *val)
+{
+	int ret;
+	uint8_t data[4];
+
+	if (!val)
+		return -EIO; 
+
+	ret = microp_i2c_read(MICROP_I2C_RCMD_ADC_VALUE, data, 2);
+	if (ret < 0) 
+	{
+		pr_err("%s: request adc fail\n", __func__);
+		return -EIO;
+	}
+
+//	printk("%x %x\n", data[0], data[1]);
+	*val = data[1] | (data[0] << 8);
+	printk("remote adc %d\n", *val);
+	return 0;
+}
+
+static int hs_gpio_get_mic(void)
+{
+	int value;
+	value = !gpio_get_value(pjack_info->mic_detect);
+	
+	printk("hs_gpio_get_mic: %d\n", value);
+	return value;
+}
+
+static int hs_enable_key_irq(int status)
+{
+	printk("hs_enable_key_irq: %d\n", status);
+	if(status)
+		enable_irq(pjack_info->irq_mic);
+	else 
+		disable_irq(pjack_info->irq_mic);
+	return 0;
 }
 
 void hs_gpio_key_enable(int enable)
 {
-	HS_DBG();
+	DBG_MSG();
 
-	if (hi->pdata.key_enable_gpio)
-		gpio_set_value(hi->pdata.key_enable_gpio, enable);
+	if (pjack_info->key_enable_gpio)
+		gpio_set_value(pjack_info->key_enable_gpio, enable);
 }
 
 void hs_gpio_mic_select(int enable)
 {
-	HS_DBG();
+	DBG_MSG();
 
-	if (hi->pdata.mic_select_gpio)
-		gpio_set_value(hi->pdata.mic_select_gpio, enable);
+	if (pjack_info->mic_select_gpio)
+		gpio_set_value(pjack_info->mic_select_gpio, enable);
 }
 
-static void detect_gpio_work_func(struct work_struct *work)
+static int get_remote_keycode(int *keycode)
 {
-	int insert = 0;
+	uint32_t val;
+	uint32_t btn = 0;
 
-	HS_DBG();
+	microp_set_adc_req(pjack_info->microp_channel);
+	if (microp_get_remote_adc(&val))
+	{
+		// failed. who know why? ignore
+		*keycode = 0;
+		return 1;
+	}
 
-	insert = gpio_get_value(hi->pdata.hpin_gpio) ? 0 : 1;
+	if((val >= 0) && (val <= 33))
+	{
+		btn = 1;
+	}
+	else if((val >= 38) && (val <= 82))
+	{
+		btn = 2;
+	}
+	else if((val >= 95) && (val <= 200))
+	{
+		btn = 3;
+	}
+	else if(val > 200)
+	{   
+		// check previous key
+		if (pjack_info->last_pressed_key)
+		{
+			*keycode = pjack_info->last_pressed_key | 0x80;
+			pjack_info->last_pressed_key = 0;
+			return 0;
+		}
+		*keycode = 0;
+		return 1;
+	}
 
-	if (hi->headset_state == insert)
-		return;
+	pjack_info->last_pressed_key = btn;
+	*keycode = btn;
+	return 0;
+}
 
-	hi->headset_state = insert;
-	hs_notify_plug_event(insert);
+static irqreturn_t mic_irq_handler(int irq, void *dev_id)
+{
+	pr_info("MIC IRQ Handler\n");
+	int value1, value2;
+	int retry_limit = 10;
+
+	AJ_DBG("");
+
+	do {
+		value1 = gpio_get_value(pjack_info->mic_detect);
+		irq_set_irq_type(pjack_info->irq_mic, value1 ? IRQF_TRIGGER_LOW : IRQF_TRIGGER_HIGH);
+		value2 = gpio_get_value(pjack_info->mic_detect);
+	} while (value1 != value2 && retry_limit-- > 0);
+
+	AJ_DBG("value2 = %d (%d retries)", value2, (10-retry_limit));
+
+	schedule_work(&pjack_info->mic_work);
+	return IRQ_HANDLED;
 }
 
 static irqreturn_t detect_irq_handler(int irq, void *dev_id)
 {
-	int gpio1 = 0;
-	int gpio2 = 0;
+	pr_info("DET IRQ Handler\n");
+	int value1, value2;
 	int retry_limit = 10;
-	unsigned int irq_type = IRQF_TRIGGER_NONE;
 
 	hs_notify_hpin_irq();
 
-	HS_DBG();
+	AJ_DBG("");
 
 	do {
-		gpio1 = gpio_get_value(hi->pdata.hpin_gpio);
-		irq_type = gpio1 ? IRQF_TRIGGER_LOW : IRQF_TRIGGER_HIGH;
-		set_irq_type(hi->hpin_irq, irq_type);
-		gpio2 = gpio_get_value(hi->pdata.hpin_gpio);
-	} while (gpio1 != gpio2 && retry_limit-- > 0);
+		value1 = gpio_get_value(pjack_info->audio_jack_detect);
+		irq_set_irq_type(pjack_info->irq_jack, value1 ?
+				IRQF_TRIGGER_LOW : IRQF_TRIGGER_HIGH);
+		value2 = gpio_get_value(pjack_info->audio_jack_detect);
+	} while (value1 != value2 && retry_limit-- > 0);
 
-	HS_DBG("gpio2 = %d (%d retries)", gpio2, (10-retry_limit));
+	AJ_DBG("value2 = %d (%d retries)", value2, (10-retry_limit));
 
-	if ((hi->headset_state == 0) ^ gpio2) {
-		wake_lock_timeout(&hi->hs_wake_lock, HS_WAKE_LOCK_TIMEOUT);
-		queue_delayed_work(detect_wq, &detect_gpio_work,
-				   hi->hpin_debounce);
+	if ((pjack_info->audio_jack_flag == 0) ^ value2) {
+		wake_lock_timeout(&pjack_info->audiojack_wake_lock, 4*HZ);
+
+		/* Do the rest of the work in timer context */
+		hrtimer_start(&pjack_info->detection_timer,
+		pjack_info->debounce_time, HRTIMER_MODE_REL);
 	}
 
 	return IRQ_HANDLED;
 }
 
-static void button_gpio_work_func(struct work_struct *work)
+static enum hrtimer_restart detect_35mm_event_timer_func(struct hrtimer *data)
 {
-	HS_DBG();
-	hs_notify_key_irq();
+	int state;
+
+	AJ_DBG("");
+	state = !gpio_get_value(pjack_info->audio_jack_detect);
+	if (pjack_info->audio_jack_flag != state) {
+		pjack_info->audio_jack_flag = state;
+		schedule_work(&pjack_info->work);
+	}
+
+	return HRTIMER_NORESTART;
 }
 
-static irqreturn_t button_irq_handler(int irq, void *dev_id)
+static void mic_work_func(struct work_struct *work)
 {
-	unsigned int irq_mask = IRQF_TRIGGER_HIGH | IRQF_TRIGGER_LOW;
+	pr_info("MIC Schedule Work\n");
+	int keycode = 0;
 
-	HS_DBG();
-
-	hi->key_irq_type ^= irq_mask;
-	set_irq_type(hi->key_irq, hi->key_irq_type);
-
-	wake_lock_timeout(&hi->hs_wake_lock, HS_WAKE_LOCK_TIMEOUT);
-	queue_delayed_work(button_wq, &button_gpio_work, HS_JIFFIES_ZERO);
-
-	return IRQ_HANDLED;
+	printk("mic_intr_work_func\n");
+	if (get_remote_keycode(&keycode) == 0) 
+	{
+		printk("keycode %d\n", keycode);
+		htc_35mm_remote_notify_button_status(keycode);
+	}
+	else
+		printk("mic error keycode\n");
+	  
 }
 
-static void irq_init_work_func(struct work_struct *work)
+static void audiojack_work_func(struct work_struct *work)
 {
-	HS_DBG();
+	int is_insert;
+	pr_info("DET Schedule Work\n");
+	unsigned long flags = 0;
 
-	if (hi->pdata.hpin_gpio) {
-		HS_LOG("Enable detect IRQ");
-		set_irq_type(hi->hpin_irq, IRQF_TRIGGER_LOW);
-		enable_irq(hi->hpin_irq);
-	}
+	spin_lock_irqsave(&pjack_info->spin_lock, flags);
+	is_insert = pjack_info->audio_jack_flag;
+	spin_unlock_irqrestore(&pjack_info->spin_lock, flags);
 
-	if (hi->pdata.key_gpio) {
-		HS_LOG("Enable button IRQ");
-		hi->key_irq_type = IRQF_TRIGGER_LOW;
-		set_irq_type(hi->key_irq, hi->key_irq_type);
-		enable_irq(hi->key_irq);
-	}
-}
+	htc_35mm_remote_notify_insert_ext_headset(is_insert);
 
-static int hs_gpio_request_irq(unsigned int gpio, unsigned int *irq,
-			       irq_handler_t handler, unsigned long flags,
-			       const char *name, unsigned int wake)
-{
-	int ret = 0;
-
-	HS_DBG();
-
-	ret = gpio_request(gpio, name);
-	if (ret < 0)
-		return ret;
-
-	ret = gpio_direction_input(gpio);
-	if (ret < 0) {
-		gpio_free(gpio);
-		return ret;
-	}
-
-	if (!(*irq)) {
-		ret = gpio_to_irq(gpio);
-		if (ret < 0) {
-			gpio_free(gpio);
-			return ret;
-		}
-		*irq = (unsigned int) ret;
-	}
-
-	ret = request_irq(*irq, handler, flags, name, NULL);
-	if (ret < 0) {
-		gpio_free(gpio);
-		return ret;
-	}
-
-	ret = set_irq_wake(*irq, wake);
-	if (ret < 0) {
-		free_irq(*irq, 0);
-		gpio_free(gpio);
-		return ret;
-	}
-
-	return 1;
+	if (is_insert)
+		pjack_info->debounce_time = ktime_set(0, 200000000);
+	else
+		pjack_info->debounce_time = ktime_set(0, 500000000);
 }
 
 static void hs_gpio_register(void)
 {
 	struct headset_notifier notifier;
 
-	if (hi->pdata.hpin_gpio) {
-		notifier.id = HEADSET_REG_HPIN_GPIO;
-		notifier.func = hs_gpio_hpin_state;
-		headset_notifier_register(&notifier);
-	}
-
-	if (hi->pdata.mic_select_gpio) {
+	if (pjack_info->mic_select_gpio) {
 		notifier.id = HEADSET_REG_MIC_SELECT;
 		notifier.func = hs_gpio_mic_select;
 		headset_notifier_register(&notifier);
 	}
 
-	if (hi->pdata.key_enable_gpio) {
+	if (pjack_info->key_enable_gpio) {
 		notifier.id = HEADSET_REG_KEY_ENABLE;
 		notifier.func = hs_gpio_key_enable;
 		headset_notifier_register(&notifier);
 	}
+	
+	if (pjack_info->mic_detect) {
+		notifier.id = HEADSET_REG_MIC_STATUS;
+		notifier.func = hs_gpio_get_mic;
+		headset_notifier_register(&notifier);
+
+		notifier.id = HEADSET_REG_KEY_INT_ENABLE;
+		notifier.func = hs_enable_key_irq;
+		headset_notifier_register(&notifier);
+	}
 }
 
-static int htc_headset_gpio_probe(struct platform_device *pdev)
+static int audiojack_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct htc_headset_gpio_platform_data *pdata = pdev->dev.platform_data;
 
-	HS_LOG("++++++++++++++++++++");
+	SYS_MSG("++++++++++++++++++++");
 
-	hi = kzalloc(sizeof(struct htc_headset_gpio_info), GFP_KERNEL);
-	if (!hi) {
-		HS_ERR("Failed to allocate memory for headset info");
+	pjack_info = kzalloc(sizeof(struct audio_jack_info), GFP_KERNEL);
+	if (!pjack_info)
 		return -ENOMEM;
-	}
 
-	if (pdata->config_headset_gpio)
-		pdata->config_headset_gpio();
+	pjack_info->audio_jack_detect = pdata->hpin_gpio;
+	pjack_info->key_enable_gpio = pdata->key_enable_gpio;
+	pjack_info->mic_select_gpio = pdata->mic_select_gpio;
+	pjack_info->mic_detect = pdata->mic_detect_gpio;
+	pjack_info->microp_channel = pdata->microp_channel;
+	pjack_info->audio_jack_flag = 0;
+	pjack_info->last_pressed_key = 0;
 
-	hi->pdata.hpin_gpio = pdata->hpin_gpio;
-	hi->pdata.key_gpio = pdata->key_gpio;
-	hi->pdata.key_enable_gpio = pdata->key_enable_gpio;
-	hi->pdata.mic_select_gpio = pdata->mic_select_gpio;
+	pjack_info->debounce_time = ktime_set(0, 500000000);
+	hrtimer_init(&pjack_info->detection_timer,
+		     CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	pjack_info->detection_timer.function = detect_35mm_event_timer_func;
 
-	hi->hpin_debounce = HS_JIFFIES_ZERO;
-	hi->key_irq_type = IRQF_TRIGGER_NONE;
-	hi->headset_state = 0;
+	INIT_WORK(&pjack_info->work, audiojack_work_func);
+	INIT_WORK(&pjack_info->mic_work, mic_work_func);
 
-	detect_wq = create_workqueue("HS_GPIO_DETECT");
-	if (detect_wq == NULL) {
-		ret = -ENOMEM;
-		HS_ERR("Failed to create detect workqueue");
-		goto err_create_detect_work_queue;
-	}
+	spin_lock_init(&pjack_info->spin_lock);
+	wake_lock_init(&pjack_info->audiojack_wake_lock,
+		WAKE_LOCK_SUSPEND, "audiojack");
 
-	button_wq = create_workqueue("HS_GPIO_BUTTON");
-	if (button_wq == NULL) {
-		ret = -ENOMEM;
-		HS_ERR("Failed to create button workqueue");
-		goto err_create_button_work_queue;
-	}
+	if (pjack_info->audio_jack_detect) {
+		ret = gpio_request(pjack_info->audio_jack_detect,
+				   "3.5mm_detect");
+		if (ret < 0)
+			goto err_request_detect_gpio;
 
-	wake_lock_init(&hi->hs_wake_lock, WAKE_LOCK_SUSPEND, DRIVER_NAME);
+		ret = gpio_direction_input(pjack_info->audio_jack_detect);
+		if (ret < 0)
+			goto err_set_detect_gpio;
 
-	if (hi->pdata.hpin_gpio) {
-		ret = hs_gpio_request_irq(hi->pdata.hpin_gpio,
-				&hi->hpin_irq, detect_irq_handler,
-				IRQF_TRIGGER_NONE, "HS_GPIO_DETECT", 1);
-		if (ret < 0) {
-			HS_ERR("Failed to request GPIO HPIN IRQ (0x%X)", ret);
+		pjack_info->irq_jack =
+			gpio_to_irq(pjack_info->audio_jack_detect);
+		if (pjack_info->irq_jack < 0) {
+			ret = pjack_info->irq_jack;
 			goto err_request_detect_irq;
 		}
-		disable_irq(hi->hpin_irq);
+
+		ret = request_irq(pjack_info->irq_jack,
+				  detect_irq_handler,
+				  IRQF_TRIGGER_LOW, "35mm_headset", NULL);
+		if (ret < 0)
+			goto err_request_detect_irq;
+
+		ret = irq_set_irq_wake(pjack_info->irq_jack, 1);
+		if (ret < 0)
+			goto err_set_irq_wake;
+		pr_info("DET IRQ Registered!");
 	}
 
-	if (hi->pdata.key_gpio) {
-		ret = hs_gpio_request_irq(hi->pdata.key_gpio,
-				&hi->key_irq, button_irq_handler,
-				hi->key_irq_type, "HS_GPIO_BUTTON", 1);
-		if (ret < 0) {
-			HS_ERR("Failed to request GPIO button IRQ (0x%X)", ret);
-			goto err_request_button_irq;
+
+	if (pjack_info->mic_detect) {
+		ret = gpio_request(pjack_info->mic_detect,
+				   "mic_detect");
+		if (ret < 0)
+			goto err_request_detect_gpio;
+
+		ret = gpio_direction_input(pjack_info->mic_detect);
+		if (ret < 0)
+			goto err_set_detect_gpio;
+
+		pjack_info->irq_mic =
+			gpio_to_irq(pjack_info->mic_detect);
+		if (pjack_info->irq_mic < 0) {
+			ret = pjack_info->irq_mic;
+			goto err_request_detect_irq;
 		}
-		disable_irq(hi->key_irq);
+
+		ret = request_irq(pjack_info->irq_mic,
+				  mic_irq_handler, IRQF_DISABLED | IRQF_TRIGGER_LOW, "mic_headset", NULL);
+		if (ret < 0)
+			goto err_request_detect_irq;
+
+		disable_irq(pjack_info->irq_mic);
+		pr_info("MIC IRQ Registered!");
 	}
-
-	queue_delayed_work(detect_wq, &irq_init_work, HS_JIFFIES_IRQ_INIT);
-
 	hs_gpio_register();
-	hs_notify_driver_ready(DRIVER_NAME);
 
-	HS_LOG("--------------------");
+	SYS_MSG("--------------------");
 
 	return 0;
 
-err_request_button_irq:
-	if (hi->pdata.hpin_gpio) {
-		free_irq(hi->hpin_irq, 0);
-		gpio_free(hi->pdata.hpin_gpio);
-	}
-
+err_set_irq_wake:
+	if (pjack_info->audio_jack_detect)
+		free_irq(pjack_info->irq_jack, 0);
 err_request_detect_irq:
-	wake_lock_destroy(&hi->hs_wake_lock);
-	destroy_workqueue(button_wq);
-
-err_create_button_work_queue:
-	destroy_workqueue(detect_wq);
-
-err_create_detect_work_queue:
-	kfree(hi);
-
-	HS_ERR("Failed to register %s driver", DRIVER_NAME);
+err_set_detect_gpio:
+	if (pjack_info->audio_jack_detect)
+		gpio_free(pjack_info->audio_jack_detect);
+err_request_detect_gpio:
+	printk(KERN_ERR "Audiojack: Failed in audiojack_probe\n");
 
 	return ret;
 }
 
-static int htc_headset_gpio_remove(struct platform_device *pdev)
+static int audiojack_remove(struct platform_device *pdev)
 {
-	if (hi->pdata.key_gpio) {
-		free_irq(hi->key_irq, 0);
-		gpio_free(hi->pdata.key_gpio);
-	}
+	if (pjack_info->audio_jack_detect)
+		free_irq(pjack_info->irq_jack, 0);
 
-	if (hi->pdata.hpin_gpio) {
-		free_irq(hi->hpin_irq, 0);
-		gpio_free(hi->pdata.hpin_gpio);
-	}
+	if (pjack_info->audio_jack_detect)
+		free_irq(pjack_info->irq_mic, 0);
 
-	wake_lock_destroy(&hi->hs_wake_lock);
-	destroy_workqueue(button_wq);
-	destroy_workqueue(detect_wq);
+	if (pjack_info->audio_jack_detect)
+		gpio_free(pjack_info->audio_jack_detect);
 
-	kfree(hi);
+	if (pjack_info->audio_jack_detect)
+		gpio_free(pjack_info->mic_detect);
 
 	return 0;
 }
 
-static struct platform_driver htc_headset_gpio_driver = {
-	.probe		= htc_headset_gpio_probe,
-	.remove		= htc_headset_gpio_remove,
+static struct platform_driver audiojack_driver = {
+	.probe		= audiojack_probe,
+	.remove		= audiojack_remove,
 	.driver		= {
 		.name		= "HTC_HEADSET_GPIO",
 		.owner		= THIS_MODULE,
 	},
 };
 
-static int __init htc_headset_gpio_init(void)
+static int __init audiojack_init(void)
 {
-	return platform_driver_register(&htc_headset_gpio_driver);
+	return platform_driver_register(&audiojack_driver);
 }
 
-static void __exit htc_headset_gpio_exit(void)
+static void __exit audiojack_exit(void)
 {
-	platform_driver_unregister(&htc_headset_gpio_driver);
+	platform_driver_unregister(&audiojack_driver);
 }
 
-module_init(htc_headset_gpio_init);
-module_exit(htc_headset_gpio_exit);
+module_init(audiojack_init);
+module_exit(audiojack_exit);
 
-MODULE_DESCRIPTION("HTC GPIO headset driver");
+MODULE_DESCRIPTION("HTC GPIO headset detection driver");
 MODULE_LICENSE("GPL");
