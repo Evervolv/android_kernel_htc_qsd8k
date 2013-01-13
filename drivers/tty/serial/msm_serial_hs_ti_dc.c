@@ -1577,7 +1577,7 @@ void ti_dc_msm_hs_request_clock_on(struct uart_port *uport)
 }
 EXPORT_SYMBOL(ti_dc_msm_hs_request_clock_on);
 
-static void msm_hs_request_clock_on_locked(struct uart_port *uport)
+void msm_hs_request_clock_on_locked(struct uart_port *uport)
 {
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
 	unsigned int data;

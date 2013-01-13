@@ -1505,7 +1505,8 @@ void msm_hs_request_clock_off(struct uart_port *uport) {
 }
 EXPORT_SYMBOL(msm_hs_request_clock_off);
 
-static void msm_hs_request_clock_on_locked(struct uart_port *uport) {
+void msm_hs_request_clock_on_locked(struct uart_port *uport)
+{
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
 	unsigned int data;
 	int ret = 0;
@@ -1546,6 +1547,7 @@ static void msm_hs_request_clock_on_locked(struct uart_port *uport) {
 		break;
 	}
 }
+EXPORT_SYMBOL(msm_hs_request_clock_on_locked);
 
 void msm_hs_request_clock_on(struct uart_port *uport) {
 	unsigned long flags;
