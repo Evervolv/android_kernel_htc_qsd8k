@@ -607,7 +607,7 @@ static const struct file_operations q6venc_dev_fops = {
 	.owner		= THIS_MODULE,
 	.open		= q6venc_open,
 	.release	= q6venc_release,
-	.ioctl		= q6venc_ioctl,
+	.unlocked_ioctl		= q6venc_ioctl,
 };
 
 static struct miscdevice q6venc_misc = {
