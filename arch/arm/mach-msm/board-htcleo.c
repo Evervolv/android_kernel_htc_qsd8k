@@ -1018,7 +1018,7 @@ static void __init htcleo_blink_camera_led(void){
 static void __init htcleo_init(void)
 {
 	printk("htcleo_init()\n");
-	msm_hw_reset_hook = htcleo_reset;
+	//msm_hw_reset_hook = htcleo_reset;
 
 	do_grp_reset();
 	do_sdc1_reset();

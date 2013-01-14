@@ -1720,7 +1720,7 @@ int __init htcleo_init_panel(void)
 
 	detect_panel_type();
 	
-	ret = platform_device_register(&msm_device_mdp);
+	ret = platform_device_register(&msm_mdp_device);
 	if (ret != 0)
 		return ret;
 
