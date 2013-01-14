@@ -57,6 +57,7 @@ obj-$(CONFIG_SPI_STMP3XXX)		+= spi_stmp.o
 obj-$(CONFIG_SPI_NUC900)		+= spi_nuc900.o
 obj-$(CONFIG_SPI_QSD)			+= spi_qsd.o
 obj-$(CONFIG_SPI_DISPLAY)		+= spi_display.o
+obj-$(CONFIG_SPI_QSD_LAGACY)		+= spi_qsd_lagacy.o
 obj-$(CONFIG_SPI_QUP)			+= spi_qsd.o
 obj-$(CONFIG_SPI_AIC3254)		+= spi_aic3254.o
 obj-$(CONFIG_SPI_SP8803COM)		+= spi_sp8803com.o

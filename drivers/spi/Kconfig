@@ -333,6 +333,11 @@ config SPI_DISPLAY
 	default n
 	depends on ARCH_MSM_SCORPION && !MSM_SMP
 
+config SPI_QSD_LAGACY
+	tristate "Old Qualcomm MSM SPI support"
+	default n
+	depends on ARCH_MSM_SCORPION
+
 config SPI_S3C24XX
 	tristate "Samsung S3C24XX series SPI"
 	depends on ARCH_S3C2410 && EXPERIMENTAL
