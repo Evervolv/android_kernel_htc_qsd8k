@@ -137,24 +137,7 @@ obj-y                             += omap2/
 obj-$(CONFIG_XEN_FBDEV_FRONTEND)  += xen-fbfront.o
 obj-$(CONFIG_FB_CARMINE)          += carminefb.o
 obj-$(CONFIG_FB_MB862XX)	  += mb862xx/
-
-ifeq ($(CONFIG_ARCH_MSM8960),y)
-  obj-$(CONFIG_FB_MSM)            += msm/
-else
-  ifeq ($(CONFIG_ARCH_MSM8X60),y)
-    obj-$(CONFIG_FB_MSM)          += msm_8x60/
-  else
-    ifeq ($(CONFIG_ARCH_MSM7X27A),y)
-      obj-$(CONFIG_FB_MSM)          += msm_7x27A/
-    else
-      obj-$(CONFIG_FB_MSM)          += msm_7x30/
-    endif
-  endif
-endif
-
-obj-$(CONFIG_MSM_VIDC_1080P) += msm/vidc/
-obj-$(CONFIG_MSM_VIDC_720P) += msm/vidc/
-
+obj-$(CONFIG_FB_MSM)              += msm/
 obj-$(CONFIG_FB_NUC900)           += nuc900fb.o
 obj-$(CONFIG_FB_JZ4740)		  += jz4740_fb.o
 obj-$(CONFIG_FB_PUV3_UNIGFX)      += fb-puv3.o
