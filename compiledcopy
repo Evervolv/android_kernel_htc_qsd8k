@@ -1,0 +1,24 @@
+CMP=../compiled
+
+#cleanup
+if [ -e $CMP ];
+then
+	rm -r $CMP;
+fi;
+
+#packageprep
+if [ ! -e $CMP ];
+then
+	mkdir $CMP $CMP/modules;
+fi;
+
+#packaging
+cp ./arch/arm/boot/zImage $CMP/
+cp ./drivers/net/kineto_gan.ko $CMP/modules/
+#cp ./drivers/net/tun.ko $CMP/modules/
+cp ./drivers/net/wireless/bcmdhd/bcmdhd.ko $CMP/modules/
+#cp ./drivers/staging/zram/zram.ko $CMP/modules/
+cp ./fs/cifs/cifs.ko $CMP/modules/
+#cp ./sound/htcleo/alsa-mix-htc-leo.ko $CMP/modules/
+#cp ./sound/htcleo/alsa-pcm-htc-leo.ko $CMP/modules/
+#cp ./drivers/net/msm_rmnet.ko $CMP/modules/
