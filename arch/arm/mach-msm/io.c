@@ -130,10 +130,28 @@ static struct map_desc qsd8x50_io_desc[] __initdata = {
 		.type =     MT_DEVICE,
 	},
 };
-
+/*
 void __init msm_map_qsd8x50_io(void)
 {
 	msm_map_io(qsd8x50_io_desc, ARRAY_SIZE(qsd8x50_io_desc));
+}*/
+
+void __init msm_map_qsd8x50_io(void)
+{
+	unsigned int unused;
+
+	/* The bootloader may not have done it, so disable predecode repair
+	 * cache for thumb2 (DPRC, set bit 4 in PVR0F2) due to a bug.
+	 */
+	asm volatile ("mrc p15, 0, %0, c15, c15, 2\n\t"
+		      "orr %0, %0, #0x10\n\t"
+		      "mcr p15, 0, %0, c15, c15, 2"
+		      : "=&r" (unused));
+	/* clear out EFSR and ADFSR on boot */
+	asm volatile ("mcr p15, 7, %0, c15, c0, 1\n\t"
+		      "mcr p15, 0, %0, c5, c1, 0"
+		      : : "r" (0));
+	iotable_init(qsd8x50_io_desc, ARRAY_SIZE(qsd8x50_io_desc));
 }
 #endif /* CONFIG_ARCH_QSD8X50 */
 
