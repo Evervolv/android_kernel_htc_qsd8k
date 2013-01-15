@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: hndpmu.c 279296 2011-08-23 23:17:20Z $
+ * $Id: hndpmu.c,v 1.228.2.56 2011-02-11 22:49:07 $
  */
 
 #include <typedefs.h>
@@ -93,26 +93,8 @@ static const sdiod_drive_str_t sdiod_drive_strength_tab4_1v8[] = {
 	{0, 0x1} };
 
 /* SDIO Drive Strength to sel value table for PMU Rev 11 (1.2v) */
-static const sdiod_drive_str_t sdiod_drive_strength_tab4_1v2[] = {
-	{16, 0x3},
-	{13, 0x2},
-	{11, 0x1},
-	{8, 0x0},
-	{6, 0x7},
-	{4, 0x6},
-	{2, 0x5},
-	{0, 0x4} };
 
 /* SDIO Drive Strength to sel value table for PMU Rev 11 (2.5v) */
-static const sdiod_drive_str_t sdiod_drive_strength_tab4_2v5[] = {
-	{80, 0x5},
-	{65, 0x4},
-	{55, 0x7},
-	{40, 0x6},
-	{30, 0x1},
-	{20, 0x0},
-	{10, 0x3},
-	{0, 0x2} };
 
 /* SDIO Drive Strength to sel value table for PMU Rev 13 (1.8v) */
 static const sdiod_drive_str_t sdiod_drive_strength_tab5_1v8[] = {
@@ -125,14 +107,6 @@ static const sdiod_drive_str_t sdiod_drive_strength_tab5_1v8[] = {
 	{0, 0x0} };
 
 /* SDIO Drive Strength to sel value table for PMU Rev 13 (3.3v) */
-static const sdiod_drive_str_t sdiod_drive_strength_tab5_3v3[] = {
-	{12, 0x7},
-	{10, 0x6},
-	{8, 0x5},
-	{6, 0x4},
-	{4, 0x2},
-	{2, 0x1},
-	{0, 0x0} };
 
 
 #define SDIOD_DRVSTR_KEY(chip, pmu)	(((chip) << 16) | (pmu))
@@ -206,10 +180,7 @@ si_sdiod_drive_strength_init(si_t *sih, osl_t *osh, uint32 drivestrength)
 
 		if (i > 0 && drivestrength > str_tab[i].strength)
 			i--;
-#ifdef HTC_KlocWork
-    if( cc!= NULL )
-    {
-#endif
+
 		W_REG(osh, &cc->chipcontrol_addr, 1);
 		cc_data_temp = R_REG(osh, &cc->chipcontrol_data);
 		cc_data_temp &= ~str_mask;
@@ -219,9 +190,6 @@ si_sdiod_drive_strength_init(si_t *sih, osl_t *osh, uint32 drivestrength)
 		PMU_MSG(("SDIO: %dmA drive strength requested; set to %dmA\n",
 		         drivestrength, str_tab[i].strength));
 	}
-#ifdef HTC_KlocWork
-    } // cc!=NULL
-#endif
 
 	/* Return to original core */
 	si_restore_core(sih, origidx, intr_val);

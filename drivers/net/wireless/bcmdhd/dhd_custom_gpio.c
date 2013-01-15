@@ -20,7 +20,7 @@
 * software in any way with any other Broadcom software provided under a license
 * other than the GPL, without Broadcom's express prior written consent.
 *
-* $Id: dhd_custom_gpio.c 275786 2011-08-04 22:42:42Z $
+* $Id: dhd_custom_gpio.c,v 1.2.42.1 2010-10-19 00:41:09 Exp $
 */
 
 #include <typedefs.h>
@@ -41,13 +41,19 @@
 extern  void bcm_wlan_power_off(int);
 extern  void bcm_wlan_power_on(int);
 #endif /* CUSTOMER_HW */
-#if  defined(CUSTOMER_HW2)
-int wifi_set_carddetect(int on);
+#if defined(CUSTOMER_HW2)
+#ifdef CONFIG_WIFI_CONTROL_FUNC
 int wifi_set_power(int on, unsigned long msec);
 int wifi_get_irq_number(unsigned long *irq_flags_ptr);
 int wifi_get_mac_addr(unsigned char *buf);
 void *wifi_get_country_code(char *ccode);
-#endif
+#else
+int wifi_set_power(int on, unsigned long msec) { return -1; }
+int wifi_get_irq_number(unsigned long *irq_flags_ptr) { return -1; }
+int wifi_get_mac_addr(unsigned char *buf) { return -1; }
+void *wifi_get_country_code(char *ccode) { return NULL; }
+#endif /* CONFIG_WIFI_CONTROL_FUNC */
+#endif /* CUSTOMER_HW2 */
 
 #if defined(OOB_INTR_ONLY)
 
@@ -235,16 +241,6 @@ const struct cntry_locales_custom translate_custom_table[] = {
 	{"CH", "CH", 0},
 	{"TR", "TR", 0},
 	{"NO", "NO", 0},
-#else
-	{"KR", "KR", 3},
-	{"AD", "XW", 0},
-	{"CK", "XW", 0},
-	{"GL", "XW", 0},
-	{"KP", "XW", 0},
-	{"MH", "XW", 0},
-	{"PS", "XW", 0},
-	{"SD", "XW", 0},
-	{"TL", "XW", 0},
 #endif /* EXMAPLE_TABLE */
 };
 
@@ -293,5 +289,5 @@ void get_customized_country_code(char *country_iso_code, wl_country_t *cspec)
 	cspec->rev = translate_custom_table[0].custom_locale_rev;
 #endif /* EXMAPLE_TABLE */
 	return;
-#endif /* defined(CUSTOMER_HW2) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)) */
+#endif /* defined(CUSTOMER_HW2) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 39)) */
 }

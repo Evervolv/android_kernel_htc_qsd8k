@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: siutils.c 279502 2011-08-24 20:46:27Z $
+ * $Id: siutils.c,v 1.813.2.36 2011-02-10 23:43:55 $
  */
 
 #include <typedefs.h>
@@ -44,14 +44,8 @@
 #include <bcmsdpcm.h>
 #include <hndpmu.h>
 
-#if !defined(BCM_BOOTLOADER) && defined(SAVERESTORE)
-#include <saverestore.h>
-#endif
-
 #include "siutils_priv.h"
 
-int bcm_chip_is_4330b1 = 0;
-int bcm_chip_is_4330 = 0;
 /* local prototypes */
 static si_info_t *si_doattach(si_info_t *sii, uint devid, osl_t *osh, void *regs,
                               uint bustype, void *sdh, char **vars, uint *varsz);
@@ -110,12 +104,7 @@ si_kattach(osl_t *osh)
 	if (!ksii_attached) {
 		void *regs;
 		regs = REG_MAP(SI_ENUM_BASE, SI_CORE_SIZE);
-#ifdef HTC_KlocWork
-		if(!osh){
-			SI_ERROR(("[HTCKW] si_kattach: osh is NULL\n"));
-			return NULL;
-		}
-#endif
+
 		if (si_doattach(&ksii, BCM4710_DEVICE_ID, osh, regs,
 		                SI_BUS, NULL,
 		                osh != SI_OSH ? &ksii.vars : NULL,
@@ -197,12 +186,7 @@ si_buscore_setup(si_info_t *sii, chipcregs_t *cc, uint bustype, uint32 savewin,
 
 	cc = si_setcoreidx(&sii->pub, SI_CC_IDX);
 	ASSERT((uintptr)cc);
-#ifdef HTC_KlocWork
-    if(cc == NULL){
-        SI_ERROR(("[HTCKW] si_buscore_setup: cc is NULL\n"));
-        return FALSE;
-    }
-#endif
+
 	/* get chipcommon rev */
 	sii->pub.ccrev = (int)si_corerev(&sii->pub);
 
@@ -229,11 +213,11 @@ si_buscore_setup(si_info_t *sii, chipcregs_t *cc, uint bustype, uint32 savewin,
 
 	/* figure out bus/orignal core idx */
 	sii->pub.buscoretype = NODEV_CORE_ID;
-	sii->pub.buscorerev = NOREV;
+	sii->pub.buscorerev = (uint)NOREV;
 	sii->pub.buscoreidx = BADIDX;
 
 	pci = pcie = FALSE;
-	pcirev = pcierev = NOREV;
+	pcirev = pcierev = (uint)NOREV;
 	pciidx = pcieidx = BADIDX;
 
 	for (i = 0; i < sii->numcores; i++) {
@@ -368,23 +352,11 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, void *regs,
 	 *   If we add other chiptypes (or if we need to support old sdio hosts w/o chipcommon),
 	 *   some way of recognizing them needs to be added here.
 	 */
-#ifdef HTC_KlocWork
-    if (cc == NULL) {
-        SI_ERROR(("[HTCKW] si_doattach: cc is NULL-1\n"));
-        return NULL;
-    }
-#endif
 	w = R_REG(osh, &cc->chipid);
 	sih->socitype = (w & CID_TYPE_MASK) >> CID_TYPE_SHIFT;
 	/* Might as wll fill in chip id rev & pkg */
 	sih->chip = w & CID_ID_MASK;
 	sih->chiprev = (w & CID_REV_MASK) >> CID_REV_SHIFT;
-	if (sih->chip == BCM4330_CHIP_ID) {
-		printf("sih->chiprev = %d\n", sih->chiprev);
-		bcm_chip_is_4330 = 1;
-		if (sih->chiprev == 3)
-			bcm_chip_is_4330b1 = 1;
-	}
 	sih->chippkg = (w & CID_PKG_MASK) >> CID_PKG_SHIFT;
 	if (CHIPID(sih->chip) == BCM4322_CHIP_ID && (((sih->chipst & CST4322_SPROM_OTP_SEL_MASK)
 		>> CST4322_SPROM_OTP_SEL_SHIFT) == (CST4322_OTP_PRESENT |
@@ -392,6 +364,19 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, void *regs,
 		SI_ERROR(("%s: Invalid setting: both SPROM and OTP strapped.\n", __FUNCTION__));
 		return NULL;
 	}
+
+#if defined(HW_OOB)
+	if (CHIPID(sih->chip) == BCM43362_CHIP_ID) {
+		uint32 gpiocontrol, addr;
+		addr = SI_ENUM_BASE + OFFSETOF(chipcregs_t, gpiocontrol);
+		gpiocontrol = bcmsdh_reg_read(sdh, addr, 4);
+		gpiocontrol |= 0x2;
+		bcmsdh_reg_write(sdh, addr, 4, gpiocontrol);
+		bcmsdh_cfg_write(sdh, SDIO_FUNC_1, 0x10005, 0xf, NULL);
+		bcmsdh_cfg_write(sdh, SDIO_FUNC_1, 0x10006, 0x0, NULL);
+		bcmsdh_cfg_write(sdh, SDIO_FUNC_1, 0x10007, 0x2, NULL);
+	}
+#endif
 
 	if ((CHIPID(sih->chip) == BCM4329_CHIP_ID) && (sih->chiprev == 0) &&
 		(sih->chippkg != BCM4329_289PIN_PKG_ID)) {
@@ -429,8 +414,9 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, void *regs,
 	}
 
 	/* assume current core is CC */
-	if ((sii->pub.ccrev == 0x25) && ((CHIPID(sih->chip) == BCM43236_CHIP_ID ||
+	if ((sii->pub.ccrev == 0x25) && ((CHIPID(sih->chip) == BCM43234_CHIP_ID ||
 	                                  CHIPID(sih->chip) == BCM43235_CHIP_ID ||
+	                                  CHIPID(sih->chip) == BCM43236_CHIP_ID ||
 	                                  CHIPID(sih->chip) == BCM43238_CHIP_ID) &&
 	                                 (CHIPREV(sii->pub.chiprev) == 0))) {
 
@@ -452,12 +438,6 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, void *regs,
 
 		if (sii->pub.ccrev >= 20) {
 			cc = (chipcregs_t *)si_setcore(sih, CC_CORE_ID, 0);
-#ifdef HTC_KlocWork
-    if (cc == NULL) {
-        SI_ERROR(("[HTCKW] si_doattach: cc is NULL-2\n"));
-        return NULL;
-    }
-#endif
 			ASSERT(cc != NULL);
 			W_REG(osh, &cc->gpiopullup, 0);
 			W_REG(osh, &cc->gpiopulldown, 0);
@@ -465,10 +445,6 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, void *regs,
 		}
 
 
-
-#if !defined(BCM_BOOTLOADER) && defined(SAVERESTORE)
-	sr_save_restore_init(sih);
-#endif /* !defined(BCM_BOOTLOADER) && defined(SAVERESTORE) */
 
 
 	return (sii);
@@ -501,13 +477,9 @@ si_detach(si_t *sih)
 
 
 #if !defined(BCMBUSTYPE) || (BCMBUSTYPE == SI_BUS)
-	if (sii != &ksii) {
+	if (sii != &ksii)
 #endif	/* !BCMBUSTYPE || (BCMBUSTYPE == SI_BUS) */
-		if (sii->osh)
 		MFREE(sii->osh, sii, sizeof(si_info_t));
-#if !defined(BCMBUSTYPE) || (BCMBUSTYPE == SI_BUS)
-	}
-#endif	/* !BCMBUSTYPE || (BCMBUSTYPE == SI_BUS) */
 }
 
 void *
@@ -1152,12 +1124,6 @@ si_slowclk_src(si_info_t *sii)
 			return (SCC_SS_XTAL);
 	} else if (sii->pub.ccrev < 10) {
 		cc = (chipcregs_t *)si_setcoreidx(&sii->pub, sii->curidx);
-#ifdef HTC_KlocWork
-		if (cc == NULL) {
-			SI_ERROR(("[HTCKW] si_slowclk_src: cc is NULL-1\n"));
-			return -1;
-		}
-#endif
 		return (R_REG(sii->osh, &cc->slow_clk_ctl) & SCC_SS_MASK);
 	} else	/* Insta-clock */
 		return (SCC_SS_XTAL);
@@ -1260,7 +1226,6 @@ si_clkctl_init(si_t *sih)
 	if (!fast)
 		si_setcoreidx(sih, origidx);
 }
-
 
 /* change logical "focus" to the gpio core for optimized access */
 void *
@@ -1851,12 +1816,7 @@ si_btcgpiowar(si_t *sih)
 
 	cc = (chipcregs_t *)si_setcore(sih, CC_CORE_ID, 0);
 	ASSERT(cc != NULL);
-#ifdef HTC_KlocWork
-		if (cc == NULL) {
-			SI_ERROR(("[HTCKW] si_btcgpiowar: cc is NULL-1\n"));
-			return;
-		}
-#endif
+
 	W_REG(sii->osh, &cc->uart0mcr, R_REG(sii->osh, &cc->uart0mcr) | 0x04);
 
 	/* restore the original index */
@@ -1908,12 +1868,6 @@ si_is_sprom_available(si_t *sih)
 		sii = SI_INFO(sih);
 		origidx = sii->curidx;
 		cc = si_setcoreidx(sih, SI_CC_IDX);
-#ifdef HTC_KlocWork
-		if (cc == NULL) {
-			SI_ERROR(("[HTCKW] si_is_sprom_available: cc is NULL-1\n"));
-			return FALSE;
-		}
-#endif
 		sromctrl = R_REG(sii->osh, &cc->sromcontrol);
 		si_setcoreidx(sih, origidx);
 		return (sromctrl & SRC_PRESENT);
@@ -1943,9 +1897,11 @@ si_is_sprom_available(si_t *sih)
 		return (sih->chipst & CST4315_SPROM_SEL) != 0;
 	case BCM4319_CHIP_ID:
 		return (sih->chipst & CST4319_SPROM_SEL) != 0;
+
 	case BCM4336_CHIP_ID:
 	case BCM43362_CHIP_ID:
 		return (sih->chipst & CST4336_SPROM_PRESENT) != 0;
+
 	case BCM4330_CHIP_ID:
 		return (sih->chipst & CST4330_SPROM_PRESENT) != 0;
 	case BCM4313_CHIP_ID:

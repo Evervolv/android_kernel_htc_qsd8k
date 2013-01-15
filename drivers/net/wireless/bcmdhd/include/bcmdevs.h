@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmdevs.h 279768 2011-08-25 19:38:56Z $
+ * $Id: bcmdevs.h 332966 2012-05-11 22:40:21Z $
  */
 
 
@@ -63,6 +63,7 @@
 #define BCM_DNGL_BL_PID_43239   0xbd1b
 #define BCM_DNGL_BDC_PID	0x0bdc
 #define BCM_DNGL_JTAG_PID	0x4a44
+#define BCM_DNGL_BL_PID_4324   0xbd1c
 
 
 #define BCM_HWUSB_PID_43239     43239
@@ -135,10 +136,15 @@
 #define BCM43237_D11N5G_ID	0x4356		
 #define BCM43227_D11N2G_ID	0x4358		
 #define BCM43228_D11N_ID		0x4359		
-#define BCM43228_D11N5G_ID	0x435a		 
+#define BCM43228_D11N5G_ID	0x435a		
 #define BCM43362_D11N_ID	0x4363		
 #define BCM43239_D11N_ID	0x4370		
+#define BCM4324_D11N_ID		0x4374		
+#define BCM43217_D11N2G_ID	0x43a9		
+#define BCM43131_D11N2G_ID	0x43aa		
 
+#define BCM4314_D11N2G_ID	0x4364		
+#define BCM43142_D11N2G_ID	0x4365		
 
 #define	BCMGPRS_UART_ID		0x4333		
 #define	BCMGPRS2_UART_ID	0x4344		
@@ -200,7 +206,7 @@
 #define	BCM4319_CHIP_ID		0x4319		
 #define	BCM4320_CHIP_ID		0x4320		
 #define	BCM4321_CHIP_ID		0x4321		
-#define	BCM43217_CHIP_ID	43217
+#define	BCM43217_CHIP_ID	43217		
 #define	BCM4322_CHIP_ID		0x4322		
 #define	BCM43221_CHIP_ID	43221		
 #define	BCM43222_CHIP_ID	43222		
@@ -228,8 +234,9 @@
 #define BCM43362_CHIP_ID	43362		
 #define BCM4330_CHIP_ID		0x4330		
 #define BCM6362_CHIP_ID		0x6362		
-#define BCM43142_CHIP_ID	43142
-#define BCM4314_CHIP_ID		0x4314
+#define BCM4314_CHIP_ID		0x4314		
+#define BCM43142_CHIP_ID	43142		
+#define BCM4324_CHIP_ID		0x4324		
 
 #define	BCM4342_CHIP_ID		4342		
 #define	BCM4402_CHIP_ID		0x4402		
@@ -285,6 +292,12 @@
 #define BCM43224_FAB_SMIC	0xa		
 #define BCM4336_WLBGA_PKG_ID	0x8
 #define BCM4330_WLBGA_PKG_ID	0x0
+#define BCM4314PCIE_ARM_PKG_ID		(8 | 0)	
+#define BCM4314SDIO_PKG_ID		(8 | 1)	
+#define BCM4314PCIE_PKG_ID		(8 | 2)	
+#define BCM4314SDIO_ARM_PKG_ID		(8 | 3)	
+#define BCM4314SDIO_FPBGA_PKG_ID	(8 | 4)	
+#define BCM4314DEV_PKG_ID		(8 | 6)	
 
 #define PCIXX21_FLASHMEDIA0_ID	0x8033		
 #define PCIXX21_SDIOH0_ID	0x8034		
@@ -360,8 +373,8 @@
 #define BFL2_EXTLNA_TX		0x08000000  
 						
 #define BFL2_4313_RADIOREG	0x10000000
+#define BFL2_SECI_LOPWR_DIS	0x20000000  
 									   
-
 
 
 #define	BOARD_GPIO_BTC3W_IN	0x850	
@@ -628,6 +641,7 @@
 #define BCM94319USBSDB_SSID     0x05a2
 
 
+
 #define BCM94329AGB_SSID	0X04b9
 #define BCM94329TDKMDL1_SSID	0X04ba
 #define BCM94329TDKMDL11_SSID	0X04fc
@@ -677,6 +691,7 @@
 
 
 #define BCM943239MOD_SSID	0x05ac
+#define BCM943239REF_SSID	0x05aa
 
 
 #define BCM94331X19               0x00D6	
@@ -695,7 +710,6 @@
 #define BCM94331PCIEDUALV2_SSID   0x05B7
 #define BCM94331CS_SSID           0x05C6
 #define BCM94331CSAX_SSID         0x00EF
-
 
 
 #define BCM953572BU_SSID       0x058D

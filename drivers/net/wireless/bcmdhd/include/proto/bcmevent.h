@@ -23,7 +23,7 @@
  *
  * Dependencies: proto/bcmeth.h
  *
- * $Id: bcmevent.h,v 9.64.2.9 2011-02-01 06:24:21 $
+ * $Id: bcmevent.h 288077 2011-10-06 00:08:47Z $
  *
  */
 
@@ -182,12 +182,9 @@ typedef BWL_PRE_PACKED_STRUCT struct bcm_event {
 #define WLC_E_PFN_SCAN_NONE		82	
 #define WLC_E_PFN_SCAN_ALLGONE	83	
 #define WLC_E_GTK_PLUMBED 84
-#define WLC_E_RELOAD		85
-#define WLC_E_RSSI_LOW		86      /* Send up rssi low event */
-#define WLC_E_ASSOCREQ_IE	87	/* Send up assoc ie */
-#define WLC_E_LOAD_IND		88
-#define WLC_E_TX_STAT_ERROR     89      
-#define WLC_E_LAST	90
+#define WLC_E_ASSOC_REQ_IE 85
+#define WLC_E_ASSOC_RESP_IE 86
+#define WLC_E_LAST	87	
 
 
 
@@ -314,7 +311,6 @@ typedef struct wl_event_data_if {
 #define WLC_E_OVL_DOWNLOAD	0	
 #define WLC_E_OVL_UPDATE_IND	1	
 
-#define WLC_E_RELOAD_STATUS1            1  /* Internal Firmware Error */
 
 #include <packed_section_end.h>
 

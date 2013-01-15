@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: bcmsdh.c 275784 2011-08-04 22:41:49Z $
+ * $Id: bcmsdh.c 300445 2011-12-03 05:37:20Z $
  */
 
 /**
@@ -688,40 +688,3 @@ bcmsdh_sleep(void *sdh, bool enab)
 	return BCME_UNSUPPORTED;
 #endif
 }
-
-int
-bcmsdh_gpio_init(void *sdh)
-{
-	bcmsdh_info_t *p = (bcmsdh_info_t *)sdh;
-	sdioh_info_t *sd = (sdioh_info_t *)(p->sdioh);
-
-	return sdioh_gpio_init(sd);
-}
-
-bool
-bcmsdh_gpioin(void *sdh, uint32 gpio)
-{
-	bcmsdh_info_t *p = (bcmsdh_info_t *)sdh;
-	sdioh_info_t *sd = (sdioh_info_t *)(p->sdioh);
-
-	return sdioh_gpioin(sd, gpio);
-}
-
-int
-bcmsdh_gpioouten(void *sdh, uint32 gpio)
-{
-	bcmsdh_info_t *p = (bcmsdh_info_t *)sdh;
-	sdioh_info_t *sd = (sdioh_info_t *)(p->sdioh);
-
-	return sdioh_gpioouten(sd, gpio);
-}
-
-int
-bcmsdh_gpioout(void *sdh, uint32 gpio, bool enab)
-{
-	bcmsdh_info_t *p = (bcmsdh_info_t *)sdh;
-	sdioh_info_t *sd = (sdioh_info_t *)(p->sdioh);
-
-	return sdioh_gpioout(sd, gpio, enab);
-}
-

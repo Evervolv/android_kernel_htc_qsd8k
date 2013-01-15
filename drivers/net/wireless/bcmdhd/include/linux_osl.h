@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: linux_osl.h 284903 2011-09-20 02:36:51Z $
+ * $Id: linux_osl.h 301794 2011-12-08 20:41:35Z $
  */
 
 
@@ -155,22 +155,6 @@ extern void osl_dma_unmap(osl_t *osh, uint pa, uint size, int direction);
 	#define SELECT_BUS_READ(osh, mmap_op, bus_op) (((osl_pubinfo_t*)(osh))->mmbus) ? \
 		mmap_op : bus_op
 
-/* HTC_CSP_START */
-#ifndef errprintf
-#define	errprintf(fmt, args...)	printk(KERN_WARNING "[WLAN][ERR] "fmt, ## args)
-#endif
-
-#ifndef wrnprintf
-#define	wrnprintf(fmt, args...)	printk(KERN_WARNING "[WLAN][WRN] "fmt, ## args)
-#endif
-
-#ifndef printf
-#define	printf(fmt, args...)	printk(KERN_INFO "[WLAN] "fmt, ## args)
-#endif
-
-#define HTC_KERNEL_FEEDBACK(x) errprintf x
-/* HTC_CSP_END */
-
 #define OSL_ERROR(bcmerror)	osl_error(bcmerror)
 extern int osl_error(int bcmerror);
 
@@ -180,6 +164,7 @@ extern int osl_error(int bcmerror);
 
 
 #define OSL_SYSUPTIME()		((uint32)jiffies * (1000 / HZ))
+#define	printf(fmt, args...)	printk(fmt , ## args)
 #include <linux/kernel.h>	
 #include <linux/string.h>	
 
@@ -283,10 +268,10 @@ extern int osl_error(int bcmerror);
 #define PKTLIST_DUMP(osh, buf)
 #define PKTDBG_TRACE(osh, pkt, bit)
 #define	PKTFREE(osh, skb, send)		osl_pktfree((osh), (skb), (send))
-#ifdef DHD_USE_STATIC_BUF
+#ifdef CONFIG_DHD_USE_STATIC_BUF
 #define	PKTGET_STATIC(osh, len, send)		osl_pktget_static((osh), (len))
 #define	PKTFREE_STATIC(osh, skb, send)		osl_pktfree_static((osh), (skb), (send))
-#endif 
+#endif
 #define	PKTDATA(osh, skb)		(((struct sk_buff*)(skb))->data)
 #define	PKTLEN(osh, skb)		(((struct sk_buff*)(skb))->len)
 #define PKTHEADROOM(osh, skb)		(PKTDATA(osh, skb)-(((struct sk_buff*)(skb))->head))

@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_cdc.c 288105 2011-10-06 01:58:02Z $
+ * $Id: dhd_cdc.c 324280 2012-03-28 19:01:17Z $
  *
  * BDC is like CDC, except it includes a header for data packets to convey
  * packet priority over the bus, and flags (e.g. to indicate checksum status
@@ -78,6 +78,8 @@ typedef struct dhd_prot {
 	unsigned char buf[WLC_IOCTL_MAXLEN + ROUND_UP_MARGIN];
 } dhd_prot_t;
 
+extern int dhd_dbus_txdata(dhd_pub_t *dhdp, void *pktbuf);
+
 static int
 dhdcdc_msg(dhd_pub_t *dhd)
 {
@@ -121,7 +123,7 @@ dhdcdc_cmplt(dhd_pub_t *dhd, uint32 id, uint32 len)
 	return ret;
 }
 
-int
+static int
 dhdcdc_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len, uint8 action)
 {
 	dhd_prot_t *prot = dhd->prot;
@@ -276,140 +278,6 @@ done:
 	return ret;
 }
 
-#ifdef PNO_SUPPORT
-#define htod32(i) i
-#define htod16(i) i
-
-typedef struct pfn_ssid {
-	char		ssid[32];			
-	int32		ssid_len;		
-	uint32		weight;
-} pfn_ssid_t;
-
-typedef struct pfn_ssid_set {
-	pfn_ssid_t	pfn_ssids[MAX_PFN_NUMBER];
-} pfn_ssid_set_t;
-
-static pfn_ssid_set_t pfn_ssid_set;
-
-int dhd_set_pfn_ssid(char * ssid, int ssid_len)
-{
-	uint32 i, lightest, weightest, samessid = 0xffff;
-
-	if ((ssid_len < 1) || (ssid_len > 32)) {
-		printf("Invaild ssid length!\n");
-		return -1;
-	}
-	printf("pfn: set ssid = %s\n", ssid);
-	lightest = 0;
-	weightest =	0;
-	for (i = 0; i < MAX_PFN_NUMBER; i++)
-	{
-		if (pfn_ssid_set.pfn_ssids[i].weight < pfn_ssid_set.pfn_ssids[lightest].weight)
-			lightest = i;
-
-		if (pfn_ssid_set.pfn_ssids[i].weight > pfn_ssid_set.pfn_ssids[weightest].weight)
-			weightest = i;
-
-		if (!strcmp(ssid, pfn_ssid_set.pfn_ssids[i].ssid))
-			samessid = i;
-	}
-
-	printf("lightest is %d, weightest is %d, samessid = %d\n", lightest, weightest, samessid);
-
-	if (samessid != 0xffff) {
-		if (samessid == weightest) {
-			printf("connect to latest ssid, ignore!\n");
-			return 0;
-		}
-		pfn_ssid_set.pfn_ssids[samessid].weight = pfn_ssid_set.pfn_ssids[weightest].weight + 1;
-		return 0;
-	}
-	memset(&pfn_ssid_set.pfn_ssids[lightest], 0, sizeof(pfn_ssid_t));
-
-	strncpy(pfn_ssid_set.pfn_ssids[lightest].ssid, ssid, ssid_len);
-	pfn_ssid_set.pfn_ssids[lightest].ssid_len = ssid_len;
-	pfn_ssid_set.pfn_ssids[lightest].weight = pfn_ssid_set.pfn_ssids[weightest].weight + 1;
-	
-	return 0;
-}
-
-int dhd_del_pfn_ssid(char * ssid, int ssid_len)
-{
-	uint32 i;
-
-	if ((ssid_len < 1) || (ssid_len > 32)) {
-		printf("Invaild ssid length!\n");
-		return -1;
-	}
-	
-	for (i = 0; i < MAX_PFN_NUMBER; i++) {
-		if (!strcmp(ssid, pfn_ssid_set.pfn_ssids[i].ssid))
-			break;
-	}
-
-	if (i == MAX_PFN_NUMBER) {
-		printf("del ssid [%s] not found!\n", ssid);
-		return 0;
-	}
-
-	memset(&pfn_ssid_set.pfn_ssids[i], 0, sizeof(pfn_ssid_t));
-	printf("del ssid [%s] complete!\n", ssid);
-
-	return 0;
-}
-extern int dhd_pno_enable(dhd_pub_t *dhd, int pfn_enabled);
-extern int dhd_pno_clean(dhd_pub_t *dhd);
-extern int dhd_pno_set(dhd_pub_t *dhd, wlc_ssid_t* ssids_local, int nssid,
-                       ushort  scan_fr, int pno_repeat, int pno_freq_expo_max);
-/* HTC_CSP_START */
-char project_type[33];
-/* HTC_CSP_END */
-int dhd_set_pfn(dhd_pub_t *dhd, int enabled)
-{
-	wlc_ssid_t ssids_local[MAX_PFN_NUMBER];
-	int i;	
-	int config_network = 0;
-
-
-	memset(ssids_local, 0, sizeof(ssids_local));
-	
-	if (enabled) {
-		for (i = 0; i < MAX_PFN_NUMBER; i++) {
-			if (pfn_ssid_set.pfn_ssids[i].ssid[0]) {
-				strncpy((char *)ssids_local[i].SSID, pfn_ssid_set.pfn_ssids[i].ssid,
-			        sizeof(ssids_local[i].SSID));
-				ssids_local[i].SSID_len = pfn_ssid_set.pfn_ssids[i].ssid_len;
-				config_network++;
-			}
-		}
-
-		if (!config_network) {
-			return 0;
-		}
-
-		/* set pno list */
-/* HTC_CSP_START */
-	        if (project_type != NULL && !strnicmp(project_type, "KT", strlen("KT")) ) {
-			dhd_pno_set(dhd, ssids_local, config_network, 120, 0, 0);
-        	} else {
-			dhd_pno_set(dhd, ssids_local, config_network, PFN_SCAN_FREQ, 0, 0);
-        	}
-/* HTC_CSP_END */
-
-		/* enable pno scan */
-		dhd_pno_enable(dhd, 1);
-	} else
-		dhd_pno_enable(dhd, 0);
-
-	return 0;
-}
-
-void dhd_clear_pfn()
-{
-	memset(&pfn_ssid_set, 0, sizeof(pfn_ssid_set_t));
-}
-#endif
 
 int
 dhd_prot_ioctl(dhd_pub_t *dhd, int ifidx, wl_ioctl_t * ioc, void * buf, int len)
@@ -2308,6 +2176,7 @@ dhd_wlfc_init(dhd_pub_t *dhd)
 		WLFC_FLAGS_CREDIT_STATUS_SIGNALS |
 		WLFC_FLAGS_HOST_PROPTXSTATUS_ACTIVE : 0;
 
+	dhd->wlfc_state  = NULL;
 
 	/*
 	try to enable/disable signaling by sending "tlv" iovar. if that fails,
@@ -2469,8 +2338,6 @@ dhd_prot_dump(dhd_pub_t *dhdp, struct bcmstrbuf *strbuf)
 #endif
 }
 
-#define RAISE_BK_PRIO 1
-
 void
 dhd_prot_hdrpush(dhd_pub_t *dhd, int ifidx, void *pktbuf)
 {
@@ -2493,10 +2360,6 @@ dhd_prot_hdrpush(dhd_pub_t *dhd, int ifidx, void *pktbuf)
 
 
 	h->priority = (PKTPRIO(pktbuf) & BDC_PRIORITY_MASK);
-#ifdef RAISE_BK_PRIO
-	if ((dhd_APUP == true) && (h->priority < 3))
-		h->priority = 3;
-#endif
 	h->flags2 = 0;
 	h->dataOffset = 0;
 #endif /* BDC */
@@ -2600,10 +2463,10 @@ dhd_prot_attach(dhd_pub_t *dhd)
 	return 0;
 
 fail:
-#ifndef DHD_USE_STATIC_BUF
+#ifndef CONFIG_DHD_USE_STATIC_BUF
 	if (cdc != NULL)
 		MFREE(dhd->osh, cdc, sizeof(dhd_prot_t));
-#endif /* DHD_USE_STATIC_BUF */
+#endif /* CONFIG_DHD_USE_STATIC_BUF */
 	return BCME_NOMEM;
 }
 
@@ -2614,9 +2477,9 @@ dhd_prot_detach(dhd_pub_t *dhd)
 #ifdef PROP_TXSTATUS
 	dhd_wlfc_deinit(dhd);
 #endif
-#ifndef DHD_USE_STATIC_BUF
+#ifndef CONFIG_DHD_USE_STATIC_BUF
 	MFREE(dhd->osh, dhd->prot, sizeof(dhd_prot_t));
-#endif /* DHD_USE_STATIC_BUF */
+#endif /* CONFIG_DHD_USE_STATIC_BUF */
 	dhd->prot = NULL;
 }
 
@@ -2655,7 +2518,7 @@ dhd_prot_init(dhd_pub_t *dhd)
 #if defined(WL_CFG80211)
 	if (dhd_download_fw_on_driverload)
 #endif /* defined(WL_CFG80211) */
-		ret = dhd_preinit_ioctls(dhd);
+	ret = dhd_preinit_ioctls(dhd);
 
 	/* Always assumes wl for now */
 	dhd->iswl = TRUE;

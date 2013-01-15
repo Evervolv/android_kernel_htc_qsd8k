@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: sbutils.c 275693 2011-08-04 19:59:34Z $
+ * $Id: sbutils.c,v 1.687.2.1 2010-11-29 20:21:56 Exp $
  */
 
 #include <typedefs.h>
@@ -426,12 +426,7 @@ sb_corereg(si_t *sih, uint coreidx, uint regoff, uint mask, uint val)
 		r = (uint32*) ((uchar*)sb_setcoreidx(&sii->pub, coreidx) + regoff);
 	}
 	ASSERT(r != NULL);
-#ifdef HTC_KlocWork
-    if(r == NULL) {
-        SI_ERROR(("[HTCKW] sb_corereg: r is NULL\n"));
-        return 0;
-    }
-#endif
+
 	/* mask and set */
 	if (mask || val) {
 		if (regoff >= SBCONFIGOFF) {
@@ -512,13 +507,9 @@ _sb_scan(si_info_t *sii, uint32 sba, void *regs, uint bus, uint32 sbba, uint num
 			uint32 ccrev = sb_corerev(&sii->pub);
 
 			/* determine numcores - this is the total # cores in the chip */
-			if (((ccrev == 4) || (ccrev >= 6))){
-#ifdef HTC_KlocWork
-				if(cc != NULL)
-#endif
+			if (((ccrev == 4) || (ccrev >= 6)))
 				numcores = (R_REG(sii->osh, &cc->chipid) & CID_CC_MASK) >>
 				        CID_CC_SHIFT;
-			}
 			else {
 				/* Older chips */
 				uint chip = CHIPID(sii->pub.chip);
@@ -762,17 +753,9 @@ sb_commit(si_t *sih)
 		chipcregs_t *ccregs = (chipcregs_t *)si_setcore(sih, CC_CORE_ID, 0);
 		ASSERT(ccregs != NULL);
 
-#ifdef HTC_KlocWork
-        if(ccregs != NULL) {
-            /* do the buffer registers update */
-            W_REG(sii->osh, &ccregs->broadcastaddress, SB_COMMIT);
-            W_REG(sii->osh, &ccregs->broadcastdata, 0x0);
-        }
-#else
 		/* do the buffer registers update */
 		W_REG(sii->osh, &ccregs->broadcastaddress, SB_COMMIT);
 		W_REG(sii->osh, &ccregs->broadcastdata, 0x0);
-#endif
 	} else
 		ASSERT(0);
 

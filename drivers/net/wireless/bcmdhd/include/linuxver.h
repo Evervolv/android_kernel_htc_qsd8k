@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: linuxver.h 275790 2011-08-04 23:02:47Z $
+ * $Id: linuxver.h 312264 2012-02-02 00:49:43Z $
  */
 
 
@@ -497,7 +497,7 @@ typedef struct {
 	(tsk_ctl)->terminated = FALSE; \
 	(tsk_ctl)->thr_pid = kernel_thread(thread_func, tsk_ctl, flags); \
 	if ((tsk_ctl)->thr_pid > 0) \
-		wait_for_completion_timeout(&((tsk_ctl)->completed), 2*HZ); \
+		wait_for_completion(&((tsk_ctl)->completed)); \
 	DBG_THR(("%s thr:%lx started\n", __FUNCTION__, (tsk_ctl)->thr_pid)); \
 }
 
@@ -511,17 +511,34 @@ typedef struct {
 	(tsk_ctl)->thr_pid = -1; \
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
+#define DAEMONIZE(a) daemonize(a); \
+	allow_signal(SIGKILL); \
+	allow_signal(SIGTERM);
+#else /* Linux 2.4 (w/o preemption patch) */
+#define RAISE_RX_SOFTIRQ() \
+	cpu_raise_softirq(smp_processor_id(), NET_RX_SOFTIRQ)
+#define DAEMONIZE(a) daemonize(); \
+	do { if (a) \
+		strncpy(current->comm, a, MIN(sizeof(current->comm), (strlen(a) + 1))); \
+	} while (0);
+#endif /* LINUX_VERSION_CODE  */
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
+#define BLOCKABLE()	(!in_atomic())
+#else
+#define BLOCKABLE()	(!in_interrupt())
+#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 31))
-/* HTC_CSP_START */
-#define KILL_PROC(pid, sig) \
+#define KILL_PROC(nr, sig) \
 { \
-	struct task_struct *tsk; \
-	tsk = pid_task(find_vpid(pid), PIDTYPE_PID); \
-	if (tsk) send_sig(sig, tsk, 1); \
+struct task_struct *tsk; \
+struct pid *pid;    \
+pid = find_get_pid((pid_t)nr);    \
+tsk = pid_task(pid, PIDTYPE_PID);    \
+if (tsk) send_sig(sig, tsk, 1); \
 }
-/* HTC_CSP_END */
 #else
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && (LINUX_VERSION_CODE <= \
 	KERNEL_VERSION(2, 6, 30))
