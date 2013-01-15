@@ -25,86 +25,7 @@
 #include <linux/usb/composite.h>
 #include <linux/usb/gadget.h>
 #include <linux/workqueue.h>
-
-#if defined(CONFIG_MACH_MECHA)
-/*#include <mach/smsc251x.h>*/
-#endif
-/*#define HTC_DIAG_DEBUG*/
 #include <linux/debugfs.h>
-#if DIAG_XPST
-#include <mach/sdio_al.h>
-#include <linux/miscdevice.h>
-#include <linux/sched.h>
-#include <asm/uaccess.h>
-#include <linux/fs.h>
-#include "../../char/diag/diagchar.h"
-#include "../../char/diag/diagfwd.h"
-#include "../../char/diag/diagmem.h"
-#include "../../char/diag/diagchar_hdlc.h"
-#if defined(CONFIG_MACH_MECHA)
-#include "../../../arch/arm/mach-msm/7x30-smd/sdio_diag.h"
-#endif
-
-static void fdiag_debugfs_init(void);
-
-#define USB_DIAG_IOC_MAGIC 0xFF
-#define USB_DIAG_FUNC_IOC_ENABLE_SET	_IOW(USB_DIAG_IOC_MAGIC, 1, int)
-#define USB_DIAG_FUNC_IOC_ENABLE_GET	_IOR(USB_DIAG_IOC_MAGIC, 2, int)
-#define USB_DIAG_FUNC_IOC_REGISTER_SET  _IOW(USB_DIAG_IOC_MAGIC, 3, char *)
-#define USB_DIAG_FUNC_IOC_AMR_SET	_IOW(USB_DIAG_IOC_MAGIC, 4, int)
-
-#define USB_DIAG_NV_7K9K_SET _IOW(USB_DIAG_IOC_MAGIC, 1, uint16_t *)
-#define USB_DIAG_NV_7KONLY_SET _IOW(USB_DIAG_IOC_MAGIC, 2, uint16_t *)
-#define USB_DIAG_NV_9KONLY_SET _IOW(USB_DIAG_IOC_MAGIC, 3, uint16_t *)
-#define USB_DIAG_NV_7K9KDIFF_SET _IOW(USB_DIAG_IOC_MAGIC, 4, uint16_t *)
-/*
-#define USB_DIAG_RC9_7K9K_SET _IOW(USB_DIAG_IOC_MAGIC, 5, uint16_t *)
-#define USB_DIAG_RC9_7KONLY_SET _IOW(USB_DIAG_IOC_MAGIC, 6, uint16_t *)
-#define USB_DIAG_RC9_9KONLY_SET _IOW(USB_DIAG_IOC_MAGIC, 7, uint16_t *)
-#define USB_DIAG_RC9_7K9KDIFF_SET _IOW(USB_DIAG_IOC_MAGIC, 8, uint16_t *)
-*/
-#define USB_DIAG_PRL_7K9K_SET _IOW(USB_DIAG_IOC_MAGIC, 9, uint16_t *)
-#define USB_DIAG_PRL_7KONLY_SET _IOW(USB_DIAG_IOC_MAGIC, 10, uint16_t *)
-#define USB_DIAG_PRL_9KONLY_SET _IOW(USB_DIAG_IOC_MAGIC, 11, uint16_t *)
-#define USB_DIAG_PRL_7K9KDIFF_SET _IOW(USB_DIAG_IOC_MAGIC, 12, uint16_t *)
-#define USB_DIAG_M29_7K9K_SET _IOW(USB_DIAG_IOC_MAGIC, 13, uint16_t *)
-#define USB_DIAG_M29_7KONLY_SET _IOW(USB_DIAG_IOC_MAGIC, 14, uint16_t *)
-#define USB_DIAG_M29_9KONLY_SET _IOW(USB_DIAG_IOC_MAGIC, 15, uint16_t *)
-#define USB_DIAG_M29_7K9KDIFF_SET _IOW(USB_DIAG_IOC_MAGIC, 16, uint16_t *)
-
-
-#define USB_DIAG_FUNC_IOC_MODEM_GET	_IOR(USB_DIAG_IOC_MAGIC, 17, int)
-#define SMD_MAX 8192
-#define NV_TABLE_SZ  128
-#define M29_TABLE_SZ  10
-#define PRL_TABLE_SZ  10
-
-#define EPST_PREFIX 0xC8
-#define HPST_PREFIX 0xF1
-
-
-#define NO_PST 0
-#define NO_DEF_ID 1
-#define DM7K9K  2
-#define DM7KONLY  3
-#define DM9KONLY  4
-#define DM7K9KDIFF  5
-#define NO_DEF_ITEM  0xff
-
-#define MAX(x, y) (x > y ? x : y)
-#endif
-
-#if defined(CONFIG_MACH_MECHA)
-int sdio_diag_init_enable;
-#endif
-
-#if DIAG_XPST
-#if defined(CONFIG_MACH_VIGOR)
-static	unsigned char *diag2arm9_buf_9k;
-#endif
-#endif
-
-int diag_configured;
 
 static DEFINE_SPINLOCK(ch_lock);
 static LIST_HEAD(usb_diag_ch_list);
@@ -202,46 +123,7 @@ struct diag_context {
 	unsigned long dpkts_tolaptop;
 	unsigned long dpkts_tomodem;
 	unsigned dpkts_tolaptop_pending;
-#if DIAG_XPST
-	spinlock_t req_lock;
-
-	struct mutex user_lock;
-#define ID_TABLE_SZ 20 /* keep this small */
-	struct list_head rx_req_idle;
-	struct list_head rx_req_user;
-	wait_queue_head_t read_wq;
-	char *user_read_buf;
-	uint32_t user_read_len;
-	char *user_readp;
-	bool opened;
-	/* list of registered command ids to be routed to userspace */
-	unsigned char id_table[ID_TABLE_SZ];
-
-	/* smd_channel_t *ch; */
-	int online;
-	int error;
-/* for slate test */
-	struct list_head rx_arm9_idle;
-	struct list_head rx_arm9_done;
-	struct mutex diag2arm9_lock;
-	struct mutex diag2arm9_read_lock;
-	struct mutex diag2arm9_write_lock;
-	bool diag2arm9_opened;
-	unsigned char toARM9_buf[SMD_MAX];
-	unsigned char DM_buf[USB_MAX_OUT_BUF];
-	unsigned read_arm9_count;
-	unsigned char *read_arm9_buf;
-	wait_queue_head_t read_arm9_wq;
-	struct usb_request *read_arm9_req;
-	u64 tx_count; /* to smd */
-	u64 rx_count; /* from smd */
-	u64 usb_in_count; /* to pc */
-	u64 usb_out_count; /* from pc */
-	int ready;
-#endif
 };
-
-#include "u_xpst.c"
 
 static inline struct diag_context *func_to_diag(struct usb_function *f)
 {
@@ -256,13 +138,7 @@ static void usb_config_work_func(struct work_struct *work)
 	struct usb_gadget_strings *table;
 	struct usb_string *s;
 
-	DIAG_INFO("%s: dev=%s\n", __func__, (ctxt == mdmctxt)?DIAG_MDM:DIAG_LEGACY);
-#if DIAG_XPST
-	ctxt->tx_count = ctxt->rx_count = 0;
-	ctxt->usb_in_count = ctxt->usb_out_count = 0;
-	driver->diag_smd_count = driver->diag_qdsp_count = 0;
-#endif
-	if (ctxt->ch.notify && ctxt == legacyctxt)
+	if (ctxt->ch.notify)
 		ctxt->ch.notify(ctxt->ch.priv, USB_DIAG_CONNECT, NULL);
 
 	if (!ctxt->update_pid_and_serial_num)
@@ -329,10 +205,6 @@ static void diag_read_complete(struct usb_ep *ep,
 	struct diag_context *ctxt = ep->driver_data;
 	struct diag_request *d_req = req->context;
 	unsigned long flags;
-#if DIAG_XPST
-	struct usb_request *xpst_req;
-	unsigned int cmd_id;
-#endif
 
 	d_req->actual = req->actual;
 	d_req->status = req->status;
@@ -342,32 +214,7 @@ static void diag_read_complete(struct usb_ep *ep,
 	spin_unlock_irqrestore(&ctxt->lock, flags);
 
 	ctxt->dpkts_tomodem++;
-#if DIAG_XPST
-#ifdef HTC_DIAG_DEBUG
-	DIAG_INFO("%s: dev=%s\n", __func__, (ctxt == mdmctxt)?DIAG_MDM:DIAG_LEGACY);
-	print_hex_dump(KERN_DEBUG, "from PC: ", DUMP_PREFIX_ADDRESS, 16, 1,
-			req->buf, req->actual, 1);
-#endif
 
-	cmd_id = *((unsigned short *)req->buf);
-
-	if ((ctxt != mdmctxt) && if_route_to_userspace(ctxt, cmd_id)) {
-		xpst_req = xpst_req_get(ctxt, &ctxt->rx_req_idle);
-		if (xpst_req) {
-			xpst_req->actual = req->actual;
-			xpst_req->status = req->status;
-			memcpy(xpst_req->buf, req->buf, req->actual);
-			xpst_req_put(ctxt, &ctxt->rx_req_user, xpst_req);
-			wake_up(&ctxt->read_wq);
-			driver->nohdlc = 1;
-		} else
-			DIAG_INFO("%s No enough xpst_req \n", __func__);
-	} else {
-		driver->nohdlc = 0;
-		ctxt->tx_count += req->actual;
-	}
-	ctxt->usb_out_count += req->actual;
-#endif
 	if (ctxt->ch.notify)
 		ctxt->ch.notify(ctxt->ch.priv, USB_DIAG_READ_DONE, d_req);
 }
@@ -387,11 +234,10 @@ struct usb_diag_ch *usb_diag_open(const char *name, void *priv,
 		void (*notify)(void *, unsigned, struct diag_request *))
 {
 	struct usb_diag_ch *ch;
-	struct diag_context *ctxt = NULL;
+	struct diag_context *ctxt;
 	unsigned long flags;
 	int found = 0;
 
-	printk(KERN_DEBUG "[USB] %s: name: %s\n", __func__, name);
 	spin_lock_irqsave(&ch_lock, flags);
 	/* Check if we already have a channel with this name */
 	list_for_each_entry(ch, &usb_diag_ch_list, list) {
@@ -403,27 +249,11 @@ struct usb_diag_ch *usb_diag_open(const char *name, void *priv,
 	spin_unlock_irqrestore(&ch_lock, flags);
 
 	if (!found) {
-		/* have a static global variable already */
-		if (!strcmp(name, DIAG_LEGACY)) {
-			legacyctxt = ctxt = &_context;
-			legacych = ch = &legacyctxt->ch;
-#if DIAG_XPST
-			misc_register(&htc_diag_device_fops);
-			/*DMrounter*/
-			misc_register(&diag2arm9_device);
-			ctxt->usb_in_count = ctxt->usb_out_count = 0;
-			ctxt->tx_count = ctxt->rx_count = 0;
-			driver->diag_smd_count = driver->diag_qdsp_count = 0;
-#endif
-		}
-#if defined(CONFIG_USB_ANDROID_MDM9K_DIAG)
-		else if (!strcmp(name, DIAG_MDM)) {
-			mdmctxt = ctxt = &_mdm_context;
-			mdmch = ch = &ctxt->ch;
-		}
-#endif
-		else
-			return NULL;
+		ctxt = kzalloc(sizeof(*ctxt), GFP_KERNEL);
+		if (!ctxt)
+			return ERR_PTR(-ENOMEM);
+
+		ch = &ctxt->ch;
 	}
 
 	ch->name = name;
@@ -433,9 +263,6 @@ struct usb_diag_ch *usb_diag_open(const char *name, void *priv,
 	spin_lock_irqsave(&ch_lock, flags);
 	list_add_tail(&ch->list, &usb_diag_ch_list);
 	spin_unlock_irqrestore(&ch_lock, flags);
-
-	DIAG_INFO("%s: ch->name:%s ctxt:%p pkts_pending:%p\n", __func__,
-			ch->name, ctxt, &ctxt->dpkts_tolaptop_pending);
 
 	return ch;
 }
@@ -450,14 +277,17 @@ EXPORT_SYMBOL(usb_diag_open);
  */
 void usb_diag_close(struct usb_diag_ch *ch)
 {
+	struct diag_context *dev = container_of(ch, struct diag_context, ch);
 	unsigned long flags;
 
 	spin_lock_irqsave(&ch_lock, flags);
 	ch->priv = NULL;
 	ch->notify = NULL;
 	/* Free-up the resources if channel is no more active */
-	if (!ch->priv_usb)
+	if (!ch->priv_usb) {
 		list_del(&ch->list);
+		kfree(dev);
+	}
 
 	spin_unlock_irqrestore(&ch_lock, flags);
 }
@@ -674,13 +504,6 @@ static void diag_function_disable(struct usb_function *f)
 	usb_ep_disable(dev->out);
 	dev->out->driver_data = NULL;
 
-#if DIAG_XPST
-	if (dev == legacyctxt) {
-		dev->online = 0;
-		wake_up(&dev->read_wq);
-	}
-#endif
-
 }
 
 static int diag_function_set_alt(struct usb_function *f,
@@ -690,9 +513,6 @@ static int diag_function_set_alt(struct usb_function *f,
 	struct usb_composite_dev *cdev = f->config->cdev;
 	unsigned long flags;
 	int rc = 0;
-#if DIAG_XPST
-	struct usb_request *req;
-#endif
 
 	dev->in_desc = ep_choose(cdev->gadget,
 			(struct usb_endpoint_descriptor *)f->hs_descriptors[1],
@@ -724,14 +544,6 @@ static int diag_function_set_alt(struct usb_function *f,
 	spin_lock_irqsave(&dev->lock, flags);
 	dev->configured = 1;
 	spin_unlock_irqrestore(&dev->lock, flags);
-#if DIAG_XPST
-	if (dev == legacyctxt) {
-		while ((req = xpst_req_get(dev, &dev->rx_req_user)))
-			xpst_req_put(dev, &dev->rx_req_idle, req);
-		dev->online = 1;
-		wake_up(&dev->read_wq);
-	}
-#endif
 
 	return rc;
 }
@@ -794,22 +606,6 @@ fail:
 
 }
 
-static struct usb_string diag_string_defs[] = {
-	[0].s = "HTC DIAG",
-	[1].s = "HTC 9K DIAG",
-	{  } /* end of list */
-};
-
-static struct usb_gadget_strings diag_string_table = {
-	.language =		0x0409,	/* en-us */
-	.strings =		diag_string_defs,
-};
-
-static struct usb_gadget_strings *diag_strings[] = {
-	&diag_string_table,
-	NULL,
-};
-
 int diag_function_add(struct usb_configuration *c, const char *name,
 			int (*update_pid)(uint32_t, const char *))
 {
@@ -834,10 +630,9 @@ int diag_function_add(struct usb_configuration *c, const char *name,
 	/* claim the channel for this USB interface */
 	_ch->priv_usb = dev;
 
-	dev->update_pid_and_serial_num = update_pid;
+	dev->update_pid_and_serial_num = update_pid; 
 	dev->cdev = c->cdev;
 	dev->function.name = _ch->name;
-	dev->function.strings = diag_strings;
 	dev->function.descriptors = fs_diag_desc;
 	dev->function.hs_descriptors = hs_diag_desc;
 	dev->function.bind = diag_function_bind;
@@ -848,26 +643,6 @@ int diag_function_add(struct usb_configuration *c, const char *name,
 	INIT_LIST_HEAD(&dev->read_pool);
 	INIT_LIST_HEAD(&dev->write_pool);
 	INIT_WORK(&dev->config_work, usb_config_work_func);
-
-	if (dev == legacyctxt) {
-		if (diag_string_defs[0].id == 0) {
-			ret = usb_string_id(c->cdev);
-			if (ret < 0)
-				return ret;
-			diag_string_defs[0].id = ret;
-		} else
-			ret = diag_string_defs[0].id;
-	} else {
-		if (diag_string_defs[1].id == 0) {
-			ret = usb_string_id(c->cdev);
-			if (ret < 0)
-				return ret;
-			diag_string_defs[1].id = ret;
-		} else
-			ret = diag_string_defs[1].id;
-	}
-
-	intf_desc.iInterface = ret;
 
 	ret = usb_add_function(c, &dev->function);
 	if (ret) {
@@ -893,7 +668,7 @@ static ssize_t debug_read_stats(struct file *file, char __user *ubuf,
 		struct diag_context *ctxt;
 
 		ctxt = ch->priv_usb;
-		if (!ctxt) continue;
+
 		temp += scnprintf(buf + temp, PAGE_SIZE - temp,
 				"---Name: %s---\n"
 				"endpoints: %s, %s\n"
@@ -970,30 +745,16 @@ static void diag_cleanup(void)
 
 		spin_lock_irqsave(&ch_lock, flags);
 		/* Free if diagchar is not using the channel anymore */
-		if (!_ch->priv)
+		if (!_ch->priv) {
 			list_del(&_ch->list);
+			kfree(dev);
+		}
 		spin_unlock_irqrestore(&ch_lock, flags);
 	}
 }
 
 static int diag_setup(void)
 {
-#if DIAG_XPST
-	struct diag_context *dev = &_context;
-	dev->ready = 1;
-
-	spin_lock_init(&dev->req_lock);
-	mutex_init(&dev->user_lock);
-	INIT_LIST_HEAD(&dev->rx_req_user);
-	INIT_LIST_HEAD(&dev->rx_req_idle);
-	init_waitqueue_head(&dev->read_wq);
-	INIT_LIST_HEAD(&dev->rx_arm9_idle);
-	INIT_LIST_HEAD(&dev->rx_arm9_done);
-	init_waitqueue_head(&dev->read_arm9_wq);
-	mutex_init(&dev->diag2arm9_lock);
-	mutex_init(&dev->diag2arm9_read_lock);
-	mutex_init(&dev->diag2arm9_write_lock);
-#endif
 	fdiag_debugfs_init();
 
 	return 0;

@@ -312,11 +312,6 @@ static const char fsg_string_interface[] = "Mass Storage";
 
 #include "storage_common.c"
 
-#ifdef CONFIG_PASCAL_DETECT
-extern struct switch_dev kddi_switch;
-extern atomic_t pascal_enable;
-#endif
-
 #ifdef CONFIG_USB_CSW_HACK
 static int write_error_after_csw_sent;
 static int csw_hack_sent;
@@ -478,7 +473,6 @@ static inline struct fsg_dev *fsg_from_func(struct usb_function *f)
 
 typedef void (*fsg_routine_t)(struct fsg_dev *);
 static int send_status(struct fsg_common *common);
-int android_switch_function(unsigned func);
 
 static int exception_in_progress(struct fsg_common *common)
 {
@@ -744,112 +738,6 @@ static int sleep_thread(struct fsg_common *common)
 }
 
 
-static void _lba_to_msf(u8 *buf, int lba)
-{
-    lba += 150;
-    buf[0] = (lba / 75) / 60;
-    buf[1] = (lba / 75) % 60;
-    buf[2] = lba % 75;
-}
-
-
-static int _read_toc_raw(struct fsg_common *common, struct fsg_buffhd *bh)
-{
-	struct fsg_lun	*curlun = common->curlun;
-	int		msf = common->cmnd[1] & 0x02;
-	u8		*buf = (u8 *) bh->buf;
-	u8		*q;
-	int		len;
-
-	q = buf + 2;
-	memset(q, 0, 46);
-	*q++ = 1; /* first session */
-	*q++ = 1; /* last session */
-
-	*q++ = 1; /* session number */
-	*q++ = 0x14; /* data track */
-	*q++ = 0; /* track number */
-	*q++ = 0xa0; /* lead-in */
-	*q++ = 0; /* min */
-	*q++ = 0; /* sec */
-	*q++ = 0; /* frame */
-	*q++ = 0;
-	*q++ = 1; /* first track */
-	*q++ = 0x00; /* disk type */
-	*q++ = 0x00;
-
-	*q++ = 1; /* session number */
-	*q++ = 0x14; /* data track */
-	*q++ = 0; /* track number */
-	*q++ = 0xa1;
-	*q++ = 0; /* min */
-	*q++ = 0; /* sec */
-	*q++ = 0; /* frame */
-	*q++ = 0;
-	*q++ = 1; /* last track */
-	*q++ = 0x00;
-	*q++ = 0x00;
-
-	*q++ = 1; /* session number */
-	*q++ = 0x14; /* data track */
-	*q++ = 0; /* track number */
-	*q++ = 0xa2; /* lead-out */
-	*q++ = 0; /* min */
-	*q++ = 0; /* sec */
-	*q++ = 0; /* frame */
-	if (msf) {
-		*q++ = 0; /* reserved */
-		_lba_to_msf(q, curlun->num_sectors);
-		q += 3;
-	} else {
-		put_unaligned_be32(curlun->num_sectors, q);
-		q += 4;
-	}
-
-	*q++ = 1; /* session number */
-	*q++ = 0x14; /* ADR, control */
-	*q++ = 0; /* track number */
-	*q++ = 1; /* point */
-	*q++ = 0; /* min */
-	*q++ = 0; /* sec */
-	*q++ = 0; /* frame */
-	if (msf) {
-		*q++ = 0;
-		_lba_to_msf(q, 0);
-		q += 3;
-	} else {
-		memset(q, 0, 4);
-		q += 4;
-	}
-
-	len = q - buf;
-	put_unaligned_be16(len - 2, buf);
-
-	return len;
-}
-
-
-static void cd_data_to_raw(u8 *buf, int lba)
-{
-	/* sync bytes */
-	buf[0] = 0x00;
-	memset(buf + 1, 0xff, 10);
-	buf[11] = 0x00;
-	buf += 12;
-
-	/* MSF */
-	_lba_to_msf(buf, lba);
-	buf[3] = 0x01; /* mode 1 data */
-	buf += 4;
-
-	/* data */
-	buf += 2048;
-
-	/* XXX: ECC not computed */
-	memset(buf, 0, 288);
-}
-
-
 /*-------------------------------------------------------------------------*/
 
 static int do_read(struct fsg_common *common)
@@ -863,25 +751,15 @@ static int do_read(struct fsg_common *common)
 	unsigned int		amount;
 	unsigned int		partial_page;
 	ssize_t			nread;
-	u32			transfer_request;
 #ifdef CONFIG_USB_MSC_PROFILING
 	ktime_t			start, diff;
 #endif
-
-	if (common->cmnd[0] == READ_CD) {
-		if (common->data_size_from_cmnd == 0)
-			return 0;
-		transfer_request = common->cmnd[9];
-	} else
-		transfer_request = 0;
 
 	/*
 	 * Get the starting Logical Block Address and check that it's
 	 * not too big.
 	 */
-	if (common->cmnd[0] == READ_CD)
-		lba = get_unaligned_be32(&common->cmnd[2]);
-	else if (common->cmnd[0] == READ_6)
+	if (common->cmnd[0] == READ_6)
 		lba = get_unaligned_be24(&common->cmnd[1]);
 	else {
 		lba = get_unaligned_be32(&common->cmnd[2]);
@@ -900,18 +778,10 @@ static int do_read(struct fsg_common *common)
 		curlun->sense_data = SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
 		return -EINVAL;
 	}
+	file_offset = ((loff_t) lba) << 9;
 
-	if ((transfer_request & 0xf8) == 0xf8) {
-		file_offset = ((loff_t) lba) << 11;
-
-		/* read all data, 2352 byte */
-		amount_left = 2352;
-	} else {
-		file_offset = ((loff_t) lba) << 9;
-
-		/* Carry out the file reads */
-		amount_left = common->data_size_from_cmnd;
-	}
+	/* Carry out the file reads */
+	amount_left = common->data_size_from_cmnd;
 	if (unlikely(amount_left == 0))
 		return -EIO;		/* No default reply */
 
@@ -962,14 +832,9 @@ static int do_read(struct fsg_common *common)
 #ifdef CONFIG_USB_MSC_PROFILING
 		start = ktime_get();
 #endif
-		if ((transfer_request & 0xf8) == 0xf8)
-			nread = vfs_read(curlun->filp,
-				    ((char __user *)bh->buf) + 16,
-				    amount, &file_offset_tmp);
-		else
-			nread = vfs_read(curlun->filp,
-				    (char __user *)bh->buf,
-				    amount, &file_offset_tmp);
+		nread = vfs_read(curlun->filp,
+				 (char __user *)bh->buf,
+				 amount, &file_offset_tmp);
 		VLDBG(curlun, "file read %u @ %llu -> %d\n", amount,
 		     (unsigned long long) file_offset, (int) nread);
 #ifdef CONFIG_USB_MSC_PROFILING
@@ -1013,138 +878,10 @@ static int do_read(struct fsg_common *common)
 		common->next_buffhd_to_fill = bh->next;
 	}
 
-	if ((transfer_request & 0xf8) == 0xf8)
-		cd_data_to_raw(bh->buf, lba);
-
 	return -EIO;		/* No default reply */
 }
-#ifdef CONFIG_LISMO
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-/* [ADD START] 2011/04/15 KDDI : vender read command */
-/*-------------------------------------------------------------------------*/
-static int do_read_buffer(struct fsg_common *common)
-{
-	struct fsg_lun		*curlun = common->curlun;
-	struct fsg_buffhd	*bh;
-	int			rc;
-	u32			amount_left;
-	loff_t			file_offset;
-	unsigned int		amount;
-	struct op_desc		*desc = 0;
-
-	file_offset = get_unaligned_be32(&common->cmnd[2]);
-
-	/* Get the starting Logical Block Address and check that it's
-	 * not too big */
-//	printk("%s: cmd=%d\n", __func__, common->cmnd[0]);
-	desc = curlun->op_desc[common->cmnd[0]-SC_VENDOR_START];
-	if (!desc->buffer){
-		printk("%s: cmd=%d not ready\n", __func__, common->cmnd[0]);
-		curlun->sense_data =
-				SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
-		curlun->sense_data_info = file_offset;
-		curlun->info_valid = 1;
-/* [ADD START] 2011/09/30 KDDI : no response set */
-		bh = common->next_buffhd_to_fill;
-		bh->inreq->length = 0;
-		bh->state = BUF_STATE_FULL;
-/* [ADD END] 2011/09/30 KDDI : no responsea set */
-		return -EIO;		/* No default reply */
-	}
 
 
-	/* Carry out the file reads */
-	amount_left = common->data_size_from_cmnd;
-
-/* [ADD START] 2011/09/30 KDDI : check offset before read data */
-	if (file_offset + amount_left > desc->len) {
-		printk("[fms_CR7]%s: vendor buffer out of range offset=0x%x read-len=0x%x buf-len=0x%x\n",
-		__func__, (unsigned int)file_offset, amount_left, desc->len);
-		curlun->sense_data =
-				SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
-		curlun->sense_data_info = file_offset;
-		curlun->info_valid = 1;
-		bh = common->next_buffhd_to_fill;
-		bh->inreq->length = 0;
-		bh->state = BUF_STATE_FULL;
-		return -EIO;		/* No default reply */
-	}
-/* [ADD END] 2011/09/30 KDDI : check offset before read data */
-
-	/* printk("[fms_CR7]%s: amount_left=%x\n", __func__, amount_left); */
-	if (unlikely(amount_left == 0))
-		return -EIO;		/* No default reply */
-
-	/* printk("[fms_CR7]%s: buf_size=%x\n", __func__, common->buf_size); */
-
-	for (;;) {
-		/* printk("[fms_CR7]%s: file_offset=%x\n", __func__, (unsigned int)file_offset); */
-
-		/* Figure out how much we need to read:
-		 * Try to read the remaining amount.
-		 * But don't read more than the buffer size.
-		 * And don't try to read past the end of the file.
-		 * Finally, if we're not at a page boundary, don't read past
-		 *	the next page.
-		 * If this means reading 0 then we were asked to read past
-		 *	the end of file. */
-		amount = min(amount_left, FSG_BUFLEN);
-		amount = min((loff_t) amount, desc->len - file_offset);
-		/* printk("[fms_CR7]%s: amount=%x\n", __func__, amount); */
-
-		/* Wait for the next buffer to become available */
-		bh = common->next_buffhd_to_fill;
-		while (bh->state != BUF_STATE_EMPTY) {
-			rc = sleep_thread(common);
-			if (rc)
-				return rc;
-		}
-		/* printk("[fms_CR7]%s: wait buffer ok\n", __func__); */
-
-		/* If we were asked to read past the end of file,
-		 * end with an empty buffer. */
-		if (amount == 0) {
-			curlun->sense_data =
-					SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
-			curlun->sense_data_info = file_offset;
-			curlun->info_valid = 1;
-			bh->inreq->length = 0;
-			bh->state = BUF_STATE_FULL;
-			break;
-		}
-
-		memcpy((char __user *) bh->buf, desc->buffer + file_offset, amount);
-
-		file_offset  += amount;
-		amount_left  -= amount;
-		common->residue -= amount;
-		bh->inreq->length = amount;
-		bh->state = BUF_STATE_FULL;
-
-		if (amount_left == 0)
-			break;		/* No more left to read */
-
-		/* Send this buffer and go read some more */
-/* [CHANGE START] 2012/01/17 KDDI : Android ICS */
-#if 0
-		START_TRANSFER_OR(common, bulk_in, bh->inreq,
-				&bh->inreq_busy, &bh->state)
-			/* Don't know what to do if
-			 * common->fsg is NULL */
-#else
-		bh->inreq->zero = 0;
-		if (!start_in_transfer(common, bh))
-			/* Don't know what to do if common->fsg is NULL */
-#endif
-/* [CHANGE END] 2012/01/17 KDDI : Android ICS */
-			return -EIO;
-		common->next_buffhd_to_fill = bh->next;
-	}
-	return -EIO;		/* No default reply */
-}
-/* [ADD END] 2011/04/15 KDDI : vender read command*/
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
-#endif
 /*-------------------------------------------------------------------------*/
 
 static int do_write(struct fsg_common *common)
@@ -1397,159 +1134,7 @@ write_error:
 	return -EIO;		/* No default reply */
 }
 
-#ifdef CONFIG_LISMO
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-/* [ADD START] 2011/04/15 KDDI : vender write command */
-/* [CHANGE START] 2011/05/27 KDDI : [offset]use change */
-/*-------------------------------------------------------------------------*/
 
-static int do_write_buffer(struct fsg_common *common)
-{
-	struct fsg_lun		*curlun = common->curlun;
-	struct fsg_buffhd	*bh;
-	int			get_some_more;
-	u32			amount_left_to_req, amount_left_to_write;
-	loff_t			file_offset;
-	unsigned int		amount;
-	int			rc;
-	struct op_desc		*desc = 0;
-
-	get_some_more = 1;
-	file_offset = get_unaligned_be32(&common->cmnd[2]);
-
-	/* printk("[fms_CR7]%s: cmd=%d\n", __func__, common->cmnd[0]); */
-	desc = curlun->op_desc[common->cmnd[0]-SC_VENDOR_START];
-	if (!desc->buffer){
-		printk("[fms_CR7]%s: cmd=%d not ready\n", __func__, common->cmnd[0]);
-		curlun->sense_data =
-				SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
-		curlun->sense_data_info = file_offset;
-		curlun->info_valid = 1;
-		return -EIO;		/* No default reply */
-	}
-
-	amount_left_to_req = amount_left_to_write = common->data_size_from_cmnd;
-	/* printk("[fms_CR7]%s: amount_left_to_write=%d\n", __func__, amount_left_to_write); */
-	/* printk("[fms_CR7]%s: file_offset=%x\n", __func__, (unsigned int)file_offset); */
-	/* printk("[fms_CR7]%s: desc->len=%x\n", __func__, desc->len); */
-	if (file_offset + amount_left_to_write > desc->len) {
-		printk("[fms_CR7]%s: vendor buffer out of range offset=0x%x write-len=0x%x buf-len=0x%x\n",
-			__func__, (unsigned int)file_offset, amount_left_to_req, desc->len);
-		curlun->sense_data =
-				SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
-		curlun->sense_data_info = file_offset;
-		curlun->info_valid = 1;
-		return -EIO;		/* No default reply */
-	}
-
-	while (amount_left_to_write > 0) {
-
-		/* Queue a request for more data from the host */
-		bh = common->next_buffhd_to_fill;
-		if (bh->state == BUF_STATE_EMPTY && get_some_more) {
-
-			/* Figure out how much we want to get:
-			 * Try to get the remaining amount.
-			 * But don't get more than the buffer size.
-			 * And don't try to go past the end of the file.
-			 * If we're not at a page boundary,
-			 *	don't go past the next page.
-			 * If this means getting 0, then we were asked
-			 *	to write past the end of file.
-			 * Finally, round down to a block boundary. */
-			amount = min(amount_left_to_req, FSG_BUFLEN);
-			/* printk("[fms_CR7]%s: (2)amount=0x%x\n", __func__, amount); */
-
-			/* Get the next buffer */
-			common->usb_amount_left -= amount;
-			amount_left_to_req -= amount;
-			if (amount_left_to_req == 0)
-				get_some_more = 0;
-
-			/* printk("[fms_CR7]%s: (3)amount=0x%x\n", __func__, amount); */
-			/* printk("[fms_CR7]%s: (3)amount_left_to_req=0x%x\n", __func__, amount_left_to_req); */
-			/* printk("[fms_CR7]%s: (3)get_some_more=%d bh->state =%d \n", __func__,get_some_more,bh->state); */
-
-			/* amount is always divisible by 512, hence by
-			 * the bulk-out maxpacket size */
-			bh->outreq->length = bh->bulk_out_intended_length =
-					amount;
-/* [CHANGE START] 2012/01/17 KDDI : Android ICS */
-#if 0
-			START_TRANSFER_OR(common, bulk_out, bh->outreq,
-					&bh->outreq_busy, &bh->state)
-				/* Don't know what to do if
-				 * common->fsg is NULL */
-#else
-			if (!start_out_transfer(common, bh))
-				/* Dunno what to do if common->fsg is NULL */
-#endif
-				return -EIO;
-			common->next_buffhd_to_fill = bh->next;
-			continue;
-		}
-
-		/* Write the received data to the backing file */
-		bh = common->next_buffhd_to_drain;
-		if (bh->state == BUF_STATE_EMPTY && !get_some_more){
-			break;			/* We stopped early */
-		}
-		if (bh->state == BUF_STATE_FULL) {
-			smp_rmb();
-			common->next_buffhd_to_drain = bh->next;
-			bh->state = BUF_STATE_EMPTY;
-
-			/* Did something go wrong with the transfer? */
-			if (bh->outreq->status != 0) {
-				curlun->sense_data = SS_COMMUNICATION_FAILURE;
-				curlun->sense_data_info = file_offset >> 9;
-				curlun->info_valid = 1;
-				break;
-			}
-
-			amount = bh->outreq->actual;
-			if (desc->len - file_offset < amount) {
-				LERROR(curlun,
-	"write %u @ %llu beyond end %llu\n",
-	amount, (unsigned long long) file_offset,
-	(unsigned long long) desc->len);
-				amount = desc->len - file_offset;
-			}
-
-			/* Perform the write */
-			/* printk("[fms_CR7]%s: (4)buf-write offset=0x%x size=0x%x \n", __func__,(unsigned int)file_offset,amount); */
-			memcpy(desc->buffer + file_offset, (char __user *) bh->buf,amount);
-			file_offset += amount;
-			amount_left_to_write -= amount;
-			common->residue -= amount;
-
-#ifdef MAX_UNFLUSHED_BYTES
-			curlun->unflushed_bytes += amount;
-			if (curlun->unflushed_bytes >= MAX_UNFLUSHED_BYTES) {
-				fsync_sub(curlun);
-				curlun->unflushed_bytes = 0;
-			}
-#endif
-			/* Did the host decide to stop early? */
-			if (bh->outreq->actual != bh->outreq->length) {
-				common->short_packet_received = 1;
-				break;
-			}
-			continue;
-		}
-
-		/* Wait for something to happen */
-		rc = sleep_thread(common);
-		if (rc)
-			return rc;
-	}
-
-	return -EIO;		/* No default reply */
-}
-/* [ADD END] 2011/04/15 KDDI : vender write command */
-/* [CHANGE END] 2011/05/27 KDDI : [offset]use change */
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
-#endif
 /*-------------------------------------------------------------------------*/
 
 static int do_synchronize_cache(struct fsg_common *common)
@@ -1697,43 +1282,12 @@ static int do_inquiry(struct fsg_common *common, struct fsg_buffhd *bh)
 	buf[1] = curlun->removable ? 0x80 : 0;
 	buf[2] = 2;		/* ANSI SCSI level 2 */
 	buf[3] = 2;		/* SCSI-2 INQUIRY data format */
-#ifdef CONFIG_LISMO
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-/* [CHANGE START] 2011/07/27 KDDI : inquiry command extend ,[Lun0] only */
-	if ( strcmp(dev_name(&curlun->dev),"lun0") == 0 ){
-/* [CHANGE START] 2011/04/15 KDDI : return data size */
-		buf[4] = 31 + INQUIRY_VENDOR_SPECIFIC_SIZE;		/* Additional length */
-/* [CHANGE END] 2011/04/15 KDDI : return data size */
-		buf[5] = 0;		/* No special options */
-		buf[6] = 0;
-		buf[7] = 0;
-		memcpy(buf + 8, common->inquiry_string, sizeof common->inquiry_string);
-/* [CHANGE START] 2011/05/26 KDDI : return data set */
-		memcpy(buf + 8 + sizeof common->inquiry_string - 1,
-		   curlun->inquiry_vendor, INQUIRY_VENDOR_SPECIFIC_SIZE);
-		return 36 + INQUIRY_VENDOR_SPECIFIC_SIZE;
-/* [CHANGE END] 2011/05/26 KDDI : return data set */
-	} else {
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
 	buf[4] = 31;		/* Additional length */
 	buf[5] = 0;		/* No special options */
 	buf[6] = 0;
 	buf[7] = 0;
 	memcpy(buf + 8, common->inquiry_string, sizeof common->inquiry_string);
 	return 36;
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-	}
-/* [CHANGE END] 2011/07/27 KDDI : inquiry command extend ,[Lun0] only */
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
-#else
-
-	buf[4] = 31;		/* Additional length */
-	buf[5] = 0;		/* No special options */
-	buf[6] = 0;
-	buf[7] = 0;
-	memcpy(buf + 8, common->inquiry_string, sizeof common->inquiry_string);
-	return 36;
-#endif
 }
 
 static int do_request_sense(struct fsg_common *common, struct fsg_buffhd *bh)
@@ -1835,7 +1389,6 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 	struct fsg_lun	*curlun = common->curlun;
 	int		msf = common->cmnd[1] & 0x02;
 	int		start_track = common->cmnd[6];
-	int		format = (common->cmnd[9] & 0xC0) >> 6;
 	u8		*buf = (u8 *)bh->buf;
 
 	if ((common->cmnd[1] & ~0x02) != 0 ||	/* Mask away MSF */
@@ -1843,9 +1396,6 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 		curlun->sense_data = SS_INVALID_FIELD_IN_CDB;
 		return -EINVAL;
 	}
-
-	if (format == 2)
-		return _read_toc_raw(common, bh);
 
 	memset(buf, 0, 20);
 	buf[1] = (20-2);		/* TOC data length */
@@ -1915,7 +1465,7 @@ static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
 		memset(buf+2, 0, 10);	/* None of the fields are changeable */
 
 		if (!changeable_values) {
-			buf[2] = 0x00;	/* Write cache disable, */
+			buf[2] = 0x04;	/* Write cache enable, */
 					/* Read cache not disabled */
 					/* No cache retention priorities */
 			put_unaligned_be16(0xffff, &buf[4]);
@@ -2060,53 +1610,6 @@ static int do_mode_select(struct fsg_common *common, struct fsg_buffhd *bh)
 	return -EINVAL;
 }
 
-struct work_struct	ums_do_reserve_work;
-static char usb_function_ebl;
-static void handle_reserve_cmd(struct work_struct *work)
-{
-	htc_usb_enable_function("adb", usb_function_ebl);
-}
-
-static int do_reserve(struct fsg_common *common, struct fsg_buffhd *bh)
-{
-	int	call_us_ret = -1;
-	char *envp[] = {
-		"HOME=/",
-		"PATH=/sbin:/system/sbin:/system/bin:/system/xbin",
-		NULL,
-	};
-	char *exec_path[2] = {"/system/bin/stop", "/system/bin/start" };
-	char *argv_stop[] = { exec_path[0], "adbd", NULL, };
-	char *argv_start[] = { exec_path[1], "adbd", NULL, };
-
-	if (common->cmnd[1] == ('h'&0x1f) && common->cmnd[2] == 't'
-		&& common->cmnd[3] == 'c') {
-		/* No special options */
-		switch (common->cmnd[5]) {
-		case 0x01: /* enable adbd */
-			call_us_ret = call_usermodehelper(exec_path[1],
-				argv_start, envp, UMH_WAIT_PROC);
-			usb_function_ebl = 1;
-			schedule_work(&ums_do_reserve_work);
-		break;
-		case 0x02: /*disable adbd */
-			call_us_ret = call_usermodehelper(exec_path[0],
-				argv_stop, envp, UMH_WAIT_PROC);
-			usb_function_ebl = 0;
-			schedule_work(&ums_do_reserve_work);
-		break;
-		default:
-			printk(KERN_DEBUG "Unknown hTC specific command..."
-					"(0x%2.2X)\n", common->cmnd[5]);
-		break;
-		}
-	}
-	printk(KERN_NOTICE "%s adb daemon from mass_storage %s(%d)\n",
-		(common->cmnd[5] == 0x01) ? "Enable" :
-		(common->cmnd[5] == 0x02) ? "Disable" : "Unknown",
-		(call_us_ret == 0) ? "DONE" : "FAIL", call_us_ret);
-	return 0;
-}
 
 /*-------------------------------------------------------------------------*/
 
@@ -2450,8 +1953,6 @@ static int check_command(struct fsg_common *common, int cmnd_size,
 			    "but we got %d\n", name,
 			    cmnd_size, common->cmnd_size);
 			cmnd_size = common->cmnd_size;
-		} else if (common->cmnd[0] == RESERVE) {
-			cmnd_size = common->cmnd_size;
 		} else {
 			common->phase_error = 1;
 			return -EINVAL;
@@ -2527,13 +2028,7 @@ static int do_scsi_command(struct fsg_common *common)
 	int			reply = -EINVAL;
 	int			i;
 	static char		unknown[16];
-#ifdef CONFIG_LISMO
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-/* [ADD START] 2011/04/15 KDDI : for vendor command */
-	struct op_desc	*desc;
-/* [ADD END] 2011/04/15 KDDI : for vendor command */
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
-#endif
+
 	dump_cdb(common);
 
 	/* Wait for the next buffer to become available for data or status */
@@ -2636,16 +2131,6 @@ static int do_scsi_command(struct fsg_common *common)
 			reply = do_read(common);
 		break;
 
-	case READ_CD:
-		common->data_size_from_cmnd = ((common->cmnd[6] << 16) |
-			    (common->cmnd[7] << 8) | (common->cmnd[8])) << 9;
-		reply = check_command(common, 12, DATA_DIR_TO_HOST,
-			    (0xf<<2) | (7<<7), 1, "READ CD");
-
-		if (reply == 0)
-			reply = do_read(common);
-		break;
-
 	case READ_CAPACITY:
 		common->data_size_from_cmnd = 8;
 		reply = check_command(common, 10, DATA_DIR_TO_HOST,
@@ -2673,7 +2158,7 @@ static int do_scsi_command(struct fsg_common *common)
 		common->data_size_from_cmnd =
 			get_unaligned_be16(&common->cmnd[7]);
 		reply = check_command(common, 10, DATA_DIR_TO_HOST,
-				      (0xf<<6) | (1<<1), 1,
+				      (7<<6) | (1<<1), 1,
 				      "READ TOC");
 		if (reply == 0)
 			reply = do_read_toc(common, bh);
@@ -2766,90 +2251,6 @@ static int do_scsi_command(struct fsg_common *common)
 			reply = do_write(common);
 		break;
 
-	case RESERVE:
-		common->data_size_from_cmnd = common->cmnd[4];
-		reply = check_command(common, 10, DATA_DIR_TO_HOST,
-				(1<<1) | (0xf<<2) , 0,
-				"RESERVE(6)");
-		if (reply == 0)
-			reply = do_reserve(common, bh);
-		break;
-#ifdef CONFIG_PASCAL_DETECT
-	case SC_PASCAL_MODE:
-		printk(KERN_INFO "SC_PASCAL_MODE\n");
-		if (!strncmp("RDEVCHG=PASCAL", (char *)&common->cmnd[1], 14)) {
-			printk(KERN_INFO "usb: switch to CDC ACM\n");
-			android_switch_function(0x400);
-			switch_set_state(&kddi_switch, 1);
-			atomic_set(&pascal_enable, 1);
-		}
-		break;
-#endif
-#ifdef CONFIG_LISMO
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-/* [ADD START] 2011/04/15 KDDI : add case vendor command */
-	case SC_VENDOR_START ... SC_VENDOR_END:
-/* [ADD START] 2011/05/30 KDDI : mutex_lock */
-		mutex_lock(&sysfs_lock);
-/* [ADD END] 2011/05/30 KDDI : mutex_lock */
-
-/* [CHANGE START] 2011/09/30 KDDI : check[Lun0] BugFix , log add */
-/* [ADD START] 2011/07/27 KDDI : inquiry command extend ,[Lun0] only */
-		if (common->lun != 0){
-			printk("[fms_CR7]%s e4 command receive but not[lun0]! \n", __func__);
-			goto cmd_error;
-		}
-/* [ADD END] 2011/07/27 KDDI : inquiry command extend ,[Lun0] only */
-		desc = common->luns[common->lun].op_desc[common->cmnd[0] - SC_VENDOR_START];
-		if (!desc){
-			printk("[fms_CR7]%s  opcode-%02x not ready! \n", __func__,common->cmnd[0]);
-			goto cmd_error;
-		}
-/* [CHANGE END] 2011/09/30 KDDI : check[Lun0] BugFix , log add */
-
-		common->data_size_from_cmnd = get_unaligned_be32(&common->cmnd[6]);
-		if (common->data_size_from_cmnd == 0)
-				goto cmd_error;
-		if (~common->cmnd[1] & 0x10) {
-			if ((reply = check_command(common, 10, DATA_DIR_FROM_HOST,
-					(1<<1) | (0xf<<2) | (0xf<<6),
-					0, "VENDOR WRITE BUFFER")) == 0) {
-				reply = do_write_buffer(common);
-				desc->update = jiffies;
-				schedule_work(&desc->work);
-			} else
-				goto cmd_error;
-/* [ADD START] 2011/05/30 KDDI : mutex_unlock */
-				mutex_unlock(&sysfs_lock);
-/* [ADD END] 2011/05/30 KDDI : mutex_unlock */
-			break;
-		} else {
-			if ((reply = check_command(common, 10, DATA_DIR_TO_HOST,
-					(1<<1) | (0xf<<2) | (0xf<<6),
-					0, "VENDOR READ BUFFER")) == 0)
-				reply = do_read_buffer(common);
-			else
-				goto cmd_error;
-/* [ADD START] 2011/05/30 KDDI : mutex_unlock */
-				mutex_unlock(&sysfs_lock);
-/* [ADD END] 2011/05/30 KDDI : mutex_unlock */
-			break;
-		}
-		cmd_error:
-/* [ADD START] 2011/05/30 KDDI : mutex_unlock */
-			mutex_unlock(&sysfs_lock);
-/* [ADD END] 2011/05/30 KDDI : mutex_unlock */
-			common->data_size_from_cmnd = 0;
-			sprintf(unknown, "Unknown x%02x", common->cmnd[0]);
-			if ((reply = check_command(common, common->cmnd_size,
-					DATA_DIR_UNKNOWN, 0x3ff, 0, unknown)) == 0) { /* 2011/04/27 KDDI : ff->3ff(10Byte support) */
-				common->curlun->sense_data = SS_INVALID_COMMAND;
-				reply = -EINVAL;
-			}
-		break;
-/* [ADD END] 2011/04/15 KDDI : add case vendor command */
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
-#endif
 	/*
 	 * Some mandatory commands that we recognize but don't implement.
 	 * They don't mean much in this setting.  It's left as an exercise
@@ -2858,6 +2259,7 @@ static int do_scsi_command(struct fsg_common *common)
 	 */
 	case FORMAT_UNIT:
 	case RELEASE:
+	case RESERVE:
 	case SEND_DIAGNOSTIC:
 		/* Fall through */
 
@@ -3396,535 +2798,6 @@ static DEVICE_ATTR(file, 0644, fsg_show_file, fsg_store_file);
 static DEVICE_ATTR(perf, 0644, fsg_show_perf, fsg_store_perf);
 #endif
 
-#ifdef CONFIG_LISMO
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-/* [ADD START] 2011/04/15 KDDI : functions to handle vendor command */
-/*************************** VENDOR SCSI OPCODE ***************************/
-
-/* setting notify change buffer */
-static void buffer_notify_sysfs(struct work_struct *work)
-{
-	struct op_desc	*desc;
-	/* printk("[fms_CR7]%s\n", __func__); */
-	desc = container_of(work, struct op_desc, work);
-	sysfs_notify_dirent(desc->value_sd);
-}
-
-/* check vendor command code */
-static int vendor_cmd_is_valid(unsigned cmd)
-{
-	if(cmd < SC_VENDOR_START)
-		return 0;
-	if(cmd > SC_VENDOR_END)
-		return 0;
-	return 1;
-}
-
-/* read vendor command buffer */
-static ssize_t
-vendor_cmd_read_buffer(struct file* f, struct kobject *kobj, struct bin_attribute *attr,
-                char *buf, loff_t off, size_t count)
-{
-	ssize_t	status;
-	struct op_desc	*desc = attr->private;
-
-	/* printk("[fms_CR7]%s: buf=%p off=%lx count=%x\n", __func__, buf, (unsigned long)off, count); */
-	mutex_lock(&sysfs_lock);
-
-	if (!test_bit(FLAG_EXPORT, &desc->flags))
-		status = -EIO;
-	else {
-		size_t srclen, n;
-		void *src;
-		size_t nleft = count;
-		src = desc->buffer;
-		srclen = desc->len;
-
-		if (off < srclen) {
-			n = min(nleft, srclen - (size_t) off);
-			memcpy(buf, src + off, n);
-			nleft -= n;
-			buf += n;
-			off = 0;
-		} else {
-			off -= srclen;
-		}
-		status = count - nleft;
-	}
-
-	mutex_unlock(&sysfs_lock);
-	return status;
-}
-
-/* write vendor commn buffer */
-static ssize_t
-vendor_cmd_write_buffer(struct file* f, struct kobject *kobj, struct bin_attribute *attr,
-                char *buf, loff_t off, size_t count)
-{
-	ssize_t	status;
-	struct op_desc	*desc = attr->private;
-
-	/* printk("[fms_CR7]%s: buf=%p off=%lx count=%x\n", __func__, buf, (unsigned long)off, count); */
-	mutex_lock(&sysfs_lock);
-
-	if (!test_bit(FLAG_EXPORT, &desc->flags))
-		status = -EIO;
-	else {
-		size_t dstlen, n;
-		size_t nleft = count;
-		void *dst;
-
-		dst = desc->buffer;
-		dstlen = desc->len;
-
-		if (off < dstlen) {
-			n = min(nleft, dstlen - (size_t) off);
-			memcpy(dst + off, buf, n);
-			nleft -= n;
-			buf += n;
-			off = 0;
-		} else {
-			off -= dstlen;
-		}
-		status = count - nleft;
-	}
-
-	desc->update = jiffies;
-	schedule_work(&desc->work);
-
-	mutex_unlock(&sysfs_lock);
-	return status;
-}
-
-/* memory mapping vendor commn buffer */
-static int
-vendor_cmd_mmap_buffer(struct file *f, struct kobject *kobj, struct bin_attribute *attr,
-		struct vm_area_struct *vma)
-{
-        int rc = -EINVAL;
-	unsigned long pgoff, delta;
-	ssize_t size = vma->vm_end - vma->vm_start;
-	struct op_desc	*desc = attr->private;
-
-	printk("[fms_CR7]%s\n", __func__);
-/* [ADD START] 2011/05/30 KDDI : mutex_lock */
-	mutex_lock(&sysfs_lock);
-/* [ADD END] 2011/05/30 KDDI : mutex_lock */
-
-	if (vma->vm_pgoff != 0) {
-		printk("mmap failed: page offset %lx\n", vma->vm_pgoff);
-		goto done;
-	}
-
-	pgoff = __pa(desc->buffer);
-	delta = PAGE_ALIGN(pgoff) - pgoff;
-	printk("[fms_CR7]%s size=%x delta=%lx pgoff=%lx\n", __func__, size, delta, pgoff);
-
-        if (size + delta > desc->len) {
-			printk("[fms_CR7]%s mmap failed: size %d\n", __func__, size);
-		goto done;
-        }
-
-        pgoff += delta;
-        vma->vm_flags |= VM_RESERVED;
-
-	rc = io_remap_pfn_range(vma, vma->vm_start, pgoff >> PAGE_SHIFT,
-		size, vma->vm_page_prot);
-
-	if (rc < 0)
-		printk("[fms_CR7]%s mmap failed: remap error %d\n", __func__, rc);
-done:
-/* [ADD START] 2011/05/30 KDDI : mutex_unlock */
-	mutex_unlock(&sysfs_lock);
-/* [ADD END] 2011/05/30 KDDI : mutex_unlock */
-	return rc;
-}
-
-/* set 'size'file */
-static ssize_t vendor_size_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	struct op_desc	*desc = dev_to_desc(dev);
-	ssize_t		status;
-
-	mutex_lock(&sysfs_lock);
-
-	if (!test_bit(FLAG_EXPORT, &desc->flags))
-		status = -EIO;
-	else
-		status = sprintf(buf, "%d\n", desc->len);
-
-	mutex_unlock(&sysfs_lock);
-	return status;
-}
-
-/* when update 'size'file */
-static ssize_t vendor_size_store(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t size)
-{
-	long len;
-	char* buffer;
-	struct op_desc	*desc = dev_to_desc(dev);
-	ssize_t		status;
-/* [ADD START] 2011/08/26 KDDI : check init alloc */
-	long cmd;
-	char cmd_buf[16]="0x";
-	struct fsg_lun	*curlun = fsg_lun_from_dev(&desc->dev);
-/* [ADD END] 2011/08/26 KDDI : check init alloc */
-	int ret;
-
-	mutex_lock(&sysfs_lock);
-
-	if (!test_bit(FLAG_EXPORT, &desc->flags))
-		status = -EIO;
-	else {
-		struct bin_attribute* dev_bin_attr_buffer = &desc->dev_bin_attr_buffer;
-		status = strict_strtol(buf, 0, &len);
-		if (status < 0) {
-			status = -EINVAL;
-			goto done;
-		}
-		if ( desc->len == len ) {
-			status = 0;
-			printk("[fms_CR7]%s already size setting! size not change\n", __func__);
-			goto done;
-		}
-
-/* [CHANGE START] 2011/08/26 KDDI : check init alloc */
-		ret = strict_strtol(strcat(cmd_buf,dev_name(&desc->dev)+7), 0, &cmd);
-		printk("[fms_CR7]%s cmd=0x%x old_size=0x%x new_size=0x%x \n", __func__, (unsigned int)cmd, (unsigned int)desc->len, (unsigned int)len);
-
-		if ( cmd-SC_VENDOR_START < ALLOC_CMD_CNT && len == ALLOC_INI_SIZE){
-			printk("[fms_CR7]%s buffer alreay malloc \n",__func__);
-			buffer = curlun->reserve_buf[cmd-SC_VENDOR_START];
-		} else {
-			printk("[fms_CR7]%s malloc buffer \n",__func__);
-			buffer = kzalloc(len, GFP_KERNEL);
-			if(!buffer) {
-				status = -ENOMEM;
-				goto done;
-			}
-		}
-		if ( cmd-SC_VENDOR_START+1 > ALLOC_CMD_CNT || desc->len != ALLOC_INI_SIZE){
-			printk("[fms_CR7]%s free old buffer \n",__func__);
-			kfree(desc->buffer);
-		}
-		desc->len = len;
-/* [CHANGE END] 2011/08/26 KDDI : check init alloc */
-		desc->buffer = buffer;
-		device_remove_bin_file(&desc->dev, dev_bin_attr_buffer);
-		dev_bin_attr_buffer->size = len;
-		status = device_create_bin_file(&desc->dev, dev_bin_attr_buffer);
-	}
-
-done:
-	mutex_unlock(&sysfs_lock);
-	return status ? : size;
-}
-/* define 'size'file */
-static DEVICE_ATTR(size, 0606, vendor_size_show, vendor_size_store); /* 2011/04/19 KDDI : permission change 0600->0606 */
-
-/* set 'update'file */
-static ssize_t vendor_update_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	struct op_desc	*desc = dev_to_desc(dev);
-	ssize_t		status;
-
-	mutex_lock(&sysfs_lock);
-
-	if (!test_bit(FLAG_EXPORT, &desc->flags))
-		status = -EIO;
-	else
-		status = sprintf(buf, "%lu\n", desc->update);
-
-	mutex_unlock(&sysfs_lock);
-	return status;
-}
-/* define 'update'file */
-static DEVICE_ATTR(update, 0404, vendor_update_show, 0); /* 2011/04/19 KDDI : permission change 0400->0404 */
-
-/* vendor command create */
-static int vendor_cmd_export(struct device *dev, unsigned cmd, int init)
-{
-	struct fsg_lun	*curlun = fsg_lun_from_dev(dev);
-	struct op_desc	*desc;
-	int		status = -EINVAL;
-	struct bin_attribute* dev_bin_attr_buffer;
-
-	if (!vendor_cmd_is_valid(cmd)){
-		printk("[fms_CR7]%s cmd=%02x cmd is invalid\n", __func__, cmd);
-		goto done;
-	}
-
-	desc = curlun->op_desc[cmd-SC_VENDOR_START];
-	if (!desc) {
-		desc = kzalloc(sizeof(struct op_desc), GFP_KERNEL);
-		if(!desc) {
-			printk("[fms_CR7]%s op_desc alloc failed\n", __func__);
-			status = -ENOMEM;
-			goto done;
-		}
-		curlun->op_desc[cmd-SC_VENDOR_START] = desc;
-	}
-
-	status = 0;
-	if (test_bit(FLAG_EXPORT, &desc->flags)) {
-		printk("[fms_CR7]%s already exported\n", __func__);
-		goto done;
-	}
-
-/* [CHANGE START] 2011/08/26 KDDI : check init alloc */
-	if ( cmd-SC_VENDOR_START+1 > ALLOC_CMD_CNT ){
-		desc->buffer = kzalloc(2048, GFP_KERNEL);
-		printk("[fms_CR7]%s opcode:%02x bufalloc size:%08x \n", __func__, cmd, 2048);
-		if(!desc->buffer) {
-			printk("[fms_CR7]%s buffer alloc failed\n", __func__);
-			status = -ENOMEM;
-			goto done;
-		}
-		desc->len = 2048;
-	}else{
-		desc->buffer = curlun->reserve_buf[cmd-SC_VENDOR_START];
-		printk("[fms_CR7]%s opcode:%02x bufcopy bufsize:%08x \n", __func__, cmd, ALLOC_INI_SIZE);
-		desc->len = ALLOC_INI_SIZE;
-	}
-/* [CHANGE END] 2011/08/26 KDDI : check init alloc */
-
-	dev_bin_attr_buffer = &desc->dev_bin_attr_buffer;
-	desc->dev.release = op_release;
-	desc->dev.parent = &curlun->dev;
-	dev_set_drvdata(&desc->dev, curlun);
-	dev_set_name(&desc->dev,"opcode-%02x", cmd);
-	status = device_register(&desc->dev);
-	if (status != 0) {
-		printk("[fms_CR7]%s failed to register opcode%d: %d\n", __func__, cmd, status);
-		goto done;
-	}
-
-	dev_bin_attr_buffer->attr.name = "buffer";
-/* [ADD START] 2011/08/26 KDDI : at initialization, change the attributes */
-	if (init)
-		dev_bin_attr_buffer->attr.mode = 0660;
-	else
-		dev_bin_attr_buffer->attr.mode = 0606;
-/* [ADD END] 2011/08/26 KDDI : at initialization, change the attributes */
-	dev_bin_attr_buffer->read = vendor_cmd_read_buffer;
-	dev_bin_attr_buffer->write = vendor_cmd_write_buffer;
-	dev_bin_attr_buffer->mmap = vendor_cmd_mmap_buffer;
-/* [CHANGE START] 2011/08/26 KDDI : check init alloc */
-	if ( cmd-SC_VENDOR_START+1 > ALLOC_CMD_CNT ){
-		dev_bin_attr_buffer->size = 2048;
-	} else {
-		dev_bin_attr_buffer->size = ALLOC_INI_SIZE;
-	}
-/* [CHANGE END] 2011/08/26 KDDI : check init alloc */
-	dev_bin_attr_buffer->private = desc;
-	status = device_create_bin_file(&desc->dev, dev_bin_attr_buffer);
-
-	if (status != 0) {
-		device_remove_bin_file(&desc->dev, dev_bin_attr_buffer);
-		kfree(desc->buffer);
-		desc->buffer = 0;
-		desc->len = 0;
-		device_unregister(&desc->dev);
-		goto done;
-	}
-
-/* [ADD START] 2011/08/26 KDDI : at initialization, change the attributes */
-	if (init){
-		dev_attr_size.attr.mode = 0660;
-		dev_attr_update.attr.mode = 0440;
-	} else {
-		dev_attr_size.attr.mode = 0606;
-		dev_attr_update.attr.mode = 0404;
-	}
-/* [ADD END] 2011/08/26 KDDI : at initialization, change the attributes */
-	status = device_create_file(&desc->dev, &dev_attr_size);
-	if (status == 0)
-		status = device_create_file(&desc->dev, &dev_attr_update);
-	if (status != 0) {
-		printk("[fms_CR7]%s device_create_file failed: %d\n", __func__, status);
-		device_remove_file(&desc->dev, &dev_attr_update);
-		device_remove_file(&desc->dev, &dev_attr_size);
-		device_remove_bin_file(&desc->dev, dev_bin_attr_buffer);
-/* [CHANGE START] 2011/08/26 KDDI : check init alloc */
-		if ( cmd-SC_VENDOR_START+1 > ALLOC_CMD_CNT )
-			kfree(desc->buffer);
-/* [CHANGE END] 2011/08/26 KDDI : check init alloc */
-		desc->buffer = 0;
-		desc->len = 0;
-		device_unregister(&desc->dev);
-		goto done;
-	}
-
-	desc->value_sd = sysfs_get_dirent(desc->dev.kobj.sd, NULL, "update");
-	INIT_WORK(&desc->work, buffer_notify_sysfs);
-
-	if (status == 0)
-		set_bit(FLAG_EXPORT, &desc->flags);
-
-/* [ADD START] 2011/05/26 KDDI : init 'update' */
-	desc->update = 0;
-/* [ADD END] 2011/05/26 KDDI : init 'update' */
-
-done:
-	if (status)
-		pr_debug("%s: opcode%d status %d\n", __func__, cmd, status);
-	return status;
-}
-
-/* vendor command delete */
-static void vendor_cmd_unexport(struct device *dev, unsigned cmd)
-{
-	struct fsg_lun	*curlun = fsg_lun_from_dev(dev);
-	struct op_desc *desc;
-	int status = -EINVAL;
-
-	if (!vendor_cmd_is_valid(cmd)){
-		printk("[fms_CR7]%s cmd=%02x cmd is invalid\n", __func__, cmd);
-		goto done;
-	}
-
-	desc = curlun->op_desc[cmd-SC_VENDOR_START];
-	if (!desc) {
-		printk("[fms_CR7]%s not export\n", __func__);
-		status = -ENODEV;
-		goto done;
-	}
-
-	if (test_bit(FLAG_EXPORT, &desc->flags)) {
-		struct bin_attribute* dev_bin_attr_buffer = &desc->dev_bin_attr_buffer;
-		clear_bit(FLAG_EXPORT, &desc->flags);
-		cancel_work_sync(&desc->work);
-		device_remove_file(&desc->dev, &dev_attr_update);
-		device_remove_file(&desc->dev, &dev_attr_size);
-		device_remove_bin_file(&desc->dev, dev_bin_attr_buffer);
-/* [CHANGE START] 2011/08/26 KDDI : check init alloc */
-		if ( cmd-SC_VENDOR_START+1 > ALLOC_CMD_CNT || desc->len != ALLOC_INI_SIZE){
-			kfree(desc->buffer);
-			printk("[fms_CR7]%s opcode:%02x free buff\n", __func__, cmd);
-		} else
-			printk("[fms_CR7]%s opcode:%02x not free buff\n", __func__, cmd);
-/* [CHANGE END] 2011/08/26 KDDI : check init alloc */
-		desc->buffer = 0;
-		desc->len = 0;
-		status = 0;
-		device_unregister(&desc->dev);
-		kfree(desc);
-		curlun->op_desc[cmd-SC_VENDOR_START] = 0;
-	} else
-		status = -ENODEV;
-
-done:
-	if (status)
-		pr_debug("%s: opcode%d status %d\n", __func__, cmd, status);
-}
-
-
-/* when 'export'file update */
-static ssize_t vendor_export_store(struct device *dev,
-                struct device_attribute *attr, const char *buf, size_t len)
-{
-	long cmd;
-	int status;
-
-	status = strict_strtol(buf, 0, &cmd);
-	if (status < 0)
-		goto done;
-
-	status = -EINVAL;
-
-	if (!vendor_cmd_is_valid(cmd))
-		goto done;
-
-	mutex_lock(&sysfs_lock);
-
-/* [CHANGE START] 2011/08/26 KDDI : at initialization, change the attributes */
-	status = vendor_cmd_export(dev, cmd, 0);
-/* [CHANGE END] 2011/08/26 KDDI : at initialization, change the attributes */
-	if (status < 0)
-		vendor_cmd_unexport(dev, cmd);
-
-	mutex_unlock(&sysfs_lock);
-done:
-	if (status)
-		pr_debug(KERN_INFO"%s: status %d\n", __func__, status);
-	return status ? : len;
-}
-
-/* define 'export'file */
-static DEVICE_ATTR(export, 0220, 0, vendor_export_store); /* 2011/08/10 KDDI : permission change 0202->0220 */
-
-/* when 'unexport'file update */
-static ssize_t vendor_unexport_store(struct device *dev,
-                struct device_attribute *attr, const char *buf, size_t len)
-{
-	long cmd;
-	int status;
-
-	status = strict_strtol(buf, 0, &cmd);
-	if (status < 0)
-		goto done;
-
-	status = -EINVAL;
-
-	if (!vendor_cmd_is_valid(cmd))
-		goto done;
-
-	mutex_lock(&sysfs_lock);
-
-	status = 0;
-	vendor_cmd_unexport(dev, cmd);
-
-	mutex_unlock(&sysfs_lock);
-done:
-	if (status)
-		pr_debug(KERN_INFO"%s: status %d\n", __func__, status);
-	return status ? : len;
-}
-/* define 'unexport'file */
-static DEVICE_ATTR(unexport, 0220, 0, vendor_unexport_store); /* 2011/08/10 KDDI : permission change 0202->0220 */
-
-/* set 'inquiry'file */
-static ssize_t vendor_inquiry_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	struct fsg_lun *curlun = fsg_lun_from_dev(dev);
-	ssize_t status;
-
-	mutex_lock(&sysfs_lock);
-	status = sprintf(buf, "\"%s\"\n", curlun->inquiry_vendor);
-
-	mutex_unlock(&sysfs_lock);
-	return status;
-}
-
-/* get 'inquiry'file */
-static ssize_t vendor_inquiry_store(struct device *dev,
-                struct device_attribute *attr, const char *buf, size_t len)
-{
-	struct fsg_lun *curlun = fsg_lun_from_dev(dev);
-
-	mutex_lock(&sysfs_lock);
-	strncpy(curlun->inquiry_vendor, buf,
-					sizeof curlun->inquiry_vendor);
-	curlun->inquiry_vendor[sizeof curlun->inquiry_vendor - 1] = '\0';
-
-	mutex_unlock(&sysfs_lock);
-	return 0;
-}
-
-/* define 'inquiry'file */
-static DEVICE_ATTR(inquiry, 0660, vendor_inquiry_show, vendor_inquiry_store); /* 2011/08/10 KDDI : permission change 0606->0660 */
-
-static void op_release(struct device *dev)
-{
-}
-/* [ADD END] 2011/04/15 KDDI : functions to handle vendor command */
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
-#endif
-
 /****************************** FSG COMMON ******************************/
 
 static void fsg_common_release(struct kref *ref);
@@ -3953,13 +2826,6 @@ static struct fsg_common *fsg_common_init(struct fsg_common *common,
 	struct fsg_lun *curlun;
 	struct fsg_lun_config *lcfg;
 	int nluns, i, rc;
-#ifdef CONFIG_LISMO
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-/* [ADD START] 2011/10/11 KDDI : "LUN1" is not created */
-	int j;
-/* [ADD END] 2011/10/11 KDDI : "LUN1" is not created */
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
-#endif
 	char *pathbuf;
 
 	/* Find out how many LUNs there should be */
@@ -4049,52 +2915,6 @@ static struct fsg_common *fsg_common_init(struct fsg_common *common,
 			dev_err(&gadget->dev, "failed to create sysfs entry:"
 				"(dev_attr_perf) error: %d\n", rc);
 #endif
-#ifdef CONFIG_LISMO
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-/* [CHANGE START] 2011/07/27 KDDI : 'export' file create ,[Lun0] only */
-		if ( i==0 ){
-/* [ADD START] 2011/04/15 KDDI : create file for vendor command */
-			rc = device_create_file(&curlun->dev, &dev_attr_export);
-			if (rc)
-				goto error_luns;
-			rc = device_create_file(&curlun->dev, &dev_attr_unexport);
-			if (rc)
-				goto error_luns;
-			rc = device_create_file(&curlun->dev, &dev_attr_inquiry);
-			if (rc)
-				goto error_luns;
-/* [CHANGE START] 2011/05/26 KDDI : initital inquiry response */
-			memset(curlun->inquiry_vendor, 0, sizeof curlun->inquiry_vendor);
-			strcpy(curlun->inquiry_vendor, INQUIRY_VENDOR_INIT);
-/* [CHANGE END] 2011/05/26 KDDI : initital inquiry response */
-/* [ADD END] 2011/04/15 KDDI : create file for vendor command */
-
-/* [ADD START] 2011/08/26 KDDI : alloc for commn buffer ,and make e4-buffer*/
-/* [CHANGE START] 2011/10/11 KDDI : "LUN1" is not created */
-			for (j=0; j < ALLOC_CMD_CNT; j++){
-				curlun->reserve_buf[j] = kzalloc(ALLOC_INI_SIZE, GFP_KERNEL);
-				printk("[fms_CR7]%s alloc buf[%d]\n", __func__,j);
-				if(!curlun->reserve_buf[j]){
-					printk("[fms_CR7]%s Error : buffer malloc fail! cmd_idx=%d \n", __func__, j);
-/* [CHANGE END] 2011/10/11 KDDI : "LUN1" is not created */
-					rc = -ENOMEM;
-					goto error_release;
-				}
-			}
-
-/* [CHANGE START] 2011/08/26 KDDI : at initialization, change the attributes */
-			rc = vendor_cmd_export(&curlun->dev, 0xe4, 1);
-/* [CHANGE END] 2011/08/26 KDDI : at initialization, change the attributes */
-			if (rc < 0){
-				vendor_cmd_unexport(&curlun->dev, 0xe4);
-				goto error_release;
-			}
-/* [ADD END] 2011/08/26 KDDI : alloc for commn buffer ,and make e4-buffer*/
-
-		}
-/* [CHANGE END] 2011/07/27 KDDI : 'export' file create ,[Lun0] only */
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
-#endif
 		if (lcfg->filename) {
 			rc = fsg_lun_open(curlun, lcfg->filename);
 			if (rc)
@@ -4137,9 +2957,9 @@ buffhds_first_it:
 		}
 	}
 	snprintf(common->inquiry_string, sizeof common->inquiry_string,
-		 "%-8s%-16s%04x", cfg->vendor_name ? cfg->vendor_name : "Linux",
+		 "%-8s%-16s%04x", cfg->vendor_name ?: "Linux",
 		 /* Assume product name dependent on the first LUN */
-		 cfg->product_name ? cfg->product_name : (common->luns->cdrom
+		 cfg->product_name ?: (common->luns->cdrom
 				     ? "File-Stor Gadget"
 				     : "File-CD Gadget"),
 		 i);
@@ -4165,8 +2985,6 @@ buffhds_first_it:
 	}
 	init_completion(&common->thread_notifier);
 	init_waitqueue_head(&common->fsg_wait);
-
-	INIT_WORK(&ums_do_reserve_work, handle_reserve_cmd);
 
 	/* Information */
 	INFO(common, FSG_DRIVER_DESC ", version: " FSG_DRIVER_VERSION "\n");
@@ -4222,39 +3040,11 @@ static void fsg_common_release(struct kref *ref)
 	if (likely(common->luns)) {
 		struct fsg_lun *lun = common->luns;
 		unsigned i = common->nluns;
-#ifdef CONFIG_LISMO
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-/* [ADD START] 2011/04/15 KDDI : delete file for vendor command */
-		unsigned j;
-/* [ADD END] 2011/04/15 KDDI : delete file for vendor command */
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
-#endif
+
 		/* In error recovery common->nluns may be zero. */
 		for (; i; --i, ++lun) {
 #ifdef CONFIG_USB_MSC_PROFILING
 			device_remove_file(&lun->dev, &dev_attr_perf);
-#endif
-#ifdef CONFIG_LISMO
-/* [ADD START] 2012/01/17 KDDI : Android ICS */
-/* [CHANGE START] 2011/07/27 KDDI : 'export' file create ,[Lun0] only */
-			if (i == common->nluns){
-/* [ADD START] 2011/04/15 KDDI : delete file for vendor command */
-				for (j=SC_VENDOR_START; j < SC_VENDOR_END + 1; j++) {
-					vendor_cmd_unexport(&lun->dev, j);
-/* [ADD START] 2011/08/26 KDDI : check init alloc */
-					if ( j-SC_VENDOR_START < ALLOC_CMD_CNT ){
-						printk("[fms_CR7]%s kfree buf[%d]\n", __func__,j-SC_VENDOR_START);
-						kfree(lun->reserve_buf[j-SC_VENDOR_START]);
-					}
-/* [ADD END] 2011/08/26 KDDI : check init alloc */
-				}
-				device_remove_file(&lun->dev, &dev_attr_export);
-				device_remove_file(&lun->dev, &dev_attr_unexport);
-				device_remove_file(&lun->dev, &dev_attr_inquiry);
-/* [ADD END] 2011/04/15 KDDI : delete file for vendor command */
-			}
-/* [CHANGE END] 2011/07/27 KDDI : 'export' file create ,[Lun0] only */
-/* [ADD END] 2012/01/17 KDDI : Android ICS */
 #endif
 			device_remove_file(&lun->dev, &dev_attr_nofua);
 			device_remove_file(&lun->dev, &dev_attr_ro);
