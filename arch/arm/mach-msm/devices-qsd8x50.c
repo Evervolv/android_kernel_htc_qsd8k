@@ -891,6 +891,24 @@ void __init msm_camera_register_device(void *res, uint32_t num,
 
 	msm_register_device(&msm_camera_device, data);
 }
+
+#if defined(CONFIG_ARCH_MSM7X30)
+#define GPIO_I2C_CLK 70
+#define GPIO_I2C_DAT 71
+#elif defined(CONFIG_ARCH_QSD8X50)
+#define GPIO_I2C_CLK 95
+#define GPIO_I2C_DAT 96
+#else
+#define GPIO_I2C_CLK 60
+#define GPIO_I2C_DAT 61
+#endif
+
+void msm_i2c_gpio_init(void)
+{
+	gpio_request(GPIO_I2C_CLK, "i2c_clk");
+	gpio_request(GPIO_I2C_DAT, "i2c_data");
+}
+
 /*
 static struct resource kgsl_3d0_resources[] = {
 	{
