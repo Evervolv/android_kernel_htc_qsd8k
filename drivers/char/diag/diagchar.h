@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,11 +17,9 @@
 #include <linux/module.h>
 #include <linux/mempool.h>
 #include <linux/mutex.h>
-#include <linux/wakelock.h>
 #include <linux/workqueue.h>
 #include <mach/msm_smd.h>
 #include <asm/atomic.h>
-#include <mach/usbdiag.h>
 #include <asm/mach-types.h>
 /* Size of the USB buffers used for read and write*/
 #define USB_MAX_OUT_BUF 4096
@@ -41,6 +39,7 @@
 #define APPS_DATA  		3
 #define SDIO_DATA		4
 #define WCNSS_DATA		5
+#define HSIC_DATA		6
 #define MODEM_PROC		0
 #define APPS_PROC		1
 #define QDSP_PROC		2
@@ -130,11 +129,7 @@ struct diagchar_dev {
 	int *data_ready;
 	int num_clients;
 	struct diag_write_device *buf_tbl;
-	spinlock_t diagchar_lock;
-#ifdef CONFIG_DIAG_SDIO_PIPE
-	struct cdev *cdev_mdm;
-	int num_mdmclients;
-#endif
+
 	/* Memory pool parameters */
 	unsigned int itemsize;
 	unsigned int poolsize;
@@ -162,10 +157,6 @@ struct diagchar_dev {
 	unsigned char *buf_in_qdsp_cntl;
 	unsigned char *buf_in_wcnss;
 	unsigned char *buf_in_wcnss_cntl;
-	struct mutex diagcharmdm_mutex;
-	wait_queue_head_t mdmwait_q;
-	struct diag_client_map *mdmclient_map;
-	int *mdmdata_ready;
 	unsigned char *usb_buf_out;
 	unsigned char *apps_rsp_buf;
 	unsigned char *user_space_data;
@@ -191,7 +182,6 @@ struct diagchar_dev {
 	struct work_struct diag_read_work;
 #endif
 	struct workqueue_struct *diag_wq;
-	struct wake_lock wake_lock;
 	struct work_struct diag_drain_work;
 	struct work_struct diag_read_smd_work;
 	struct work_struct diag_read_smd_cntl_work;
@@ -214,45 +204,43 @@ struct diagchar_dev {
 	struct diag_request *write_ptr_qdsp_2;
 	struct diag_request *write_ptr_wcnss;
 	int logging_mode;
+	int mask_check;
 	int logging_process_id;
-#if DIAG_XPST
-	unsigned char nohdlc;
-	unsigned char in_busy_dmrounter;
-	struct mutex smd_lock;
-	unsigned char init_done;
-	unsigned char is2ARM11;
-#endif
 #ifdef CONFIG_DIAG_SDIO_PIPE
-	unsigned char *buf_in_sdio_1;
-	unsigned char *buf_in_sdio_2;
+	unsigned char *buf_in_sdio;
 	unsigned char *usb_buf_mdm_out;
 	struct sdio_channel *sdio_ch;
 	int read_len_mdm;
-	int in_busy_sdio_1;
-	int in_busy_sdio_2;
+	int in_busy_sdio;
 	struct usb_diag_ch *mdm_ch;
 	struct work_struct diag_read_mdm_work;
 	struct workqueue_struct *diag_sdio_wq;
 	struct work_struct diag_read_sdio_work;
-	struct work_struct diag_remove_sdio_work;
+	struct work_struct diag_close_sdio_work;
 	struct diag_request *usb_read_mdm_ptr;
-	struct diag_request *write_ptr_mdm_1;
-	struct diag_request *write_ptr_mdm_2;
+	struct diag_request *write_ptr_mdm;
 #endif
-	u64 diag_smd_count; /* from smd */
-	u64 diag_qdsp_count; /* from qdsp */
-	void (*enable_sd_log)(unsigned int enable);
-	int qxdm2sd_drop;
+#ifdef CONFIG_DIAG_HSIC_PIPE
+	unsigned char *buf_in_hsic;
+	unsigned char *usb_buf_mdm_out;
+	int hsic_initialized;
+	int hsic_ch;
+	int hsic_device_enabled;
+	int hsic_device_opened;
+	int read_len_mdm;
+	int in_busy_hsic_read_on_mdm;
+	int in_busy_hsic_write_on_mdm;
+	int in_busy_hsic_write;
+	int in_busy_hsic_read;
+	int usb_mdm_connected;
+	struct usb_diag_ch *mdm_ch;
+	struct workqueue_struct *diag_hsic_wq;
+	struct work_struct diag_read_mdm_work;
+	struct work_struct diag_read_hsic_work;
+	struct diag_request *usb_read_mdm_ptr;
+	struct diag_request *write_ptr_mdm;
+#endif
 };
 
-#define EPST_FUN 1
-#define HPST_FUN 0
-
-#if defined(CONFIG_ARCH_MSM8X60) || defined(CONFIG_ARCH_MSM8960) || defined(CONFIG_ARCH_MSM7X27A)
-#define	SMDDIAG_NAME "DIAG"
-#else
-#define	SMDDIAG_NAME "SMD_DIAG"
-#endif
 extern struct diagchar_dev *driver;
-extern int is_wcnss_used;
 #endif
