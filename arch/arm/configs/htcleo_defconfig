@@ -1424,13 +1424,13 @@ CONFIG_SERIAL_BCM_BT_LPM=y
 #
 # Diag Support
 #
-CONFIG_DIAG_CHAR=y
+# CONFIG_DIAG_CHAR is not set
 
 #
 # DIAG traffic over USB
 #
-CONFIG_DIAG_OVER_USB=y
-CONFIG_MODEM_DIAG_MASTER=y
+# CONFIG_DIAG_OVER_USB is not set
+# CONFIG_MODEM_DIAG_MASTER is not set
 
 #
 # SDIO support for DIAG
