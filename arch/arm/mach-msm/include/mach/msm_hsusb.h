@@ -263,5 +263,6 @@ struct msm_usb_host_platform_data {
 
 void htc_mode_enable(int enable);
 int check_htc_mode_status(void);
+int usb_get_connect_type(void);
 
 #endif
