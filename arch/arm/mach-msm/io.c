@@ -43,7 +43,7 @@
  */
 unsigned int msm_shared_ram_phys = 0x00100000;
 
-static void msm_map_io(struct map_desc *io_desc, int size)
+static void __init msm_map_io(struct map_desc *io_desc, int size)
 {
 	int i;
 
@@ -130,11 +130,6 @@ static struct map_desc qsd8x50_io_desc[] __initdata = {
 		.type =     MT_DEVICE,
 	},
 };
-/*
-void __init msm_map_qsd8x50_io(void)
-{
-	msm_map_io(qsd8x50_io_desc, ARRAY_SIZE(qsd8x50_io_desc));
-}*/
 
 void __init msm_map_qsd8x50_io(void)
 {
@@ -151,7 +146,7 @@ void __init msm_map_qsd8x50_io(void)
 	asm volatile ("mcr p15, 7, %0, c15, c0, 1\n\t"
 		      "mcr p15, 0, %0, c5, c1, 0"
 		      : : "r" (0));
-	iotable_init(qsd8x50_io_desc, ARRAY_SIZE(qsd8x50_io_desc));
+	msm_map_io(qsd8x50_io_desc, ARRAY_SIZE(qsd8x50_io_desc));
 }
 #endif /* CONFIG_ARCH_QSD8X50 */
 
