@@ -343,8 +343,12 @@ static int __init ram_console_init(struct ram_console_buffer *buffer,
 }
 
 #ifdef CONFIG_ANDROID_RAM_CONSOLE_EARLY_INIT
-static int __init ram_console_early_init(void)
+static int ram_console_early_init_done = 0;
+int __init ram_console_early_init(void)
 {
+	if (ram_console_early_init_done) return;
+	ram_console_early_init_done = 1;
+
 	return ram_console_init((struct ram_console_buffer *)
 		CONFIG_ANDROID_RAM_CONSOLE_EARLY_ADDR,
 		CONFIG_ANDROID_RAM_CONSOLE_EARLY_SIZE,

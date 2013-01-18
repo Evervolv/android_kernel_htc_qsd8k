@@ -907,6 +907,12 @@ config PHYS_OFFSET
 	default "0x48000000" if ARCH_MSM8X60
 	default "0x10000000"
 
+
+config VERY_EARLY_CONSOLE
+	bool "Support for very early consoles"
+	default n
+	
+
 config KERNEL_PMEM_EBI_REGION
 	bool "Enable in-kernel PMEM region for EBI"
 	default y if ARCH_MSM8X60
