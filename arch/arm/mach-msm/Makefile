@@ -7,7 +7,9 @@ obj-$(CONFIG_KEXEC) += msm_kexec.o
 
 obj-$(CONFIG_MSM_PROC_COMM) += proc_comm.o
 ifndef CONFIG_ARCH_MSM8X60
+ifndef CONFIG_MACH_HTCLEO
 	obj-$(CONFIG_MSM_PROC_COMM) += clock-pcom.o
+endif
 	obj-$(CONFIG_MSM_PROC_COMM) += vreg.o mpp.o
 	ifdef CONFIG_MSM_PROC_COMM
 ifndef CONFIG_ARCH_FSM9XXX
@@ -304,6 +306,8 @@ obj-$(CONFIG_ARCH_MSMCOPPER) += board-copper.o board-dt.o
 obj-$(CONFIG_ARCH_MSM8960) += devices_htc.o htc_wifi_nvs.o htc_awb_cal.o
 obj-$(CONFIG_ARCH_MSM8X60) += devices_htc.o htc_wifi_nvs.o sysinfo-8x60.o emmc_partitions.o htc_awb_cal.o
 
+
+obj-$(CONFIG_MACH_HTCLEO) += clock-wince.o
 obj-$(CONFIG_MACH_HTCLEO) += board-htcleo-wifi-nvs.o board-htcleo.o board-htcleo-panel.o board-htcleo-keypad.o
 obj-$(CONFIG_MACH_HTCLEO) += board-htcleo-ts.o board-htcleo-mmc.o ieee754-df.o
 
