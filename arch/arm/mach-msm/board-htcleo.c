@@ -936,11 +936,52 @@ static struct platform_device htcleo_timed_gpios = {
 // I2C
 ///////////////////////////////////////////////////////////////////////
 
+// Cotulla: old definition can not be used with new msm i2c driver
+#if 0
 static struct msm_i2c_device_platform_data msm_i2c_pdata = {
 	.i2c_clock = 400000,
 	.clock_strength = GPIO_8MA,
 	.data_strength = GPIO_8MA,
 };
+#else
+
+#define GPIO_I2C_CLK 95
+#define GPIO_I2C_DAT 96
+
+static void msm_i2c_gpio_config(int adap_id, int config_type)
+{
+	unsigned id;
+
+
+	if (adap_id > 0) return;
+
+	if (config_type == 0) 
+	{
+		id = GPIO_CFG(GPIO_I2C_CLK, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA);
+		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &id, 0);
+		id = GPIO_CFG(GPIO_I2C_DAT, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA);
+		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &id, 0);
+	} 
+	else 
+	{
+		id = GPIO_CFG(GPIO_I2C_CLK, 1, GPIO_INPUT, GPIO_NO_PULL, GPIO_8MA);
+		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &id, 0);
+		id = GPIO_CFG(GPIO_I2C_DAT , 1, GPIO_INPUT, GPIO_NO_PULL, GPIO_8MA);
+		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &id, 0);
+	}
+}
+
+
+static struct msm_i2c_platform_data msm_i2c_pdata = 
+{
+	.clk_freq = 400000,
+	.pri_clk = GPIO_I2C_CLK,
+	.pri_dat = GPIO_I2C_DAT,
+	.rmutex  = 0,
+	.msm_i2c_config_gpio = msm_i2c_gpio_config,
+};
+
+#endif
 
 static void __init msm_device_i2c_init(void)
 {
