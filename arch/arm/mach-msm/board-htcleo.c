@@ -1017,6 +1017,9 @@ static void __init htcleo_blink_camera_led(void){
 
 static void __init htcleo_init(void)
 {
+// Cotulla vibro test
+	*(uint32_t*)0xF800380C |= 0x20;
+
 	printk("htcleo_init()\n");
 	//msm_hw_reset_hook = htcleo_reset;
 
@@ -1111,10 +1114,18 @@ static void __init htcleo_allocate_memory_regions(void)
 			"pmem arena\n", size, addr, __pa(addr));
 	}
 }
+
+static void __init htcleo_init_early(void)
+{
+	htcleo_allocate_memory_regions();
+}
+
 static void __init htcleo_map_io(void)
 {
 	msm_map_qsd8x50_io();
-	htcleo_allocate_memory_regions();
+
+// Cotulla LEO FIX
+//	htcleo_allocate_memory_regions();
 	//msm_clock_init();
 	if (socinfo_init() < 0)
 		printk(KERN_ERR "%s: socinfo_init() failed!\n",__func__);
@@ -1128,7 +1139,6 @@ static void __init htcleo_map_io(void)
 	ram_console_early_init();
 #endif
 #endif
-
 }
 
 extern struct sys_timer msm_timer;
@@ -1144,4 +1154,6 @@ MACHINE_START(HTCLEO, "htcleo")
 	.init_irq	= msm_init_irq,
 	.init_machine	= htcleo_init,
 	.timer		= &msm_timer,
+// Cotulla LEO FIX
+	.init_early 	= htcleo_init_early,
 MACHINE_END

@@ -1121,6 +1121,9 @@ static void __init msm_timer_init(void)
 		__raw_writel(0, clock->regbase + TIMER_COUNT_VAL);
 		__raw_writel(~0, clock->regbase + TIMER_MATCH_VAL);
 
+// Cotulla LEO FIX
+		while (msm_read_timer_count(clock, LOCAL_TIMER));
+
 		if ((clock->freq << clock->shift) == gpt_hz) {
 			clock->rollover_offset = 0;
 		} else {
