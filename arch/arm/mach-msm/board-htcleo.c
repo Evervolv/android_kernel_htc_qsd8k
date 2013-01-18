@@ -1059,7 +1059,7 @@ static void __init htcleo_blink_camera_led(void){
 static void __init htcleo_init(void)
 {
 // Cotulla vibro test
-	*(uint32_t*)0xF800380C |= 0x20;
+//	*(uint32_t*)0xF800380C |= 0x20;
 
 	printk("htcleo_init()\n");
 	//msm_hw_reset_hook = htcleo_reset;
@@ -1180,6 +1180,8 @@ static void __init htcleo_map_io(void)
 	ram_console_early_init();
 #endif
 #endif
+	printk(KERN_ERR "%s: ramconsole init done!\n",__func__);
+//	*(uint32_t*)0xF800380C |= 0x20;
 }
 
 extern struct sys_timer msm_timer;
