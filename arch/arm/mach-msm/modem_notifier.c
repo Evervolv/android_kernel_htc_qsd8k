@@ -210,4 +210,16 @@ static int __init init_modem_notifier_list(void)
 
 	return 0;
 }
+
+// Cotulla: 
+// ROOTCASE:
+//   crash caused by NOT inited modem_notifier_wq. 
+//   modem_queue_end_reset_notify() called from SMD before  init_modem_notifier_list()
+// SOLUTION:
+//   change init call order
+//
+#ifdef CONFIG_MACH_HTCLEO
+subsys_initcall(init_modem_notifier_list);
+#else
 module_init(init_modem_notifier_list);
+#endif
