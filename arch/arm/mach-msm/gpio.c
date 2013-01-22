@@ -681,20 +681,6 @@ static int __devinit msm_gpio_probe(struct platform_device *dev)
 	return 0;
 }
 
-static struct platform_driver msm_gpio_driver = {
-	.probe = msm_gpio_probe,
-	.driver = {
-		.name = "msmgpio",
-		.owner = THIS_MODULE,
-	},
-};
-
-static int __init msm_gpio_init(void)
-{
-	return platform_driver_register(&msm_gpio_driver);
-}
-postcore_initcall(msm_gpio_init);
-
 void config_gpio_table(uint32_t *table, int len)
 {
 	int n;
@@ -706,3 +692,45 @@ void config_gpio_table(uint32_t *table, int len)
 	}
 }
 EXPORT_SYMBOL(config_gpio_table);
+
+static struct platform_driver msm_gpio_driver = {
+	.probe = msm_gpio_probe,
+	.driver = {
+		.name = "msmgpio",
+		.owner = THIS_MODULE,
+	},
+};
+
+static struct platform_device msm_device_gpio = {
+	.name = "msmgpio",
+	.id   = -1,
+};
+
+static int __init msm_gpio_init(void)
+{
+	int rc;
+
+	rc = platform_driver_register(&msm_gpio_driver);
+	if (!rc) {
+		rc = platform_device_register(&msm_device_gpio);
+		if (rc)
+			platform_driver_unregister(&msm_gpio_driver);
+	}
+
+	return rc;
+}
+
+static void __exit msm_gpio_exit(void)
+{
+	platform_device_unregister(&msm_device_gpio);
+	platform_driver_unregister(&msm_gpio_driver);
+}
+
+postcore_initcall(msm_gpio_init);
+module_exit(msm_gpio_exit);
+
+MODULE_AUTHOR("Gregory Bean <gbean@codeaurora.org>, Marc Alexander <admin@m-a-styles.de>");
+MODULE_DESCRIPTION("Driver for Qualcomm MSM SoC GPIOs");
+MODULE_LICENSE("GPL v2");
+MODULE_ALIAS("platform:msmgpio");
+
