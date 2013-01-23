@@ -30,6 +30,7 @@
 #include <mach/msm_iomap.h>
 #include <mach/fiq.h>
 
+#include "sirc.h"
 #include "fiq.h"
 #include "smd_private.h"
 
@@ -45,8 +46,13 @@ module_param_named(debug_mask, msm_irq_debug_mask, int,
 		   S_IRUGO | S_IWUSR | S_IWGRP);
 
 #define VIC_REG(off) (MSM_VIC_BASE + (off))
+#if defined(CONFIG_ARCH_MSM7X30)
 #define VIC_INT_TO_REG_ADDR(base, irq) (base + (irq / 32) * 4)
 #define VIC_INT_TO_REG_INDEX(irq) ((irq >> 5) & 3)
+#else
+#define VIC_INT_TO_REG_ADDR(base, irq) (base + ((irq & 32) ? 4 : 0))
+#define VIC_INT_TO_REG_INDEX(irq) ((irq >> 5) & 1)
+#endif
 
 #define VIC_INT_SELECT0     VIC_REG(0x0000)  /* 1: FIQ, 0: IRQ */
 #define VIC_INT_SELECT1     VIC_REG(0x0004)  /* 1: FIQ, 0: IRQ */
@@ -163,13 +169,10 @@ static struct {
 static uint32_t msm_irq_idle_disable[VIC_NUM_REGS];
 
 #define SMSM_FAKE_IRQ (0xff)
-#if !defined(CONFIG_ARCH_FSM9XXX)
 static uint8_t msm_irq_to_smsm[NR_IRQS] = {
-#if !defined(CONFIG_ARCH_MSM7X27A)
 	[INT_MDDI_EXT] = 1,
 	[INT_MDDI_PRI] = 2,
 	[INT_MDDI_CLIENT] = 3,
-#endif
 	[INT_USB_OTG] = 4,
 
 	[INT_PWB_I2C] = 5,
@@ -226,18 +229,6 @@ static uint8_t msm_irq_to_smsm[NR_IRQS] = {
 	[INT_SIRC_1] = SMSM_FAKE_IRQ,
 #endif
 };
-# else /* CONFIG_ARCH_FSM9XXX */
-static uint8_t msm_irq_to_smsm[NR_IRQS] = {
-	[INT_UART1] = 11,
-	[INT_A9_M2A_0] = SMSM_FAKE_IRQ,
-	[INT_A9_M2A_1] = SMSM_FAKE_IRQ,
-	[INT_A9_M2A_5] = SMSM_FAKE_IRQ,
-	[INT_GP_TIMER_EXP] = SMSM_FAKE_IRQ,
-	[INT_DEBUG_TIMER_EXP] = SMSM_FAKE_IRQ,
-	[INT_SIRC_0] = 10,
-	[INT_ADSP_A11] = SMSM_FAKE_IRQ,
-};
-#endif /* CONFIG_ARCH_FSM9XXX */
 
 static inline void msm_irq_write_all_regs(void __iomem *base, unsigned int val)
 {
@@ -602,14 +593,15 @@ void __init msm_init_irq(void)
 	/* don't use vic */
 	writel(0, VIC_CONFIG);
 
+	/* enable interrupt controller */
+	writel(3, VIC_INT_MASTEREN);
 
 	for (n = 0; n < NR_MSM_IRQS; n++) {
 		irq_set_chip_and_handler(n, &msm_irq_chip, handle_level_irq);
 		set_irq_flags(n, IRQF_VALID);
 	}
 
-	/* enable interrupt controller */
-	writel(3, VIC_INT_MASTEREN);
+	msm_init_sirc();
 	mb();
 }
 
