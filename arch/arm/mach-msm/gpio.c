@@ -20,10 +20,10 @@
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/module.h>
-#include <linux/platform_device.h>
-#include <asm/mach/irq.h>
-#include <mach/gpiomux.h>
+#include <mach/irqs.h>
 #include "gpio_hw.h"
+#include "gpiomux.h"
+
 #include "proc_comm.h"
 #include "smd_private.h"
 
@@ -248,7 +248,7 @@ struct msm_gpio_chip msm_gpio_chips[] = {
 static void msm_gpio_irq_ack(struct irq_data *d)
 {
 	unsigned long irq_flags;
-	struct msm_gpio_chip *msm_chip = irq_get_chip_data(d->irq);
+	struct msm_gpio_chip *msm_chip = irq_data_get_irq_chip_data(d);
 	spin_lock_irqsave(&msm_chip->lock, irq_flags);
 	msm_gpio_clear_detect_status(msm_chip,
 			     d->irq - gpio_to_irq(msm_chip->chip.base));
@@ -258,7 +258,7 @@ static void msm_gpio_irq_ack(struct irq_data *d)
 static void msm_gpio_irq_mask(struct irq_data *d)
 {
 	unsigned long irq_flags;
-	struct msm_gpio_chip *msm_chip = irq_get_chip_data(d->irq);
+	struct msm_gpio_chip *msm_chip = irq_data_get_irq_chip_data(d);
 	unsigned offset = d->irq - gpio_to_irq(msm_chip->chip.base);
 
 	spin_lock_irqsave(&msm_chip->lock, irq_flags);
@@ -274,7 +274,7 @@ static void msm_gpio_irq_mask(struct irq_data *d)
 static void msm_gpio_irq_unmask(struct irq_data *d)
 {
 	unsigned long irq_flags;
-	struct msm_gpio_chip *msm_chip = irq_get_chip_data(d->irq);
+	struct msm_gpio_chip *msm_chip = irq_data_get_irq_chip_data(d);
 	unsigned offset = d->irq - gpio_to_irq(msm_chip->chip.base);
 
 	spin_lock_irqsave(&msm_chip->lock, irq_flags);
@@ -290,7 +290,7 @@ static void msm_gpio_irq_unmask(struct irq_data *d)
 static int msm_gpio_irq_set_wake(struct irq_data *d, unsigned int on)
 {
 	unsigned long irq_flags;
-	struct msm_gpio_chip *msm_chip = irq_get_chip_data(d->irq);
+	struct msm_gpio_chip *msm_chip = irq_data_get_irq_chip_data(d);
 	unsigned offset = d->irq - gpio_to_irq(msm_chip->chip.base);
 
 	spin_lock_irqsave(&msm_chip->lock, irq_flags);
@@ -307,7 +307,7 @@ static int msm_gpio_irq_set_wake(struct irq_data *d, unsigned int on)
 static int msm_gpio_irq_set_type(struct irq_data *d, unsigned int flow_type)
 {
 	unsigned long irq_flags;
-	struct msm_gpio_chip *msm_chip = irq_get_chip_data(d->irq);
+	struct msm_gpio_chip *msm_chip = irq_data_get_irq_chip_data(d);
 	unsigned offset = d->irq - gpio_to_irq(msm_chip->chip.base);
 	unsigned val, mask = BIT(offset);
 
@@ -315,10 +315,10 @@ static int msm_gpio_irq_set_type(struct irq_data *d, unsigned int flow_type)
 	val = __raw_readl(msm_chip->regs.int_edge);
 	if (flow_type & IRQ_TYPE_EDGE_BOTH) {
 		__raw_writel(val | mask, msm_chip->regs.int_edge);
-		__irq_set_handler_locked(d->irq, handle_edge_irq);
+		irq_desc[d->irq].handle_irq = handle_edge_irq;
 	} else {
 		__raw_writel(val & ~mask, msm_chip->regs.int_edge);
-		__irq_set_handler_locked(d->irq, handle_level_irq);
+		irq_desc[d->irq].handle_irq = handle_level_irq;
 	}
 	if ((flow_type & IRQ_TYPE_EDGE_BOTH) == IRQ_TYPE_EDGE_BOTH) {
 		msm_chip->both_edge_detect |= mask;
@@ -360,12 +360,12 @@ static void msm_gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
 }
 
 static struct irq_chip msm_gpio_irq_chip = {
-	.name      = "msmgpio",
-	.irq_ack	= msm_gpio_irq_ack,
-	.irq_mask	= msm_gpio_irq_mask,
-	.irq_unmask	= msm_gpio_irq_unmask,
-	.irq_set_wake	= msm_gpio_irq_set_wake,
-	.irq_set_type	= msm_gpio_irq_set_type,
+	.name          = "msmgpio",
+	.irq_ack       = msm_gpio_irq_ack,
+	.irq_mask      = msm_gpio_irq_mask,
+	.irq_unmask    = msm_gpio_irq_unmask,
+	.irq_set_wake  = msm_gpio_irq_set_wake,
+	.irq_set_type  = msm_gpio_irq_set_type,
 };
 
 #define NUM_GPIO_SMEM_BANKS 6
@@ -646,29 +646,30 @@ void msm_gpio_find_out(const unsigned gpio, void __iomem **out,
 	*offset = gpio - msm_chip->chip.base;
 }
 
-static int __devinit msm_gpio_probe(struct platform_device *dev)
+void config_gpio_table(uint32_t *table, int len)
+{
+	int n;
+	unsigned id;
+	for (n = 0; n < len; n++) {
+		id = table[n];
+		msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &id, 0);
+	}
+}
+EXPORT_SYMBOL(config_gpio_table);
+
+static int __init msm_init_gpio(void)
 {
 	int i, j = 0;
-	int grp_irq;
 
 	for (i = FIRST_GPIO_IRQ; i < FIRST_GPIO_IRQ + NR_GPIO_IRQS; i++) {
 		if (i - FIRST_GPIO_IRQ >=
-			msm_gpio_chips[j].chip.base +
-			msm_gpio_chips[j].chip.ngpio)
+			(msm_gpio_chips[j].chip.base +
+			msm_gpio_chips[j].chip.ngpio))
 			j++;
 		irq_set_chip_data(i, &msm_gpio_chips[j]);
 		irq_set_chip_and_handler(i, &msm_gpio_irq_chip,
 					 handle_edge_irq);
 		set_irq_flags(i, IRQF_VALID);
-	}
-
-	for (i = 0; i < dev->num_resources; i++) {
-		grp_irq = platform_get_irq(dev, i);
-		if (grp_irq < 0)
-			return -ENXIO;
-
-		irq_set_chained_handler(grp_irq, msm_gpio_irq_handler);
-		irq_set_irq_wake(grp_irq, (i + 1));
 	}
 
 	for (i = 0; i < ARRAY_SIZE(msm_gpio_chips); i++) {
@@ -677,60 +678,12 @@ static int __devinit msm_gpio_probe(struct platform_device *dev)
 		gpiochip_add(&msm_gpio_chips[i].chip);
 	}
 
+	irq_set_chained_handler(INT_GPIO_GROUP1, msm_gpio_irq_handler);
+	irq_set_chained_handler(INT_GPIO_GROUP2, msm_gpio_irq_handler);
+	irq_set_irq_wake(INT_GPIO_GROUP1, 1);
+	irq_set_irq_wake(INT_GPIO_GROUP2, 2);
 	mb();
 	return 0;
 }
 
-void config_gpio_table(uint32_t *table, int len)
-{
-	int n;
-	unsigned id;
-	for (n = 0; n < len; n++) {
-		id = table[n];
-		if (msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &id, 0))
-			printk(KERN_ERR "%s: config gpio fail\n", __func__);
-	}
-}
-EXPORT_SYMBOL(config_gpio_table);
-
-static struct platform_driver msm_gpio_driver = {
-	.probe = msm_gpio_probe,
-	.driver = {
-		.name = "msmgpio",
-		.owner = THIS_MODULE,
-	},
-};
-
-static struct platform_device msm_device_gpio = {
-	.name = "msmgpio",
-	.id   = -1,
-};
-
-static int __init msm_gpio_init(void)
-{
-	int rc;
-
-	rc = platform_driver_register(&msm_gpio_driver);
-	if (!rc) {
-		rc = platform_device_register(&msm_device_gpio);
-		if (rc)
-			platform_driver_unregister(&msm_gpio_driver);
-	}
-
-	return rc;
-}
-
-static void __exit msm_gpio_exit(void)
-{
-	platform_device_unregister(&msm_device_gpio);
-	platform_driver_unregister(&msm_gpio_driver);
-}
-
-postcore_initcall(msm_gpio_init);
-module_exit(msm_gpio_exit);
-
-MODULE_AUTHOR("Gregory Bean <gbean@codeaurora.org>, Marc Alexander <admin@m-a-styles.de>");
-MODULE_DESCRIPTION("Driver for Qualcomm MSM SoC GPIOs");
-MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:msmgpio");
-
+postcore_initcall(msm_init_gpio);
