@@ -69,6 +69,8 @@
 #include "proc_comm.h"
 #include "dex_comm.h"
 #include "footswitch.h"
+#include "pm.h"
+#include "pm-boot.h"
 
 #define ATAG_MAGLDR_BOOT    0x4C47414D
 struct tag_magldr_entry
@@ -595,6 +597,70 @@ static struct platform_device htcleo_rfkill =
 };
 
 ///////////////////////////////////////////////////////////////////////
+// PM Platform data
+///////////////////////////////////////////////////////////////////////
+
+static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR] = {
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE] = {
+		.idle_supported = 1,
+		.suspend_supported = 1,
+		.idle_enabled = 1,
+		.suspend_enabled = 1,
+		.latency = 8594,
+		.residency = 23740,
+	},
+	[MSM_PM_SLEEP_MODE_APPS_SLEEP] = {
+		.idle_supported = 1,
+		.suspend_supported = 1,
+		.idle_enabled = 1,
+		.suspend_enabled = 1,
+		.latency = 8594,
+		.residency = 23740,
+	},
+/*
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN] = {
+		.idle_supported = 1,
+		.suspend_supported = 1,
+		.idle_enabled = 1,
+		.suspend_enabled = 1,
+		.latency = 4594,
+		.residency = 23740,
+	},
+*/
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE] = {
+#ifdef CONFIG_MSM_STANDALONE_POWER_COLLAPSE
+		.idle_supported = 1,
+		.suspend_supported = 1,
+		.idle_enabled = 1,
+		.suspend_enabled = 0,
+#else /*CONFIG_MSM_STANDALONE_POWER_COLLAPSE*/
+		.idle_supported = 0,
+		.suspend_supported = 0,
+		.idle_enabled = 0,
+		.suspend_enabled = 0,
+#endif /*CONFIG_MSM_STANDALONE_POWER_COLLAPSE*/
+		.latency = 500,
+		.residency = 6000,
+	},
+	[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT] = {
+		.idle_supported = 1,
+		.suspend_supported = 1,
+		.idle_enabled = 0,
+		.suspend_enabled = 1,
+		.latency = 443,
+		.residency = 1098,
+	},
+	[MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT] = {
+		.idle_supported = 1,
+		.suspend_supported = 1,
+		.idle_enabled = 1,
+		.suspend_enabled = 1,
+		.latency = 2,
+		.residency = 0,
+	},
+};
+
+///////////////////////////////////////////////////////////////////////
 // SPI
 ///////////////////////////////////////////////////////////////////////
 
@@ -1093,6 +1159,7 @@ static void __init htcleo_init(void)
 #ifdef CONFIG_USB_ANDROID
 	htcleo_add_usb_devices();
 #endif
+	msm_pm_set_platform_data(msm_pm_data, ARRAY_SIZE(msm_pm_data));
 
 	i2c_register_board_info(0, base_i2c_devices, ARRAY_SIZE(base_i2c_devices));
 	
