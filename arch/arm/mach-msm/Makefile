@@ -108,9 +108,7 @@ ifndef CONFIG_ARCH_MSM7X30
 ifndef CONFIG_ARCH_APQ8064
 ifndef CONFIG_ARCH_MSMCOPPER
 ifndef CONFIG_ARCH_MSM7X27A
-ifndef CONFIG_MACH_HTCLEO
 	obj-y += nand_partitions.o
-endif
 endif
 endif
 endif

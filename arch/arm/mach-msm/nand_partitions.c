@@ -48,7 +48,7 @@ struct msm_ptbl_entry {
 	__u32 flags;
 };
 
-#define MSM_MAX_PARTITIONS 18
+#define MSM_MAX_PARTITIONS 8
 
 static struct mtd_partition msm_nand_partitions[MSM_MAX_PARTITIONS];
 static char msm_nand_names[MSM_MAX_PARTITIONS * 16];
@@ -116,87 +116,19 @@ struct flash_partition_table {
 	struct flash_partition_entry part_entry[16];
 };
 
-#ifdef CONFIG_MSM_SMD
 static int get_nand_partitions(void)
 {
-	struct flash_partition_table *partition_table;
-	struct flash_partition_entry *part_entry;
-	struct mtd_partition *ptn = msm_nand_partitions;
-	char *name = msm_nand_names;
-	int part;
 
 	if (msm_nand_data.nr_parts)
 		return 0;
 
-	partition_table = (struct flash_partition_table *)
-	    smem_alloc(SMEM_AARM_PARTITION_TABLE,
-		       sizeof(struct flash_partition_table));
-
-	if (!partition_table) {
-		printk(KERN_WARNING "%s: no flash partition table in shared "
-		       "memory\n", __func__);
-		return -ENOENT;
-	}
-
-	if ((partition_table->magic1 != (u32) FLASH_PART_MAGIC1) ||
-	    (partition_table->magic2 != (u32) FLASH_PART_MAGIC2) ||
-	    (partition_table->version != (u32) FLASH_PARTITION_VERSION)) {
-		printk(KERN_WARNING "%s: version mismatch -- magic1=%#x, "
-		       "magic2=%#x, version=%#x\n", __func__,
-		       partition_table->magic1,
-		       partition_table->magic2,
-		       partition_table->version);
-		return -EFAULT;
-	}
-
-	msm_nand_data.nr_parts = 0;
-
-	/* Get the LINUX FS partition info */
-	for (part = 0; part < partition_table->numparts; part++) {
-		part_entry = &partition_table->part_entry[part];
-
-		/* Find a match for the Linux file system partition */
-		if (strcmp(part_entry->name, LINUX_FS_PARTITION_NAME) == 0) {
-			strcpy(name, part_entry->name);
-			ptn->name = name;
-
-			/*TODO: Get block count and size info */
-			ptn->offset = part_entry->offset;
-
-			/* For SMEM, -1 indicates remaining space in flash,
-			 * but for MTD it is 0
-			 */
-			if (part_entry->length == (u32)-1)
-				ptn->size = 0;
-			else
-				ptn->size = part_entry->length;
-
-			msm_nand_data.nr_parts = 1;
-			msm_nand_data.parts = msm_nand_partitions;
-
-			printk(KERN_INFO "Partition(from smem) %s "
-					"-- Offset:%llx Size:%llx\n",
-					ptn->name, ptn->offset, ptn->size);
-
-			return 0;
-		}
-	}
-
 	printk(KERN_WARNING "%s: no partition table found!", __func__);
 
-	return -ENODEV;
-}
+#ifdef CONFIG_MACH_HTCLEO
+	return 0;
 #else
-static int get_nand_partitions(void)
-{
-
-	if (msm_nand_data.nr_parts)
-		return 0;
-
-	printk(KERN_WARNING "%s: no partition table found!", __func__);
-
 	return -ENODEV;
-}
 #endif
+}
 
 device_initcall(get_nand_partitions);
