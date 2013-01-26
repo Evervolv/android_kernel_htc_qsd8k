@@ -122,6 +122,8 @@ obj-$(CONFIG_STAGING)		+= staging/
 obj-y				+= platform/
 obj-y				+= ieee802154/
 #common clk code
+ifndef CONFIG_MACH_HTCLEO
 obj-y				+= clk/
+endif
 
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/

@@ -1,5 +1,9 @@
 obj-y += io.o dma.o memory.o timer.o
+ifndef CONFIG_MACH_HTCLEO
 obj-y += clock.o clock-voter.o clock-dummy.o
+else
+obj-y += clock-voter.o clock-dummy.o
+endif
 obj-y += subsystem_map.o
 obj-$(CONFIG_CPU_FREQ_MSM) += cpufreq.o
 obj-$(CONFIG_DEBUG_FS) += nohlt.o clock-debug.o
