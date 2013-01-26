@@ -194,7 +194,7 @@ static struct footswitch footswitches[] = {
 
 static int get_clocks(struct device *dev, struct footswitch *fs)
 {
-	int rc;
+	int rc = 0;
 
 	/*
 	 * Some SoCs may not have a separate rate-settable clock.
@@ -203,7 +203,7 @@ static int get_clocks(struct device *dev, struct footswitch *fs)
 	 */
 	if (fs->has_src_clk) {
 #ifdef CONFIG_MACH_HTCLEO
-		fs->src_clk = clk_get(dev, "grp_clk");
+		fs->src_clk = clk_get(dev, "core_clk");
 #else
 		fs->src_clk = clk_get(dev, "src_clk");
 		if (IS_ERR(fs->src_clk))
@@ -217,18 +217,13 @@ static int get_clocks(struct device *dev, struct footswitch *fs)
 		rc = PTR_ERR(fs->src_clk);
 		goto err_src_clk;
 	}
-#ifdef CONFIG_MACH_HTCLEO
-	fs->core_clk = clk_get(dev, "grp_clk");
-#else
 	fs->core_clk = clk_get(dev, "core_clk");
-#endif
 	if (IS_ERR(fs->core_clk)) {
 		pr_err("clk_get(core_clk) failed\n");
 		rc = PTR_ERR(fs->core_clk);
 		goto err_core_clk;
 	}
 
-#ifndef CONFIG_MACH_HTCLEO
 	if (fs->has_ahb_clk) {
 		fs->ahb_clk = clk_get(dev, "iface_clk");
 		if (IS_ERR(fs->ahb_clk)) {
@@ -237,12 +232,9 @@ static int get_clocks(struct device *dev, struct footswitch *fs)
 			goto err_ahb_clk;
 		}
 	}
-#endif
 	return 0;
-#ifndef CONFIG_MACH_HTCLEO
 err_ahb_clk:
 	clk_put(fs->core_clk);
-#endif
 err_core_clk:
 	clk_put(fs->src_clk);
 err_src_clk:
