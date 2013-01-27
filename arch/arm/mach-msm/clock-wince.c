@@ -372,6 +372,8 @@ static int set_mdns_host_clock(uint32_t id, unsigned long freq)
 	if (!params.offset)
 	{
 		printk(KERN_WARNING "%s: FIXME! Don't know how to set clock %u - no known Md/Ns reg\n", __func__, id);
+		if (id > P_NR_CLKS)
+			WARN_ON(sprintf("invalid clock ID: %u\n", id));
 		return -ENOTSUPP;
 	}
 
@@ -1067,8 +1069,9 @@ static unsigned long pc_clk_get_rate(struct clk *clk)
 
 		default:
 			//TODO: support all clocks
-			if(debug_mask&DEBUG_UNKNOWN_ID)
+			if(debug_mask&DEBUG_UNKNOWN_ID) {
 				printk("%s: unknown clock: id=%u\n", __func__, id);
+			}
 			rate = 0;
 		}
 	}
