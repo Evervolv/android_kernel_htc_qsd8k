@@ -32,6 +32,8 @@
 #include "clock-pcom.h"
 #include "clock-voter.h"
 
+// Only enable this if you want to debug the clk_find method
+#define DEBUG_CLK_FIND	0
 
 // Cotulla: this define is here, because a new code doesn't support generic GRP_CLK definition
 // it looks like GRP_3D_CLK is the nearest one with same meaning.
@@ -372,8 +374,7 @@ static int set_mdns_host_clock(uint32_t id, unsigned long freq)
 	if (!params.offset)
 	{
 		printk(KERN_WARNING "%s: FIXME! Don't know how to set clock %u - no known Md/Ns reg\n", __func__, id);
-		if (id > P_NR_CLKS)
-			WARN_ON(sprintf("invalid clock ID: %u\n", id));
+		WARN_ON(id > P_NR_CLKS);
 		return -ENOTSUPP;
 	}
 
@@ -1144,11 +1145,15 @@ static struct clk_lookup *clk_find(const char *dev_id, const char *con_id)
 {
 	struct clk_lookup *p, *cl = NULL;
 	int match, best = 0;
+#if DEBUG_CLK_FIND
 	printk("%s: find dev: %s clk_id: %s\n", __func__, dev_id, con_id);
+#endif
 	list_for_each_entry(p, &clocks, node) {
 		match = 0;
+#if DEBUG_CLK_FIND
 		printk("%s: curr clk: %s ... %s\n", __func__, p->dev_id,
 		       p->con_id);
+#endif
 		if (p->dev_id) {
 			if (!dev_id || strcmp(p->dev_id, dev_id))
 				continue;
@@ -1168,12 +1173,14 @@ static struct clk_lookup *clk_find(const char *dev_id, const char *con_id)
 				break;
 		}
 	}
+#if DEBUG_CLK_FIND
 	if (cl != NULL)
 	{
 		printk("%s: found clk with dev: %s clk_id: %s\n", __func__,
 		       cl->dev_id, cl->con_id);
 	}
 	printk("%s: end\n", __func__);
+#endif
 	return cl;
 }
 
