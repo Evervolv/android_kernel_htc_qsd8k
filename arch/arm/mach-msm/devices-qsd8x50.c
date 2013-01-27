@@ -904,6 +904,32 @@ void msm_i2c_gpio_init(void)
 	gpio_request(GPIO_I2C_DAT, "i2c_data");
 }
 
+static struct resource gpio_resources[] = {
+	{
+		.start	= INT_GPIO_GROUP1,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= INT_GPIO_GROUP2,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device msm_device_gpio = {
+	.name		= "msmgpio",
+	.id		= -1,
+	.resource	= gpio_resources,
+	.num_resources	= ARRAY_SIZE(gpio_resources),
+};
+
+static int __init qsd8x50_init_gpio(void)
+{
+	platform_device_register(&msm_device_gpio);
+	return 0;
+}
+
+postcore_initcall(qsd8x50_init_gpio);
+
 /*
 static struct resource kgsl_3d0_resources[] = {
 	{
