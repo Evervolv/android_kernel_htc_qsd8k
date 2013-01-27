@@ -16,6 +16,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/msm_kgsl.h>
+#include <linux/mtd/nand.h>
 
 #include <linux/dma-mapping.h>
 #include <asm/clkdev.h>
@@ -379,16 +380,9 @@ struct platform_device usb_gadget_fserial_device = {
 #define MSM_NAND_PHYS		0xA0A00000
 static struct resource resources_nand[] = {
 	[0] = {
-		.name   = "msm_nand_dmac",
-		.start	= DMOV_NAND_CHAN,
-		.end	= DMOV_NAND_CHAN,
+		.start	= 7,
+		.end	= 7,
 		.flags	= IORESOURCE_DMA,
-	},
-	[1] = {
-		.name   = "msm_nand_phys",
-		.start  = MSM_NAND_PHYS,
-		.end    = MSM_NAND_PHYS + 0x7FF,
-		.flags  = IORESOURCE_MEM,
 	},
 };
 
