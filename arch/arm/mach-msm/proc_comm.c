@@ -129,14 +129,13 @@ again:
 	if (proc_comm_wait_for(base + APP_COMMAND, PCOM_CMD_DONE))
 		goto again;
 
-	if ((ret = readl_relaxed(base + APP_STATUS)) == PCOM_CMD_SUCCESS) {
+	if (readl_relaxed(base + APP_STATUS) == PCOM_CMD_SUCCESS) {
 		if (data1)
 			*data1 = readl_relaxed(base + APP_DATA1);
 		if (data2)
 			*data2 = readl_relaxed(base + APP_DATA2);
 		ret = 0;
 	} else {
-		printk(KERN_ERR "%s: failed. status = %d", __func__, ret);
 		ret = -EIO;
 	}
 
