@@ -956,6 +956,7 @@ static struct platform_device *devices[] __initdata =
 	&msm_device_uart_dm1,
 	&htcleo_rfkill,
 	&qsd_device_spi,
+	&msm_device_dmov,
 	&msm_device_nand,
 	&msm_device_smd,
 	&msm_device_rtc,
