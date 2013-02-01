@@ -50,7 +50,7 @@
 #include "msm_nand.h"
 #include "../mtdcore.h"
 
-unsigned long msm_nand_phys;
+unsigned long msm_nand_phys = MSM_NAND_BASE;
 
 #define MSM_NAND_DMA_BUFFER_SIZE SZ_4K
 #define MSM_NAND_DMA_BUFFER_SLOTS \
