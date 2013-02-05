@@ -695,7 +695,7 @@ static struct resource msm_tvenc_resources[] = {
 
 
 struct platform_device msm_mdp_device = {
-	.name   = "mdp",
+	.name   = "msm_mdp",
 	.id     = 0,
 	.num_resources  = ARRAY_SIZE(msm_mdp_resources),
 	.resource       = msm_mdp_resources,

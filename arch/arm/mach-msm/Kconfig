@@ -235,6 +235,21 @@ config MSM_REMOTE_SPINLOCK_SFPB
 config MSM_ADM3
 	bool
 
+config MSM_MDP22
+	bool
+	depends on ARCH_MSM7X00A
+	default y
+
+config MSM_MDP31
+	bool
+	depends on ARCH_QSD8X50
+	default y
+
+config MSM_MDP40
+	bool
+	depends on ARCH_MSM7X30
+	default y
+
 config PERFLOCK
         depends on CPU_FREQ
         depends on ARCH_MSM8960 || ARCH_MSM8X60 || ARCH_QSD8X50 || ARCH_MSM7X30 || ARCH_MSM7X00A || ARCH_MSM7X27A || ARCH_MSM7X25
