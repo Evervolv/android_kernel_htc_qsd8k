@@ -659,14 +659,14 @@ static int mdp_lcdc_probe(struct platform_device *pdev)
 	if (IS_ERR(lcdc->mdp_pclk))
 		lcdc->mdp_pclk = NULL;
 
-	lcdc->pclk = clk_get(mdp_dev->dev.parent, "lcdc_pclk_clk");
+	lcdc->pclk = clk_get(mdp_dev->dev.parent, "mdp_lcdc_pclk_clk");
 	if (IS_ERR(lcdc->pclk)) {
 		pr_err("%s: failed to get lcdc_pclk\n", __func__);
 		ret = PTR_ERR(lcdc->pclk);
 		goto err_get_pclk;
 	}
 
-	lcdc->pad_pclk = clk_get(mdp_dev->dev.parent, "lcdc_pad_pclk_clk");
+	lcdc->pad_pclk = clk_get(mdp_dev->dev.parent, "mdp_lcdc_pad_pclk_clk");
 	if (IS_ERR(lcdc->pad_pclk)) {
 		pr_err("%s: failed to get lcdc_pad_pclk\n", __func__);
 		ret = PTR_ERR(lcdc->pad_pclk);
