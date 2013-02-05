@@ -6,9 +6,32 @@ config FB_MSM
 	select FB_CFB_IMAGEBLIT
 	default y
 
+config FB_MSM_MDP_PPP
+	bool "MSM MDP PPP"
+	depends on FB_MSM_LEGACY_MDP
+	default y
+
+config FB_MSM_LCDC
+	bool "Support for integrated LCD controller in MDP3/4"
+	depends on FB_MSM && (MSM_MDP31 || MSM_MDP302 || MSM_MDP40)
+	default y
+
+config FB_MSM_MDDI
+	bool "Support for MSM MDDI controllers"
+	depends on FB_MSM
+	default y
+
+config FB_MSM
+	tristate
+	depends on FB && ARCH_MSM
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
+	default y
+
 config FB_MSM_LEGACY_MDP
 	bool "MSM Legacy MDP (qsd8k)"
-	depends on FB_MSM && (MSM_MDP31 || MSM_MDP22)
+	depends on FB_MSM && (MSM_MDP30 || MSM_MDP31 || MSM_MDP302)
 	default y
 
 config FB_MSM_MDP_PPP
@@ -17,8 +40,8 @@ config FB_MSM_MDP_PPP
 	default y
 
 config FB_MSM_LCDC
-	bool "Support for integrated LCD controller in MDP3/4"
-	depends on FB_MSM && (MSM_MDP31 || MSM_MDP40)
+	bool "Support for integrated LCD controller in qsd8x50 ,MSM7x27 and MSM7x30"
+	depends on FB_MSM && (MSM_MDP31 || MSM_MDP302 || MSM_MDP40)
 	default y
 
 config FB_MSM_MDDI
@@ -40,4 +63,11 @@ config MSM_HDMI
 	bool "Support for HDMI in QCT platform"
 	depends on MSM_MDP31
 	default n
+
+config FB_MSM_LOGO
+       bool "Use boot splashscreen"
+       depends on FB_MSM
+       default y
+       help
+        Use logo.rle splash screen at startup
 

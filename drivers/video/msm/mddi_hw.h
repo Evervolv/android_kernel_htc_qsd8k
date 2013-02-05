@@ -53,9 +53,9 @@
 #define MDDI_MF_CNT             0x0084
 #define MDDI_CURR_REV_PTR       0x0088
 #define MDDI_CORE_VER           0x008c
-#define MDDI_SF_LEN_CTL_REG	0x0094
-#define MDDI_PAD_IO_CTL		0x00a0
-#define MDDI_PAD_CAL		0x00a4
+#define MDDI_SF_LEN_CTL_REG		0x0094
+#define MDDI_PAD_IO_CTL			0x00a0
+#define MDDI_PAD_CAL			0x00a4
 
 #define MDDI_INT_PRI_PTR_READ       0x0001
 #define MDDI_INT_SEC_PTR_READ       0x0002

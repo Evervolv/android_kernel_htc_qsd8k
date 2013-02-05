@@ -31,7 +31,6 @@
 #include <linux/delay.h>
 #include <linux/earlysuspend.h>
 #include <linux/wakelock.h>
-#include <linux/debugfs.h>
 #include <asm/uaccess.h>
 #include <mach/msm_fb.h>
 #include "mddi_hw.h"
@@ -104,7 +103,6 @@ struct mddi_info {
 
 	struct platform_device client_pdev;
 	unsigned type;
-	char debugfs_buf[32];
 };
 
 static void mddi_init_rev_encap(struct mddi_info *mddi);
@@ -861,84 +859,7 @@ static void mddi_skew_calibration(struct mddi_info *mddi)
 }
 */
 
-static ssize_t mddi_reg_open(struct inode *inode, struct file *file)
-{
-        file->private_data = inode->i_private;
-        return 0;
-}
-
-static ssize_t mddi_reg_read(struct file *file, char __user *user_buf,
-                size_t count, loff_t *ppos)
-{
-        struct mddi_info *mddi = (struct mddi_info*)file->private_data;
-
-        return simple_read_from_buffer(user_buf, count, ppos, mddi->debugfs_buf, strlen(mddi->debugfs_buf));
-}
-
-static ssize_t mddi_reg_write(struct file *file, const char __user *user_buf,
-		size_t count, loff_t *ppos)
-{
-        unsigned int reg, data;
-	char debug_buf[32], type;
-        int cnt, len;
-	struct mddi_info *mddi = file->private_data;
-
-	memset(debug_buf, 0x00, sizeof(debug_buf));
-
-        if (count > sizeof(debug_buf))
-                return -EFAULT;
-
-        if (copy_from_user(debug_buf, user_buf, count))
-                return -EFAULT;
-
-        debug_buf[count] = 0;   /* end of string */
-
-	if (debug_buf[0] == 'w') {
-		cnt = sscanf(debug_buf, "%s %x %x", &type ,&reg, &data);
-		mddi_set_auto_hibernate(&mddi->client_data, 0);
-		mddi_remote_write(&mddi->client_data, data, reg);
-		mddi_set_auto_hibernate(&mddi->client_data, 1);
-
-		len = snprintf(mddi->debugfs_buf, sizeof(mddi->debugfs_buf),
-			 "[W] reg=0x%x val=0x%x\n", reg, data);
-		printk(KERN_INFO "%s: reg=%x val=%x\n", __func__, reg, data);
-	} else {
-		cnt = sscanf(debug_buf, "%s %x", &type ,&reg);
-
-		len = snprintf(mddi->debugfs_buf, sizeof(mddi->debugfs_buf),
-			 "[R] reg=0x%x val=0x%x\n", reg,
-			mddi_remote_read(&mddi->client_data, reg));
-
-		printk(KERN_INFO "%s: reg=%x val=%x buf=%s\n", __func__, reg,
-		mddi_remote_read(&mddi->client_data, reg), debug_buf);
-	}
-
-        return count;
-}
-
-static struct file_operations mddi_reg_debugfs_fops[] = {
-        {
-		.open  = mddi_reg_open,
-		.read = mddi_reg_read,
-		.write = mddi_reg_write,
-        }
-};
-
-int mddi_reg_debugfs_init(struct mddi_info *mddi)
-{
-	struct dentry *mddi_reg_dent;
-
-        mddi_reg_dent = debugfs_create_dir("mddi", 0);
-        if (IS_ERR(mddi_reg_dent))
-                return PTR_ERR(mddi_reg_dent);
-
-        debugfs_create_file("reg", 0666, mddi_reg_dent, mddi,
-                &mddi_reg_debugfs_fops[0]);
-
-        return 0;
-}
-
-static int __init mddi_probe(struct platform_device *pdev)
+static int mddi_probe(struct platform_device *pdev)
 {
 	struct msm_mddi_platform_data *pdata = pdev->dev.platform_data;
 	struct mddi_info *mddi = &mddi_info[pdev->id];
@@ -966,7 +887,7 @@ static int __init mddi_probe(struct platform_device *pdev)
 	printk(KERN_INFO "mddi: init() base=0x%p irq=%d\n", mddi->base,
 	       mddi->irq);
 	mddi->power_client = pdata->power_client;
-	if (pdata->type != MSM_MDP_MDDI_TYPE_I)
+	if ((pdata->type != NULL) && (pdata->type != MSM_MDP_MDDI_TYPE_I))
 		mddi->type = pdata->type;
 
 	mutex_init(&mddi->reg_write_lock);
@@ -1090,8 +1011,6 @@ dummy_client:
 	mddi->client_pdev.dev.platform_data = &mddi->client_data;
 	printk(KERN_INFO "mddi: publish: %s\n", mddi->client_name);
 	platform_device_register(&mddi->client_pdev);
-	mddi_reg_debugfs_init(mddi);
-
 	return 0;
 
 error_mddi_interface:

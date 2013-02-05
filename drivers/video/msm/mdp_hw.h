@@ -97,6 +97,7 @@ struct panel_icm_info {
 	bool	icm_doable;
 	bool	clock_enabled;
 	int	panel_update;
+	bool	icm_suspend;
 	struct mutex icm_lock;
 	struct mdp_lcdc_info *lcdc;
 	spinlock_t lock;
@@ -122,6 +123,7 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 #define mdp_writel(mdp, value, offset) writel(value, mdp->base + offset)
 #define mdp_readl(mdp, offset) readl(mdp->base + offset)
 #define panel_to_lcdc(p) container_of((p), struct mdp_lcdc_info, fb_panel_data)
+#define panel_to_dtv(p) container_of((p), struct mdp_dtv_info, fb_panel_data)
 
 /* define mdp state for multi purpose */
 #define MDP_STATE_STANDBY		(1 << 0)
@@ -379,6 +381,21 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 #define MDP_LCDC_HSYNC_SKEW              (0xc0030)
 #define MDP_LCDC_TEST_CTL                (0xc0034)
 #define MDP_LCDC_CTL_POLARITY            (0xc0038)
+
+#define MDP_DTV_EN                       (0xd0000)
+#define MDP_DTV_HSYNC_CTL                (0xd0004)
+#define MDP_DTV_VSYNC_PERIOD             (0xd0008)
+#define MDP_DTV_VSYNC_PULSE_WIDTH        (0xd000c)
+#define MDP_DTV_DISPLAY_HCTL             (0xd0018)
+#define MDP_DTV_DISPLAY_V_START          (0xd001c)
+#define MDP_DTV_DISPLAY_V_END            (0xd0020)
+#define MDP_DTV_ACTIVE_HCTL              (0xd002c)
+#define MDP_DTV_ACTIVE_V_START           (0xd0030)
+#define MDP_DTV_ACTIVE_V_END             (0xd0038)
+#define MDP_DTV_BORDER_CLR               (0xd0040)
+#define MDP_DTV_UNDERFLOW_CTL            (0xd0044)
+#define MDP_DTV_HSYNC_SKEW               (0xd0048)
+#define MDP_DTV_CTL_POLARITY             (0xd0050)
 #else
 #define MDP_LCDC_EN                      (0xe0000)
 #define MDP_LCDC_HSYNC_CTL               (0xe0004)
@@ -408,13 +425,9 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 #define TV_OUT_DMA3_DONE		(1<<6)
 #define TV_ENC_UNDERRUN			(1<<7)
 #define TV_OUT_FRAME_START		(1<<13)
+#define MDP_HIST_DONE       	(1<<20)
 
-#if defined(CONFIG_MSM_MDP40)
-#define MDP_OVERLAYPROC0_DONE		(1 << 0)
-#define MDP_OVERLAYPROC1_DONE		(1 << 1)
-#define MDP_DMA_P_DONE			(1 << 4)
-#define MDP_LCDC_FRAME_START		(1 << 7)
-#elif defined(CONFIG_MSM_MDP22)
+#ifdef CONFIG_MSM_MDP22
 #define MDP_DMA_P_DONE			(1 << 2)
 #define MDP_DMA_S_DONE			(1 << 3)
 #else /* CONFIG_MSM_MDP31 */
@@ -931,6 +944,7 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 #endif
 
 #define DMA_DITHER_EN				(1 << 24)
+#define DMA_DEFLKR_EN				(1 << 24)	/* dma_e */
 #define DMA_IBUF_FORMAT_RGB888			(0 << 25)
 #define DMA_IBUF_FORMAT_RGB565			(1 << 25)
 #define DMA_IBUF_FORMAT_XRGB8888		(2 << 25)
@@ -945,6 +959,7 @@ int mdp_wait(struct mdp_info *mdp, uint32_t mask, wait_queue_head_t *wq);
 /* MDDI REGISTER ? */
 #define MDDI_VDO_PACKET_DESC_RGB565  0x5565
 #define MDDI_VDO_PACKET_DESC_RGB666  0x5666
+#define MDDI_VDO_PACKET_DESC_RGB888  0x5888
 #define MDDI_VDO_PACKET_PRIM  0xC3
 #define MDDI_VDO_PACKET_SECD  0xC0
 

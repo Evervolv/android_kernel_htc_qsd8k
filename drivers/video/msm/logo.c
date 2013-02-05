@@ -61,7 +61,8 @@ int load_565rle_image(char *filename)
 	struct fb_info *info;
 	int fd, err = 0;
 	unsigned count, max;
-	unsigned short *data, *bits, *ptr;
+	unsigned short *data, *ptr;
+	unsigned int *bits;
 
 	info = registered_fb[0];
 	if (!info) {
@@ -96,7 +97,7 @@ int load_565rle_image(char *filename)
 
 	max = fb_width(info) * fb_height(info);
 	ptr = data;
-	bits = (unsigned short *)(info->screen_base);
+	bits = (unsigned int *)(info->screen_base);
 	while (count > 3) {
 		unsigned n = ptr[0];
 		if (n > max)

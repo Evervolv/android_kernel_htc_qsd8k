@@ -115,7 +115,7 @@ int mdp_hw_init(struct mdp_info *mdp)
 
 #ifndef CONFIG_MSM_MDP22
 	/* disable lcdc */
-	//mdp_writel(mdp, 0, MDP_LCDC_EN);
+	mdp_writel(mdp, 0, MDP_LCDC_EN);
 	/* enable auto clock gating for all blocks by default */
 	mdp_writel(mdp, 0xffffffff, MDP_CGC_EN);
 	/* reset color/gamma correct parms */

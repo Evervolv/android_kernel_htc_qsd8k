@@ -414,21 +414,21 @@ static void flush_imgs(struct mdp_blit_req *req, struct ppp_regs *regs,
 	uint32_t src0_len, src1_len, dst0_len, dst1_len;
 
 	if (!(req->flags & MDP_BLIT_NON_CACHED)) {
-	/* flush src images to memory before dma to mdp */
-	get_len(&req->src, &req->src_rect, regs->src_bpp, &src0_len,
-		&src1_len);
-	flush_pmem_file(src_file, req->src.offset, src0_len);
-	if (IS_PSEUDOPLNR(req->src.format))
-		flush_pmem_file(src_file, req->src.offset + src0_len,
-				src1_len);
+		/* flush src images to memory before dma to mdp */
+		get_len(&req->src, &req->src_rect, regs->src_bpp, &src0_len,
+			&src1_len);
+		flush_pmem_file(src_file, req->src.offset, src0_len);
+		if (IS_PSEUDOPLNR(req->src.format))
+			flush_pmem_file(src_file, req->src.offset + src0_len,
+					src1_len);
 
-	/* flush dst images */
-	get_len(&req->dst, &req->dst_rect, regs->dst_bpp, &dst0_len,
-		&dst1_len);
-	flush_pmem_file(dst_file, req->dst.offset, dst0_len);
-	if (IS_PSEUDOPLNR(req->dst.format))
-		flush_pmem_file(dst_file, req->dst.offset + dst0_len,
-				dst1_len);
+		/* flush dst images */
+		get_len(&req->dst, &req->dst_rect, regs->dst_bpp, &dst0_len,
+			&dst1_len);
+		flush_pmem_file(dst_file, req->dst.offset, dst0_len);
+		if (IS_PSEUDOPLNR(req->dst.format))
+			flush_pmem_file(dst_file, req->dst.offset + dst0_len,
+					dst1_len);
 	}
 #endif
 }
@@ -736,8 +736,8 @@ void put_img(struct file *p_src_file)
 	if (p_src_file)
 		put_pmem_file(p_src_file);
 #else
-    if (is_msm_hw3d_file(file))
-			put_msm_hw3d_file(file);
+    if (is_msm_hw3d_file(p_src_file))
+			put_msm_hw3d_file(p_src_file);
 #endif
 }
 
