@@ -2374,9 +2374,18 @@ kgsl_register_device(struct kgsl_device *device)
 	if (ret != 0)
 		goto err_close_mmu;
 
+	/*
+	 * The wake lock is always destroyed and will be used by pwrctrl.
+	 * Therefore it needs to be initialized for every SoC type
+	 * by Marc Alexander (c) 2013
+	 */
+#if 0
 	if (cpu_is_msm8x60())
 		wake_lock_init(&device->idle_wakelock,
 					   WAKE_LOCK_IDLE, device->name);
+#else
+	wake_lock_init(&device->idle_wakelock, WAKE_LOCK_IDLE, device->name);
+#endif
 	/*kgsl_pm_qos_req = pm_qos_add_request(PM_QOS_CPU_DMA_LATENCY,
 				PM_QOS_DEFAULT_VALUE);*/
 
