@@ -858,7 +858,7 @@ static int qmi_open(struct inode *ip, struct file *fp)
     if (ctrl_ch == NULL)
     {
         DBG("first open\n");
-        r = smd_open("SMD_CONTROL", &ctrl_ch, ctxt, qmi_notify);		 
+        r = smd_open("CONTROL", &ctrl_ch, ctxt, qmi_notify);		 
     }
     else
     {
