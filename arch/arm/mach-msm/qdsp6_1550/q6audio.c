@@ -484,7 +484,7 @@ static struct audio_client *audio_client_alloc(unsigned bufsz)
 
 
 //    dsp = dal_attach(AUDIO_DAL_DEVICE, AUDIO_DAL_PORT, callback, 0);
-    dsp = dal_attach_ex(AUDIO_DAL_DEVICE, "AudioQdsp", AUDIO_DAL_PORT, callback, 0);
+    dsp = dal_attach_ex(AUDIO_DAL_DEVICE, "AudioQdsp", AUDIO_DAL_PORT, 1, callback, 0);
     if (!dsp) 
     {
         pr_err("audio_client_alloc: cannot attach to adsp\n");
@@ -1349,7 +1349,7 @@ static int q6audio_init(void)
     }
 
 //    pr_info("audio: init: attach ACDB\n");
-    acdb = dal_attach(ACDB_DAL_DEVICE, ACDB_DAL_PORT, 0, 0);
+    acdb = dal_attach(ACDB_DAL_DEVICE, ACDB_DAL_PORT, 0, 0, 0);
     if (!acdb) 
     {
         pr_err("audio_init: cannot attach to acdb channel\n");
@@ -1358,7 +1358,7 @@ static int q6audio_init(void)
     }
 
 //    pr_info("audio: init: attach ADIE\n");
-    adie = dal_attach(ADIE_DAL_DEVICE, ADIE_DAL_PORT, 0, 0);
+    adie = dal_attach(ADIE_DAL_DEVICE, ADIE_DAL_PORT, 0, 0, 0);
     if (!adie) {
         pr_err("audio_init: cannot attach to adie\n");
         res = -ENODEV;
@@ -2837,7 +2837,7 @@ static struct audio_client * audio_test(void)
             clk_enable(sdac_clk);
 
     // 1.  attach ADIE
-    adie = dal_attach_ex(ADIE_DAL_DEVICE, "NULL", ADIE_DAL_PORT , 0, 0);
+    adie = dal_attach_ex(ADIE_DAL_DEVICE, "NULL", ADIE_DAL_PORT, 0, 0, 0);
     if (!adie) 
     {
         pr_err("audio_init: cannot attach to adie\n");
@@ -2853,7 +2853,7 @@ static struct audio_client * audio_test(void)
     dal_call_f9(adie, DAL_OP_INFO,  &info, sizeof(info));    
 
 
-    acdb = dal_attach(ACDB_DAL_DEVICE, ACDB_DAL_PORT, 0, 0);
+    acdb = dal_attach(ACDB_DAL_DEVICE, ACDB_DAL_PORT, 0, 0, 0);
     if (!acdb) 
     {
         pr_err("audio_init: cannot attach to acdb channel\n");

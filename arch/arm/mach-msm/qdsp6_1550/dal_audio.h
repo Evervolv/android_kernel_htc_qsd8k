@@ -34,7 +34,7 @@
 #include <mach/msm_qdsp6_audio_1550.h>
 
 #define AUDIO_DAL_DEVICE 0x02000028
-#define AUDIO_DAL_PORT "DSP_DAL_AQ_AUD"
+#define AUDIO_DAL_PORT "DAL_AQ_AUD"
 
 enum 
 {

@@ -32,7 +32,7 @@
 #include "dal.h"
 
 #define ADIE_DAL_DEVICE     0x02000029
-#define ADIE_DAL_PORT       "SMD_DAL00"
+#define ADIE_DAL_PORT       "DAL00"
 //#define ADIE_DAL_PORT       "SMD_DAL_AM_AUD"
 
 

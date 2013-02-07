@@ -28,7 +28,7 @@
 
 #define ACDB_DAL_DEVICE     0x02000069
 //#define ACDB_DAL_PORT       "SMD_DAL_AM_AUD"
-#define ACDB_DAL_PORT       "SMD_DAL00"
+#define ACDB_DAL_PORT       "DAL00"
 
 #define ACDB_OP_IOCTL       DAL_OP_FIRST_DEVICE_API
 

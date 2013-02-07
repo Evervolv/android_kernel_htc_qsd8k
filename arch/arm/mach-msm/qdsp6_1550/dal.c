@@ -289,14 +289,14 @@ done:
 static LIST_HEAD(dal_channel_list);
 static DEFINE_MUTEX(dal_channel_list_lock);
 
-static struct dal_channel *dal_open_channel(const char *name)
+static struct dal_channel *dal_open_channel(const char *name, uint32_t cpu)
 {
 	struct dal_channel *dch;
 
 	/* quick sanity check to avoid trying to talk to
 	 * some non-DAL channel...
 	 */
-	if (strncmp(name, "DSP_DAL", 7) && strncmp(name, "SMD_DAL", 7))
+	if (strncmp(name, "DAL", 3) && strncmp(name, "SMD_DAL", 7))
 		return 0;
 
 	mutex_lock(&dal_channel_list_lock);
@@ -319,7 +319,7 @@ static struct dal_channel *dal_open_channel(const char *name)
 
 found_it:
 	if (!dch->sch) {
-		if (smd_open(name, &dch->sch, dch, dal_channel_notify))
+		if (smd_named_open_on_edge(name, cpu, &dch->sch, dch, dal_channel_notify))
 			dch = NULL;
 		/* FIXME: wait for channel to open before returning */
 		msleep(100);
@@ -416,8 +416,9 @@ struct dal_reply_attach {
 	char name[64];
 };
 
-
-struct dal_client *dal_attach_ex(uint32_t device_id, const char *aname, const char *name, dal_event_func_t func, void *cookie)
+struct dal_client *dal_attach_ex(uint32_t device_id, const char *aname,
+				 const char *name, uint32_t cpu, dal_event_func_t func,
+				 void *cookie)
 {
 	struct dal_hdr hdr;
 	struct dal_msg_attach msg;
@@ -427,7 +428,7 @@ struct dal_client *dal_attach_ex(uint32_t device_id, const char *aname, const ch
 	unsigned long flags;
 	int r;
 
-	dch = dal_open_channel(name);
+	dch = dal_open_channel(name, cpu);
 	if (!dch)
 		return 0;
 
@@ -476,7 +477,7 @@ struct dal_client *dal_attach_ex(uint32_t device_id, const char *aname, const ch
 
 
 struct dal_client *dal_attach(uint32_t device_id, const char *name,
-				  dal_event_func_t func, void *cookie)
+			      uint32_t cpu, dal_event_func_t func, void *cookie)
 {
 	struct dal_hdr hdr;
 	struct dal_msg_attach msg;
@@ -486,7 +487,7 @@ struct dal_client *dal_attach(uint32_t device_id, const char *name,
 	unsigned long flags;
 	int r;
 
-	dch = dal_open_channel(name);
+	dch = dal_open_channel(name, cpu);
 	if (!dch)
 		return 0;
 

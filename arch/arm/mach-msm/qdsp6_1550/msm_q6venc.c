@@ -53,7 +53,7 @@
 #include "dal.h"
 
 #define DALDEVICEID_VENC_DEVICE		0x0200002D
-#define DALDEVICEID_VENC_PORTNAME	"DSP_DAL_AQ_VID"
+#define DALDEVICEID_VENC_PORTNAME	"DAL_AQ_VID"
 
 enum {
 	VENC_DALRPC_INITIALIZE = DAL_OP_FIRST_DEVICE_API,
@@ -214,7 +214,7 @@ static int q6venc_open(struct inode *inode, struct file *file)
 	spin_lock_init(&q6venc->done_lock);
 
 	q6venc->venc = dal_attach(DALDEVICEID_VENC_DEVICE,
-				  DALDEVICEID_VENC_PORTNAME,
+				  DALDEVICEID_VENC_PORTNAME, 1,
 				  callback, q6venc);
 	if (!q6venc->venc) {
 		pr_err("%s: dal_attach failed\n", __func__);
