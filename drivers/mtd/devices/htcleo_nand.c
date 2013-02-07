@@ -1871,7 +1871,7 @@ void scanmac(struct mtd_info *mtd)
 		       ops.retlen, addr);
 		goto out;
 	}
-	sprintf(nvs_mac_addr, "macaddr=%02x:%02x:%02x:%02x:%02x:%02x\n",
+	sprintf(nvs_mac_addr, "macaddr=%02x:%02x:%02x:%02x:%02x:%02x",
 		iobuf[40],iobuf[41],iobuf[42],iobuf[43],iobuf[44],iobuf[45]);
 	pr_info("Device WiFi MAC Address: %s\n", nvs_mac_addr);
 
@@ -2115,11 +2115,35 @@ struct msm_nand_info {
 	struct msm_nand_chip	msm_nand;
 };
 
+static int setup_mtd_device(struct platform_device *pdev,
+			     struct msm_nand_info *info)
+{
+	int i, err;
+	struct flash_platform_data *pdata = pdev->dev.platform_data;
+
+	if (pdata) {
+		for (i = 0; i < pdata->nr_parts; i++) {
+			pdata->parts[i].offset = pdata->parts[i].offset
+				* info->mtd.erasesize;
+			pdata->parts[i].size = pdata->parts[i].size
+				* info->mtd.erasesize;
+		}
+		err = mtd_device_register(&info->mtd, pdata->parts,
+				pdata->nr_parts);
+	} else {
+		err = mtd_device_register(&info->mtd, NULL, 0);
+	}
+	return err;
+}
+
 static int __devinit msm_nand_probe(struct platform_device *pdev)
 {
 	struct msm_nand_info *info;
 	struct flash_platform_data *pdata = pdev->dev.platform_data;
-	int err, i;
+	int err;
+#ifdef CONFIG_MTD_PARTITIONS
+	int i;
+#endif
 
 	if (pdev->num_resources != 1) {
 		pr_err("invalid num_resources");
@@ -2177,6 +2201,13 @@ static int __devinit msm_nand_probe(struct platform_device *pdev)
 	else if (err <= 0 && pdata && pdata->parts)
 		add_mtd_partitions(&info->mtd, pdata->parts, pdata->nr_parts);
 	else
+#else
+	err = setup_mtd_device(pdev, info);
+	if (err < 0) {
+		pr_err("%s: setup_mtd_device failed with err=%d\n",
+				__func__, err);
+		goto out_free_dma_buffer;
+	}
 #endif
 		err = add_mtd_device(&info->mtd);
 
