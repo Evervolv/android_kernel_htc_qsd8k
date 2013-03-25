@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/memory.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -37,11 +37,7 @@
 #include <mach/msm_iomap.h>
 #include <mach/socinfo.h>
 #include <../../mm/mm.h>
-
-#if defined(CONFIG_ARCH_MSM7X30)
-unsigned int ebi0_size = 0x20000000;
-EXPORT_SYMBOL(ebi0_size);
-#endif
+#include <linux/fmem.h>
 
 void *strongly_ordered_page;
 char strongly_ordered_mem[PAGE_SIZE*2-4];
@@ -230,6 +226,25 @@ static unsigned long stable_size(struct membank *mb,
 	return unstable_limit - mb->start;
 }
 
+/* stable size of all memory banks contiguous to and below this one */
+static unsigned long total_stable_size(unsigned long bank)
+{
+	int i;
+	struct membank *mb = &meminfo.bank[bank];
+	int memtype = reserve_info->paddr_to_memtype(mb->start);
+	unsigned long size;
+
+	size = stable_size(mb, reserve_info->low_unstable_address);
+	for (i = bank - 1, mb = &meminfo.bank[bank - 1]; i >= 0; i--, mb--) {
+		if (mb->start + mb->size != (mb + 1)->start)
+			break;
+		if (reserve_info->paddr_to_memtype(mb->start) != memtype)
+			break;
+		size += stable_size(mb, reserve_info->low_unstable_address);
+	}
+	return size;
+}
+
 static void __init calculate_reserve_limits(void)
 {
 	int i;
@@ -246,7 +261,7 @@ static void __init calculate_reserve_limits(void)
 			continue;
 		}
 		mt = &reserve_info->memtype_reserve_table[memtype];
-		size = stable_size(mb, reserve_info->low_unstable_address);
+		size = total_stable_size(i);
 		mt->limit = max(mt->limit, size);
 	}
 }
@@ -281,10 +296,11 @@ static void __init reserve_memory_for_mempools(void)
 		if (mt->flags & MEMTYPE_FLAGS_FIXED || !mt->size)
 			continue;
 
-		/* We know we will find a memory bank of the proper size
+		/* We know we will find memory bank(s) of the proper size
 		 * as we have limited the size of the memory pool for
-		 * each memory type to the size of the largest memory
-		 * bank. Choose the memory bank with the highest physical
+		 * each memory type to the largest total size of the memory
+		 * banks which are contiguous and of the correct memory type.
+		 * Choose the memory bank with the highest physical
 		 * address which is large enough, so that we will not
 		 * take memory from the lowest memory bank which the kernel
 		 * is in (and cause boot problems) and so that we might
@@ -297,9 +313,14 @@ static void __init reserve_memory_for_mempools(void)
 				reserve_info->paddr_to_memtype(mb->start);
 			if (memtype != membank_type)
 				continue;
-			size = stable_size(mb,
-				reserve_info->low_unstable_address);
+			size = total_stable_size(i);
 			if (size >= mt->size) {
+				size = stable_size(mb,
+					reserve_info->low_unstable_address);
+				/* mt->size may be larger than size, all this
+				 * means is that we are carving the memory pool
+				 * out of multiple contiguous memory banks.
+				 */
 				mt->start = mb->start + (size - mt->size);
 				ret = memblock_remove(mt->start, mt->size);
 				BUG_ON(ret);
@@ -307,6 +328,29 @@ static void __init reserve_memory_for_mempools(void)
 			}
 		}
 	}
+}
+
+unsigned long __init reserve_memory_for_fmem(unsigned long fmem_size)
+{
+	struct membank *mb;
+	int ret;
+	unsigned long fmem_phys;
+
+	if (!fmem_size)
+		return 0;
+
+	mb = &meminfo.bank[meminfo.nr_banks - 1];
+	/*
+	 * Placing fmem at the top of memory causes multimedia issues.
+	 * Instead, place it 1 page below the top of memory to prevent
+	 * the issues from occurring.
+	 */
+	fmem_phys = mb->start + (mb->size - fmem_size) - PAGE_SIZE;
+	ret = memblock_remove(fmem_phys, fmem_size);
+	BUG_ON(ret);
+
+	pr_info("fmem start %lx size %lx\n", fmem_phys, fmem_size);
+	return fmem_phys;
 }
 
 static void __init initialize_mempools(void)
@@ -425,4 +469,14 @@ void store_ttbr0(void)
 	/* Store TTBR0 for post-mortem debugging purposes. */
 	asm("mrc p15, 0, %0, c2, c0, 0\n"
 		: "=r" (msm_ttbr0));
+}
+
+int request_fmem_c_region(void *unused)
+{
+	return fmem_set_state(FMEM_C_STATE);
+}
+
+int release_fmem_c_region(void *unused)
+{
+	return fmem_set_state(FMEM_T_STATE);
 }
