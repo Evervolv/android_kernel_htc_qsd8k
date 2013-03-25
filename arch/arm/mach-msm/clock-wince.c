@@ -549,7 +549,7 @@ Cotulla: not used in LEO (no I2S audio devices)
         else if (rate ==  3000000) speed = 1;
         else 
         {
-            printk("wrong MDC clock %d\n", rate);
+            printk("wrong MDC clock %lu\n", rate);
             return 0;
         }
         clk = 40;
@@ -563,7 +563,7 @@ Cotulla: not used in LEO (no I2S audio devices)
         else if (rate == 96000000) speed = 5;
         else 
         {
-            printk("wrong clock %d\n", rate);
+            printk("wrong clock %lu\n", rate);
             return 0;
         }
         clk = 41;
@@ -991,6 +991,28 @@ static void pc_clk_disable(struct clk *clk)
 			printk(KERN_WARNING "%s: FIXME! disabling a clock that doesn't have an "
 			       "ena bit: %u\n", __func__, id);
 	}
+}
+
+int pc_clk_reset(unsigned id, enum clk_reset_action action)
+{
+	int rc;
+
+	pr_info("reset on ID %i\n", id);
+	if (action == CLK_RESET_ASSERT)
+		rc = msm_proc_comm(PCOM_CLKCTL_RPC_RESET_ASSERT, &id, NULL);
+	else
+		rc = msm_proc_comm(PCOM_CLKCTL_RPC_RESET_DEASSERT, &id, NULL);
+
+	if (rc < 0)
+		return rc;
+	else
+		return (int)id < 0 ? -EINVAL : 0;
+}
+
+static int pc_reset(struct clk *clk, enum clk_reset_action action)
+{
+	int id = to_pcom_clk(clk)->id;
+	return pc_clk_reset(id, action);
 }
 
 static int pc_clk_set_rate(struct clk *clk, unsigned long rate)
@@ -1432,7 +1454,7 @@ struct clk_ops clk_ops_pcom = {
 	.enable = pc_clk_enable,
 	.disable = pc_clk_disable,
 	.auto_off = pc_clk_disable,
-//	.reset = pc_clk_reset,
+	.reset = pc_reset,
 	.set_rate = pc_clk_set_rate,
 	.set_min_rate = pc_clk_set_min_rate,
 	.set_max_rate = pc_clk_set_max_rate,
@@ -1450,7 +1472,7 @@ struct clk_ops clk_ops_pcom_ext_config = {
 	.enable = pc_clk_enable,
 	.disable = pc_clk_disable,
 	.auto_off = pc_clk_disable,
-//	.reset = pc_reset,
+	.reset = pc_reset,
 //	.set_rate = pc_clk_set_ext_config,
 	.set_min_rate = pc_clk_set_min_rate,
 	.set_max_rate = pc_clk_set_max_rate,
