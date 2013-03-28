@@ -52,6 +52,10 @@
 #include "smd_rpc_sym.h"
 #include "smd_private.h"
 
+#if defined(CONFIG_MACH_HTCLEO)
+#include "board-htcleo.h"
+#endif
+
 enum {
 	SMEM_LOG = 1U << 0,
 	RTR_DBG = 1U << 1,
@@ -246,7 +250,11 @@ static int rpcrouter_send_control_msg(struct rpcrouter_xprt_info *xprt_info,
 		return 0;
 
 	if (!(msg->cmd == RPCROUTER_CTRL_CMD_HELLO) &&
-	    !xprt_info->initialized) {
+	    !xprt_info->initialized 
+#if defined(CONFIG_MACH_HTCLEO)
+	  && (!(msg->cmd == RPCROUTER_CTRL_CMD_BYE) && !htcleo_is_nand_boot())
+#endif
+	)  {
 		printk(KERN_ERR "rpcrouter_send_control_msg(): Warning, "
 		       "router not initialized\n");
 		return -EINVAL;
@@ -773,9 +781,16 @@ static int process_control_msg(struct rpcrouter_xprt_info *xprt_info,
 	case RPCROUTER_CTRL_CMD_HELLO:
 		RR("o HELLO PID %d\n", xprt_info->remote_pid);
 		memset(&ctl, 0, sizeof(ctl));
+#if defined(CONFIG_MACH_HTCLEO)
+		if (htcleo_is_nand_boot())
+		{
+			ctl.cmd = RPCROUTER_CTRL_CMD_HELLO;
+			rpcrouter_send_control_msg(xprt_info, &ctl);
+		}
+#else
 		ctl.cmd = RPCROUTER_CTRL_CMD_HELLO;
 		rpcrouter_send_control_msg(xprt_info, &ctl);
-
+#endif
 		xprt_info->initialized = 1;
 
 		/* Send list of servers one at a time */
@@ -823,12 +838,17 @@ static int process_control_msg(struct rpcrouter_xprt_info *xprt_info,
 		break;
 
 	case RPCROUTER_CTRL_CMD_NEW_SERVER:
+		/*
+		 * Do not reject servers with version 0
+		 * Marc Alexander (c) 2013
+		 */
+		/*
 		if (msg->srv.vers == 0) {
 			pr_err(
 			"rpcrouter: Server create rejected, version = 0, "
 			"program = %08x\n", msg->srv.prog);
 			break;
-		}
+		}*/
 
 		RR("o NEW_SERVER id=%d:%08x prog=%08x:%08x\n",
 		   msg->srv.pid, msg->srv.cid, msg->srv.prog, msg->srv.vers);

@@ -183,6 +183,14 @@
 #define APP_TIMEREMOTE_PDEV_NAME               "rs30000048:00040000"
 #define HTC_PROCEDURE_SET_VIB_ON_OFF           22
 #define PM_LIBVERS                             0x30001
+
+#elif (CONFIG_MSM_AMSS_VERSION == 1550)
+#define TIME_REMOTE_MTOA_VERS                  0x10002
+#define DOG_KEEPALIVE_VERS                     0x10001
+#define RPC_DOG_KEEPALIVE_BEACON               2
+#define APP_TIMEREMOTE_PDEV_NAME               "rs30000048:0x00010002"
+#define HTC_PROCEDURE_SET_VIB_ON_OFF           22
+#define PM_LIBVERS                             0x30001
 #endif
 
 #endif /*__ASM__ARCH_MSM_RPC_VERSION_H */
