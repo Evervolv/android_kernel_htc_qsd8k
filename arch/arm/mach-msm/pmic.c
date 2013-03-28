@@ -181,11 +181,11 @@ static struct pmic_ctrl pmic_ctrl = {
 
 /* Add newer versions at the top of array */
 static const unsigned int rpc_vers[] = {
+	PMIC_RPC_VER_1_1,
 	PMIC_RPC_VER_6_1,
 	PMIC_RPC_VER_5_1,
 	PMIC_RPC_VER_3_1,
 	PMIC_RPC_VER_2_1,
-	PMIC_RPC_VER_1_1,
 };
 
 static int pmic_rpc_req_reply(struct pmic_buf *tbuf,
