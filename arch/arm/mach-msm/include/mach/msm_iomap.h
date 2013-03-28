@@ -43,23 +43,66 @@
 #define IOMEM(x)	((void __force __iomem *)(x))
 #endif
 
+#if defined(CONFIG_ARCH_MSM8960) || defined(CONFIG_ARCH_APQ8064) || \
+	defined(CONFIG_ARCH_MSM8930) || defined(CONFIG_ARCH_MSM9615) || \
+	defined(CONFIG_ARCH_MSMCOPPER)
+/* Unified iomap */
+
+#define MSM_TMR_BASE		IOMEM(0xFA000000)	/*  4K	*/
+#define MSM_TMR0_BASE		IOMEM(0xFA001000)	/*  4K	*/
+#define MSM_QGIC_DIST_BASE	IOMEM(0xFA002000)	/*  4K	*/
+#define MSM_QGIC_CPU_BASE	IOMEM(0xFA003000)	/*  4K	*/
+#define MSM_TCSR_BASE		IOMEM(0xFA004000)	/*  4K	*/
+#define MSM_APCS_GCC_BASE	IOMEM(0xFA006000)	/*  4K	*/
+#define MSM_SAW_L2_BASE		IOMEM(0xFA007000)	/*  4K	*/
+#define MSM_SAW0_BASE		IOMEM(0xFA008000)	/*  4K	*/
+#define MSM_SAW1_BASE		IOMEM(0xFA009000)	/*  4K	*/
+#define MSM_IMEM_BASE		IOMEM(0xFA00A000)	/*  4K	*/
+#define MSM_ACC0_BASE		IOMEM(0xFA00B000)	/*  4K	*/
+#define MSM_ACC1_BASE		IOMEM(0xFA00C000)	/*  4K	*/
+#define MSM_ACC2_BASE		IOMEM(0xFA00D000)	/*  4K	*/
+#define MSM_ACC3_BASE		IOMEM(0xFA00E000)	/*  4K	*/
+#define MSM_CLK_CTL_BASE	IOMEM(0xFA010000)	/* 16K	*/
+#define MSM_MMSS_CLK_CTL_BASE	IOMEM(0xFA014000)	/*  4K	*/
+#define MSM_LPASS_CLK_CTL_BASE	IOMEM(0xFA015000)	/*  4K	*/
+#define MSM_HFPLL_BASE		IOMEM(0xFA016000)	/*  4K	*/
+#define MSM_TLMM_BASE		IOMEM(0xFA017000)	/* 16K	*/
+#define MSM_SHARED_RAM_BASE	IOMEM(0xFA300000)	/*  2M  */
+#define MSM_SIC_NON_SECURE_BASE	IOMEM(0xFA600000)	/* 64K	*/
+#define MSM_HDMI_BASE		IOMEM(0xFA800000)	/*  4K  */
+#define MSM_RPM_BASE		IOMEM(0xFA801000)	/*  24K	*/
+#define MSM_RPM_MPM_BASE	IOMEM(0xFA807000)	/*  4K	*/
+#define MSM_QFPROM_BASE		IOMEM(0xFA700000)	/*  4K  */
+#define MSM_L2CC_BASE		IOMEM(0xFA701000)	/* 4K */
+#define MSM_APCS_GLB_BASE	IOMEM(0xFA702000)	/* 4K */
+
+#if defined(CONFIG_ARCH_MSM9615)
+#define MSM_SHARED_RAM_SIZE	SZ_1M
+#else
+#define MSM_SHARED_RAM_SIZE	SZ_2M
+#endif
+
+#include "msm_iomap-8960.h"
+#include "msm_iomap-8930.h"
+#include "msm_iomap-8064.h"
+#include "msm_iomap-9615.h"
+#include "msm_iomap-copper.h"
+
+#else
+/* Legacy single-target iomap */
+
 #if defined(CONFIG_ARCH_MSM7X30)
 #include "msm_iomap-7x30.h"
 #elif defined(CONFIG_ARCH_QSD8X50)
 #include "msm_iomap-8x50.h"
 #elif defined(CONFIG_ARCH_MSM8X60)
 #include "msm_iomap-8x60.h"
+#elif defined(CONFIG_ARCH_FSM9XXX)
+#include "msm_iomap-fsm9xxx.h"
 #else
-#include "msm_iomap-7x00.h"
+#include "msm_iomap-7xxx.h"
 #endif
 
-#include "msm_iomap-8960.h"
-
-/* Virtual addresses shared across all MSM targets. */
-#define MSM_CSR_BASE		IOMEM(0xE0001000)
-#define MSM_QGIC_DIST_BASE	IOMEM(0xF0000000)
-#define MSM_QGIC_CPU_BASE	IOMEM(0xF0001000)
-#define MSM_TMR_BASE		IOMEM(0xF0200000)
-#define MSM_TMR0_BASE		IOMEM(0xF0201000)
+#endif
 
 #endif

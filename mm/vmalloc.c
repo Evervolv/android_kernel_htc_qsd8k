@@ -1636,9 +1636,14 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 	struct vm_struct *area;
 	void *addr;
 	unsigned long real_size = size;
+#ifdef CONFIG_FIX_MOVABLE_ZONE
+	unsigned long total_pages = total_unmovable_pages;
+#else
+	unsigned long total_pages = totalram_pages;
+#endif
 
 	size = PAGE_ALIGN(size);
-	if (!size || (size >> PAGE_SHIFT) > totalram_pages)
+	if (!size || (size >> PAGE_SHIFT) > total_pages)
 		return NULL;
 
 	area = __get_vm_area_node(size, align, VM_ALLOC | VM_UNLIST,
@@ -1751,6 +1756,10 @@ void *vmalloc_user(unsigned long size)
 			     PAGE_KERNEL, -1, __builtin_return_address(0));
 	if (ret) {
 		area = find_vm_area(ret);
+		if (!area) {
+			vfree(ret);
+			return NULL;
+		}
 		area->flags |= VM_USERMAP;
 	}
 	return ret;
@@ -1854,6 +1863,10 @@ void *vmalloc_32_user(unsigned long size)
 			     -1, __builtin_return_address(0));
 	if (ret) {
 		area = find_vm_area(ret);
+		if (!area) {
+			vfree(ret);
+			return NULL;
+		}
 		area->flags |= VM_USERMAP;
 	}
 	return ret;

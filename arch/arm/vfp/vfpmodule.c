@@ -397,36 +397,66 @@ static void vfp_enable(void *unused)
 	set_copro_access(access | CPACC_FULL(10) | CPACC_FULL(11));
 }
 
-#ifdef CONFIG_PM
-#include <linux/syscore_ops.h>
-
-static int vfp_pm_suspend(void)
+int vfp_flush_context(void)
 {
-	struct thread_info *ti = current_thread_info();
-	u32 fpexc = fmrx(FPEXC);
+	unsigned long flags;
+	struct thread_info *ti;
+	u32 fpexc;
+	u32 cpu;
+	int saved = 0;
 
-	/* if vfp is on, then save state for resumption */
-	if (fpexc & FPEXC_EN) {
-		printk(KERN_DEBUG "%s: saving vfp state\n", __func__);
-		vfp_save_state(&ti->vfpstate, fpexc);
+	local_irq_save(flags);
+
+	ti = current_thread_info();
+	fpexc = fmrx(FPEXC);
+	cpu = ti->cpu;
+
+#ifdef CONFIG_SMP
+	/* On SMP, if VFP is enabled, save the old state */
+	if ((fpexc & FPEXC_EN) && last_VFP_context[cpu]) {
+		last_VFP_context[cpu]->hard.cpu = cpu;
+#else
+	/* If there is a VFP context we must save it. */
+	if (last_VFP_context[cpu]) {
+		/* Enable VFP so we can save the old state. */
+		fmxr(FPEXC, fpexc | FPEXC_EN);
+		isb();
+#endif
+		vfp_save_state(last_VFP_context[cpu], fpexc);
 
 		/* disable, just in case */
 		fmxr(FPEXC, fmrx(FPEXC) & ~FPEXC_EN);
+		saved = 1;
 	}
+	last_VFP_context[cpu] = NULL;
 
-	/* clear any information we had about last context state */
-	memset(last_VFP_context, 0, sizeof(last_VFP_context));
+	local_irq_restore(flags);
 
-	return 0;
+	return saved;
 }
 
-static void vfp_pm_resume(void)
+void vfp_reinit(void)
 {
 	/* ensure we have access to the vfp */
 	vfp_enable(NULL);
 
 	/* and disable it to ensure the next usage restores the state */
 	fmxr(FPEXC, fmrx(FPEXC) & ~FPEXC_EN);
+}
+
+#ifdef CONFIG_PM
+#include <linux/syscore_ops.h>
+
+static int vfp_pm_suspend(void)
+{
+	vfp_flush_context();
+
+	return 0;
+}
+
+static void vfp_pm_resume(void)
+{
+	vfp_reinit();
 }
 
 static struct syscore_ops vfp_pm_syscore_ops = {
@@ -582,7 +612,6 @@ static int __init vfp_init(void)
 				elf_hwcap |= HWCAP_VFPv3D16;
 		}
 #endif
-#ifdef CONFIG_NEON
 		/*
 		 * Check for the presence of the Advanced SIMD
 		 * load/store instructions, integer and single
@@ -590,10 +619,15 @@ static int __init vfp_init(void)
 		 * for NEON if the hardware has the MVFR registers.
 		 */
 		if ((read_cpuid_id() & 0x000f0000) == 0x000f0000) {
+#ifdef CONFIG_NEON
 			if ((fmrx(MVFR1) & 0x000fff00) == 0x00011100)
 				elf_hwcap |= HWCAP_NEON;
-		}
 #endif
+
+			if ((fmrx(MVFR1) & 0xf0000000) == 0x10000000 ||
+			    (read_cpuid_id() & 0xff00fc00) == 0x51000400)
+				elf_hwcap |= HWCAP_VFPv4;
+		}
 	}
 	return 0;
 }

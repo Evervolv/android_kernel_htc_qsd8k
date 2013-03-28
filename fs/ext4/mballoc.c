@@ -335,6 +335,9 @@
  *        object
  *
  */
+#ifdef CONFIG_EXT4_E2FSCK_RECOVER
+extern int ext4_debug_level;
+#endif
 static struct kmem_cache *ext4_pspace_cachep;
 static struct kmem_cache *ext4_ac_cachep;
 static struct kmem_cache *ext4_free_ext_cachep;
@@ -1315,6 +1318,12 @@ static void mb_free_blocks(struct inode *inode, struct ext4_buddy *e4b,
 	mb_free_blocks_double(inode, e4b, first, count);
 
 	e4b->bd_info->bb_free += count;
+#ifdef CONFIG_EXT4_E2FSCK_RECOVER
+	if (unlikely(ext4_debug_level))
+		pr_info("ext4: (%s) group %d free %d block, remain %d\n",
+			sb->s_id, e4b->bd_group, count,
+			e4b->bd_info->bb_free);
+#endif
 	if (first < e4b->bd_info->bb_first_free)
 		e4b->bd_info->bb_first_free = first;
 
@@ -1460,6 +1469,12 @@ static int mb_mark_used(struct ext4_buddy *e4b, struct ext4_free_extent *ex)
 	mb_mark_used_double(e4b, start, len);
 
 	e4b->bd_info->bb_free -= len;
+#ifdef CONFIG_EXT4_E2FSCK_RECOVER
+	if (unlikely(ext4_debug_level))
+		pr_info("ext4: (%s) group %d mark %d block, remain %d\n",
+			e4b->bd_sb->s_id, e4b->bd_group, len,
+			e4b->bd_info->bb_free);
+#endif
 	if (e4b->bd_info->bb_first_free == start)
 		e4b->bd_info->bb_first_free += len;
 
@@ -2255,6 +2270,11 @@ int ext4_mb_add_groupinfo(struct super_block *sb, ext4_group_t group,
 		meta_group_info[i]->bb_free =
 			ext4_free_blks_count(sb, desc);
 	}
+#ifdef CONFIG_EXT4_E2FSCK_RECOVER
+	if (unlikely(ext4_debug_level))
+		pr_info("ext4: group %d bb_free %d\n",
+			group, meta_group_info[i]->bb_free);
+#endif
 
 	INIT_LIST_HEAD(&meta_group_info[i]->bb_prealloc_list);
 	init_rwsem(&meta_group_info[i]->alloc_sem);

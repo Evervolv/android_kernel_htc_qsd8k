@@ -10,7 +10,19 @@
 #include <linux/fs.h>
 #include <linux/buffer_head.h>
 #include <linux/time.h>
+#include <linux/genhd.h>
 #include "fat.h"
+
+/* Copied from block/gendisk.c */
+static void set_disk_ro_uevent(struct gendisk *gd, int ro)
+{
+	char event[] = "DISK_RO=1";
+	char *envp[] = { event, NULL };
+
+	if (!ro)
+		event[8] = '0';
+	kobject_uevent_env(&disk_to_dev(gd)->kobj, KOBJ_CHANGE, envp);
+}
 
 /*
  * fat_fs_error reports a file system problem that might indicate fa data
@@ -40,6 +52,7 @@ void __fat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
 		sb->s_flags |= MS_RDONLY;
 		printk(KERN_ERR "FAT-fs (%s): Filesystem has been "
 				"set read-only\n", sb->s_id);
+		set_disk_ro_uevent(sb->s_bdev->bd_disk, 1);
 	}
 }
 EXPORT_SYMBOL_GPL(__fat_fs_error);

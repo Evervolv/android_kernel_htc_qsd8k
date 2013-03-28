@@ -34,6 +34,7 @@
 
 extern pgd_t *pgd_alloc(struct mm_struct *mm);
 extern void pgd_free(struct mm_struct *mm, pgd_t *pgd);
+extern pgd_t *get_percpu_init_pgd(struct mm_struct *mm, unsigned int cpu);
 
 #define PGALLOC_GFP	(GFP_KERNEL | __GFP_NOTRACK | __GFP_REPEAT | __GFP_ZERO)
 

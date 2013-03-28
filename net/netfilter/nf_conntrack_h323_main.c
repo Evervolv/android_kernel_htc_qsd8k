@@ -124,6 +124,11 @@ static int get_tpkt_data(struct sk_buff *skb, unsigned int protoff,
 	int tpktlen;
 	int tpktoff;
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(info) || (!info))
+		printk(KERN_ERR "[NET] info is NULL in %s!\n", __func__);
+#endif
+
 	/* Get TCP header */
 	th = skb_header_pointer(skb, protoff, sizeof(_tcph), &_tcph);
 	if (th == NULL)
@@ -1257,6 +1262,11 @@ static int expect_q931(struct sk_buff *skb, struct nf_conn *ct,
 	struct nf_conntrack_expect *exp;
 	typeof(nat_q931_hook) nat_q931;
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(info) || (!info))
+		printk(KERN_ERR "[NET] info is NULL in %s!\n", __func__);
+#endif
+
 	/* Look for the first related address */
 	for (i = 0; i < count; i++) {
 		if (get_h225_addr(ct, *data, &taddr[i], &addr, &port) &&
@@ -1369,6 +1379,11 @@ static int process_rrq(struct sk_buff *skb, struct nf_conn *ct,
 
 	pr_debug("nf_ct_ras: RRQ\n");
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(info) || (!info))
+		printk(KERN_ERR "[NET] info is NULL in %s!\n", __func__);
+#endif
+
 	ret = expect_q931(skb, ct, ctinfo, data,
 			  rrq->callSignalAddress.item,
 			  rrq->callSignalAddress.count);
@@ -1405,6 +1420,11 @@ static int process_rcf(struct sk_buff *skb, struct nf_conn *ct,
 	typeof(set_sig_addr_hook) set_sig_addr;
 
 	pr_debug("nf_ct_ras: RCF\n");
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(info) || (!info))
+		printk(KERN_ERR "[NET] info is NULL in %s!\n", __func__);
+#endif
 
 	set_sig_addr = rcu_dereference(set_sig_addr_hook);
 	if (set_sig_addr && ct->status & IPS_NAT_MASK) {
@@ -1454,6 +1474,11 @@ static int process_urq(struct sk_buff *skb, struct nf_conn *ct,
 
 	pr_debug("nf_ct_ras: URQ\n");
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(info) || (!info))
+		printk(KERN_ERR "[NET] info is NULL in %s!\n", __func__);
+#endif
+
 	set_sig_addr = rcu_dereference(set_sig_addr_hook);
 	if (set_sig_addr && ct->status & IPS_NAT_MASK) {
 		ret = set_sig_addr(skb, ct, ctinfo, data,
@@ -1486,6 +1511,11 @@ static int process_arq(struct sk_buff *skb, struct nf_conn *ct,
 	typeof(set_h225_addr_hook) set_h225_addr;
 
 	pr_debug("nf_ct_ras: ARQ\n");
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(info) || (!info))
+		printk(KERN_ERR "[NET] info is NULL in %s!\n", __func__);
+#endif
 
 	set_h225_addr = rcu_dereference(set_h225_addr_hook);
 	if ((arq->options & eAdmissionRequest_destCallSignalAddress) &&

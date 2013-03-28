@@ -578,6 +578,10 @@ int unregister_module_notifier(struct notifier_block * nb);
 
 extern void print_modules(void);
 
+#ifdef CONFIG_WIMAX
+extern bool find_wimax_modules(void);
+#endif
+
 extern void module_update_tracepoints(void);
 extern int module_get_iter_tracepoints(struct tracepoint_iter *iter);
 

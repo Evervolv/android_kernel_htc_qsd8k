@@ -90,6 +90,8 @@ struct mgmt_cp_set_dev_class {
 	__u8 major;
 	__u8 minor;
 } __packed;
+#define MGMT_MAJOR_CLASS_MASK		0x1F
+#define MGMT_MAJOR_CLASS_LIMITED	0x20
 
 #define MGMT_OP_SET_SERVICE_CACHE	0x000C
 struct mgmt_cp_set_service_cache {
@@ -98,9 +100,13 @@ struct mgmt_cp_set_service_cache {
 
 struct mgmt_key_info {
 	bdaddr_t bdaddr;
-	u8 type;
+	u8 addr_type;
+	u8 key_type;
 	u8 val[16];
 	u8 pin_len;
+	u8 auth;
+	u8 dlen;
+	u8 data[10];
 } __packed;
 
 #define MGMT_OP_LOAD_KEYS		0x000D
@@ -155,6 +161,7 @@ struct mgmt_cp_set_io_capability {
 struct mgmt_cp_pair_device {
 	bdaddr_t bdaddr;
 	__u8 io_cap;
+	__u8 ssp_cap;
 } __packed;
 struct mgmt_rp_pair_device {
 	bdaddr_t bdaddr;
@@ -199,6 +206,34 @@ struct mgmt_cp_remove_remote_oob_data {
 
 #define MGMT_OP_STOP_DISCOVERY		0x001C
 
+#define MGMT_OP_USER_PASSKEY_REPLY	0x001D
+struct mgmt_cp_user_passkey_reply {
+	bdaddr_t bdaddr;
+	__le32 passkey;
+} __packed;
+
+#define MGMT_OP_RESOLVE_NAME		0x001E
+struct mgmt_cp_resolve_name {
+	bdaddr_t bdaddr;
+} __packed;
+
+#define MGMT_OP_SET_LIMIT_DISCOVERABLE	0x001F
+
+#define MGMT_OP_SET_CONNECTION_PARAMS	0x0020
+struct mgmt_cp_set_connection_params {
+	bdaddr_t bdaddr;
+	__le16 interval_min;
+	__le16 interval_max;
+	__le16 slave_latency;
+	__le16 timeout_multiplier;
+} __packed;
+
+#define MGMT_OP_ENCRYPT_LINK		0x0021
+struct mgmt_cp_encrypt_link {
+	bdaddr_t bdaddr;
+	__u8 enable;
+} __packed;
+
 #define MGMT_EV_CMD_COMPLETE		0x0001
 struct mgmt_ev_cmd_complete {
 	__le16 opcode;
@@ -237,6 +272,7 @@ struct mgmt_ev_new_key {
 #define MGMT_EV_CONNECTED		0x000B
 struct mgmt_ev_connected {
 	bdaddr_t bdaddr;
+	__u8 le;
 } __packed;
 
 #define MGMT_EV_DISCONNECTED		0x000C
@@ -259,7 +295,8 @@ struct mgmt_ev_pin_code_request {
 #define MGMT_EV_USER_CONFIRM_REQUEST	0x000F
 struct mgmt_ev_user_confirm_request {
 	bdaddr_t bdaddr;
-	__u8 confirm_hint;
+	__u8 auto_confirm;
+	__u8 event;
 	__le32 value;
 } __packed;
 
@@ -279,13 +316,34 @@ struct mgmt_ev_device_found {
 	bdaddr_t bdaddr;
 	__u8 dev_class[3];
 	__s8 rssi;
+	__u8 le;
+	__u8 type;
 	__u8 eir[HCI_MAX_EIR_LENGTH];
 } __packed;
 
 #define MGMT_EV_REMOTE_NAME		0x0013
 struct mgmt_ev_remote_name {
 	bdaddr_t bdaddr;
+	__u8 status;
 	__u8 name[MGMT_MAX_NAME_LENGTH];
 } __packed;
 
 #define MGMT_EV_DISCOVERING		0x0014
+
+#define MGMT_EV_USER_PASSKEY_REQUEST	0x0015
+struct mgmt_ev_user_passkey_request {
+	bdaddr_t bdaddr;
+} __packed;
+
+#define MGMT_EV_ENCRYPT_CHANGE		0x0016
+struct mgmt_ev_encrypt_change {
+	bdaddr_t bdaddr;
+	__u8 status;
+} __packed;
+
+
+#define MGMT_EV_REMOTE_CLASS		0x0017
+struct mgmt_ev_remote_class {
+	bdaddr_t bdaddr;
+	__u8 dev_class[3];
+} __packed;

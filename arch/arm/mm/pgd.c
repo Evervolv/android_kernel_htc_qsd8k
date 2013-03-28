@@ -17,6 +17,7 @@
 
 #include "mm.h"
 
+static DEFINE_PER_CPU(pgd_t *, percpu_init_pgd);
 /*
  * need to get a 16k page for level 1
  */
@@ -112,4 +113,69 @@ no_pud:
 	pud_free(mm, pud);
 no_pgd:
 	free_pages((unsigned long) pgd_base, 2);
+}
+
+pgd_t *get_percpu_init_pgd(struct mm_struct *mm, unsigned int cpu)
+{
+	pgd_t *new_pgd, *init_pgd;
+	pud_t *new_pud, *init_pud;
+	pmd_t *new_pmd, *init_pmd;
+	pte_t *new_pte, *init_pte;
+
+	new_pgd = per_cpu(percpu_init_pgd, cpu);
+	if (new_pgd == NULL)
+		new_pgd = (pgd_t *)__get_free_pages(GFP_KERNEL, 2);
+
+	if (!new_pgd)
+		goto no_pgd;
+
+	memset(new_pgd, 0, USER_PTRS_PER_PGD * sizeof(pgd_t));
+
+	/*
+	 * Copy over the kernel and IO PGD entries
+	 */
+	init_pgd = pgd_offset_k(0);
+	memcpy(new_pgd + USER_PTRS_PER_PGD, init_pgd + USER_PTRS_PER_PGD,
+		       (PTRS_PER_PGD - USER_PTRS_PER_PGD) * sizeof(pgd_t));
+
+	clean_dcache_area(new_pgd, PTRS_PER_PGD * sizeof(pgd_t));
+
+	if (!vectors_high()) {
+		/*
+		 * On ARM, first page must always be allocated since it
+		 * contains the machine vectors.
+		 */
+		new_pud = pud_alloc(mm, new_pgd, 0);
+		if (!new_pud)
+			goto no_pud;
+
+		new_pmd = pmd_alloc(mm, new_pud, 0);
+		if (!new_pmd)
+			goto no_pmd;
+
+		new_pte = pte_alloc_map(mm, NULL, new_pmd, 0);
+		if (!new_pte)
+			goto no_pte;
+
+		init_pud = pud_offset(init_pgd, 0);
+		init_pmd = pmd_offset(init_pud, 0);
+		init_pte = pte_offset_map(init_pmd, 0);
+		set_pte_ext(new_pte, *init_pte, 0);
+		pte_unmap(init_pte);
+		pte_unmap(new_pte);
+	}
+
+	per_cpu(percpu_init_pgd, cpu) = new_pgd;
+	return new_pgd;
+
+no_pte:
+	pmd_free(mm, new_pmd);
+no_pmd:
+	pud_free(mm, new_pud);
+no_pud:
+	free_pages((unsigned long)new_pgd, 2);
+	new_pgd = NULL;
+no_pgd:
+	per_cpu(percpu_init_pgd, cpu) = new_pgd;
+	return NULL;
 }

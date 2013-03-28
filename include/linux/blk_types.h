@@ -151,6 +151,10 @@ enum rq_flag_bits {
 	__REQ_IO_STAT,		/* account I/O stat */
 	__REQ_MIXED_MERGE,	/* merge of different types, fail separately */
 	__REQ_SECURE,		/* secure discard (used with __REQ_DISCARD) */
+/* Modified by Memory, Studio Software for Zimmer */
+#if defined(CONFIG_ZIMMER)
+	__REQ_SWAPIN_DMPG,	/* request to swap-in page from swap area or demand paging */
+#endif
 	__REQ_NR_BITS,		/* stops here */
 };
 
@@ -191,5 +195,9 @@ enum rq_flag_bits {
 #define REQ_IO_STAT		(1 << __REQ_IO_STAT)
 #define REQ_MIXED_MERGE		(1 << __REQ_MIXED_MERGE)
 #define REQ_SECURE		(1 << __REQ_SECURE)
+/* Modified by Memory, Studio Software for Zimmer */
+#if defined(CONFIG_ZIMMER)
+	#define REQ_SWAPIN_DMPG	(1 << __REQ_SWAPIN_DMPG)
+#endif
 
 #endif /* __LINUX_BLK_TYPES_H */

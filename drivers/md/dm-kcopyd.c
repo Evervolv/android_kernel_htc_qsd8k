@@ -600,7 +600,10 @@ int dm_kcopyd_copy(struct dm_kcopyd_client *kc, struct dm_io_region *from,
 	job->source = *from;
 
 	job->num_dests = num_dests;
-	memcpy(&job->dests, dests, sizeof(*dests) * num_dests);
+	if (num_dests <= ARRAY_SIZE(job->dests))
+		memcpy(&job->dests, dests, sizeof(*dests) * num_dests);
+	else
+		memcpy(&job->dests, dests, sizeof(*dests) * ARRAY_SIZE(job->dests));
 
 	job->offset = 0;
 	job->nr_pages = 0;

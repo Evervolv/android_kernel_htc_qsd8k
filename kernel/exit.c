@@ -716,6 +716,8 @@ static struct task_struct *find_new_reaper(struct task_struct *father)
 	struct pid_namespace *pid_ns = task_active_pid_ns(father);
 	struct task_struct *thread;
 
+	BUG_ON(!pid_ns);
+
 	thread = father;
 	while_each_thread(father, thread) {
 		if (thread->flags & PF_EXITING)

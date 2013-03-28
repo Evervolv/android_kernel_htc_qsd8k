@@ -424,7 +424,13 @@ void elv_dispatch_sort(struct request_queue *q, struct request *rq)
 	q->nr_sorted--;
 
 	boundary = q->end_sector;
+/* Modified by Memory, Studio Software for Zimmer */
+#if defined(CONFIG_ZIMMER)
+	stop_flags = REQ_SOFTBARRIER | REQ_STARTED | REQ_SWAPIN_DMPG;
+#else
 	stop_flags = REQ_SOFTBARRIER | REQ_STARTED;
+#endif
+
 	list_for_each_prev(entry, &q->queue_head) {
 		struct request *pos = list_entry_rq(entry);
 
@@ -650,9 +656,28 @@ void elv_quiesce_end(struct request_queue *q)
 
 void __elv_add_request(struct request_queue *q, struct request *rq, int where)
 {
+/* Modified by Memory, Studio Software for Zimmer */
+#if defined(CONFIG_ZIMMER)
+	struct list_head *	check_pos = NULL;
+	struct request *	check_rq = NULL;
+	int		pos_found = 0;
+#endif
+
 	trace_block_rq_insert(q, rq);
 
 	rq->q = q;
+
+/* Modified by Memory, Studio Software for Zimmer */
+#if defined(CONFIG_ZIMMER)
+   if (rq->cmd_flags & REQ_SWAPIN_DMPG) {
+       /*
+        * Insert swap-in or demand page requests at the front. This causes them
+        * to be queued in the reversed order.
+        */
+       where = ELEVATOR_INSERT_FRONT;
+   }
+   else
+#endif
 
 	if (rq->cmd_flags & REQ_SOFTBARRIER) {
 		/* barriers are scheduling boundary, update end_sector */
@@ -668,9 +693,73 @@ void __elv_add_request(struct request_queue *q, struct request *rq, int where)
 
 	switch (where) {
 	case ELEVATOR_INSERT_REQUEUE:
-	case ELEVATOR_INSERT_FRONT:
 		rq->cmd_flags |= REQ_SOFTBARRIER;
 		list_add(&rq->queuelist, &q->queue_head);
+		break;
+
+	case ELEVATOR_INSERT_FRONT:
+		rq->cmd_flags |= REQ_SOFTBARRIER;
+
+/* Modified by Memory, Studio Software for Zimmer */
+#if defined(CONFIG_ZIMMER)
+		/*
+		 *	Note:
+		 *
+		 *	Request Type
+		 *		D: DMPG and Swap-In reqs
+		 *		N: Reqs not DMPG nor Swap-In
+		 *		_: Insert position, all reqs inserted at front
+		 *
+		 *	Different Cases
+		 *		head->DDD_NNN
+		 *		head->_NNN
+		 *		head->DDD_
+		 *		head->_ (this case is list_empty)
+		 */
+
+		/* check if the empty queue */
+		if (list_empty(&q->queue_head))
+		{
+			/*
+			 *	Case:
+			 *		head->_
+			 */
+			list_add(&rq->queuelist, &q->queue_head);
+		}
+		else
+		{
+			list_for_each(check_pos, &q->queue_head)
+			{
+				check_rq = list_entry_rq(check_pos);
+
+				if (check_rq)
+				{
+					if ((check_rq->cmd_flags & REQ_SWAPIN_DMPG) == 0)
+					{
+						/*
+						 *	Case:
+						 *		head->DDD_NNN
+						 *		head->_NNN
+						 */
+						list_add(&rq->queuelist, check_pos->prev);
+						pos_found = 1;
+						break;
+					}
+				}
+			}
+
+			if (!pos_found)
+			{
+				/*
+				 *	Case:
+				 *		head->DDD_
+				 */
+				list_add_tail(&rq->queuelist, &q->queue_head);
+			}
+		}
+#else
+		list_add(&rq->queuelist, &q->queue_head);
+#endif
 		break;
 
 	case ELEVATOR_INSERT_BACK:

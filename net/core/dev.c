@@ -3576,6 +3576,12 @@ struct sk_buff *napi_frags_skb(struct napi_struct *napi)
 	 * This works because the only protocols we care about don't require
 	 * special handling.  We'll fix it up properly at the end.
 	 */
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(eth) || (!eth))
+		printk(KERN_ERR "[CORE] eth is NULL in %s!\n", __func__);
+#endif
+
 	skb->protocol = eth->h_proto;
 
 out:

@@ -39,7 +39,7 @@
  * (host controller _Structural_ parameters)
  * see EHCI spec, Table 2-4 for each value
  */
-static void dbg_hcs_params (struct ehci_hcd *ehci, char *label)
+static void __maybe_unused dbg_hcs_params (struct ehci_hcd *ehci, char *label)
 {
 	u32	params = ehci_readl(ehci, &ehci->caps->hcs_params);
 
@@ -83,7 +83,7 @@ static inline void dbg_hcs_params (struct ehci_hcd *ehci, char *label) {}
  * (host controller _Capability_ parameters)
  * see EHCI Spec, Table 2-5 for each value
  * */
-static void dbg_hcc_params (struct ehci_hcd *ehci, char *label)
+static void __maybe_unused dbg_hcc_params (struct ehci_hcd *ehci, char *label)
 {
 	u32	params = ehci_readl(ehci, &ehci->caps->hcc_params);
 
@@ -808,7 +808,7 @@ static ssize_t fill_registers_buffer(struct debug_buffer *buf)
 	next += temp;
 
 	temp = scnprintf (next, size, "uframe %04x\n",
-			ehci_read_frame_index(ehci));
+			ehci_readl(ehci, &ehci->regs->frame_index));
 	size -= temp;
 	next += temp;
 

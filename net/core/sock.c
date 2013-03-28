@@ -210,8 +210,14 @@ static struct lock_class_key af_callback_keys[AF_MAX];
 #define SK_RMEM_MAX		(_SK_MEM_OVERHEAD * _SK_MEM_PACKETS)
 
 /* Run time adjustable parameters. */
+#ifdef CONFIG_WIMAX
+__u32 sysctl_wmem_max __read_mostly = 512*1024;
+__u32 sysctl_rmem_max __read_mostly = 512*1024*3; /* For KDDI project*/
+#else
 __u32 sysctl_wmem_max __read_mostly = SK_WMEM_MAX;
 __u32 sysctl_rmem_max __read_mostly = SK_RMEM_MAX;
+#endif
+
 __u32 sysctl_wmem_default __read_mostly = SK_WMEM_MAX;
 __u32 sysctl_rmem_default __read_mostly = SK_RMEM_MAX;
 

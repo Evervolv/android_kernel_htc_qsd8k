@@ -14,6 +14,7 @@
 #define __LINUX_POWER_SUPPLY_H__
 
 #include <linux/device.h>
+#include <linux/wakelock.h>
 #include <linux/workqueue.h>
 #include <linux/leds.h>
 
@@ -43,6 +44,17 @@ enum {
 	POWER_SUPPLY_CHARGE_TYPE_NONE,
 	POWER_SUPPLY_CHARGE_TYPE_TRICKLE,
 	POWER_SUPPLY_CHARGE_TYPE_FAST,
+};
+
+enum {
+	POWER_SUPPLY_DISABLE_CHARGE = 0,
+	POWER_SUPPLY_ENABLE_SLOW_CHARGE,
+	POWER_SUPPLY_ENABLE_FAST_CHARGE,
+	POWER_SUPPLY_ENABLE_9VAC_CHARGE,
+	POWER_SUPPLY_ENABLE_WIRELESS_CHARGE,
+	POWER_SUPPLY_ENABLE_SLOW_HV_CHARGE,
+	POWER_SUPPLY_ENABLE_FAST_HV_CHARGE,
+	POWER_SUPPLY_ENABLE_INTERNAL,
 };
 
 enum {
@@ -127,6 +139,7 @@ enum power_supply_type {
 	POWER_SUPPLY_TYPE_UPS,
 	POWER_SUPPLY_TYPE_MAINS,
 	POWER_SUPPLY_TYPE_USB,		/* Standard Downstream Port */
+	POWER_SUPPLY_TYPE_WIRELESS,
 	POWER_SUPPLY_TYPE_USB_DCP,	/* Dedicated Charging Port */
 	POWER_SUPPLY_TYPE_USB_CDP,	/* Charging Downstream Port */
 	POWER_SUPPLY_TYPE_USB_ACA,	/* Accessory Charger Adapters */
@@ -156,6 +169,8 @@ struct power_supply {
 				     enum power_supply_property psp);
 	void (*external_power_changed)(struct power_supply *psy);
 	void (*set_charged)(struct power_supply *psy);
+	int (*set_current_limit)(struct power_supply *psy, int limit);
+	int (*set_charging_by)(struct power_supply *psy, bool enable);
 
 	/* For APM emulation, think legacy userspace. */
 	int use_for_apm;
@@ -163,6 +178,9 @@ struct power_supply {
 	/* private */
 	struct device *dev;
 	struct work_struct changed_work;
+	spinlock_t changed_lock;
+	bool changed;
+	struct wake_lock work_wake_lock;
 
 #ifdef CONFIG_LEDS_TRIGGERS
 	struct led_trigger *charging_full_trig;
@@ -201,6 +219,8 @@ extern struct power_supply *power_supply_get_by_name(char *name);
 extern void power_supply_changed(struct power_supply *psy);
 extern int power_supply_am_i_supplied(struct power_supply *psy);
 extern int power_supply_set_battery_charged(struct power_supply *psy);
+extern int power_supply_set_current_limit(struct power_supply *psy, int limit);
+extern int power_supply_set_charging_by(struct power_supply *psy, bool enable);
 
 #if defined(CONFIG_POWER_SUPPLY) || defined(CONFIG_POWER_SUPPLY_MODULE)
 extern int power_supply_is_system_supplied(void);

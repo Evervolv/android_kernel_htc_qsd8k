@@ -1278,6 +1278,44 @@ static int usb_resume_both(struct usb_device *udev, pm_message_t msg)
 	return status;
 }
 
+#ifdef CONFIG_USB_OTG
+void usb_hnp_polling_work(struct work_struct *work)
+{
+	int ret;
+	struct usb_bus *bus =
+		container_of(work, struct usb_bus, hnp_polling.work);
+	struct usb_device *udev = bus->root_hub->children[bus->otg_port - 1];
+	u8 *status = kmalloc(sizeof(*status), GFP_KERNEL);
+
+	if (!status)
+		return;
+
+	ret = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
+		USB_REQ_GET_STATUS, USB_DIR_IN | USB_RECIP_DEVICE,
+		0, OTG_STATUS_SELECTOR, status, sizeof(*status),
+		USB_CTRL_GET_TIMEOUT);
+	if (ret < 0) {
+		/* Peripheral may not be supporting HNP polling */
+		dev_info(&udev->dev, "HNP polling failed. status %d\n", ret);
+		goto out;
+	}
+
+	/* Spec says host must suspend the bus with in 2 sec. */
+	if (*status & (1 << HOST_REQUEST_FLAG)) {
+		do_unbind_rebind(udev, DO_UNBIND);
+		udev->do_remote_wakeup = device_may_wakeup(&udev->dev);
+		ret = usb_suspend_both(udev, PMSG_USER_SUSPEND);
+		if (ret)
+			dev_info(&udev->dev, "suspend failed\n");
+	} else {
+		schedule_delayed_work(&bus->hnp_polling,
+			msecs_to_jiffies(THOST_REQ_POLL));
+	}
+out:
+	kfree(status);
+}
+#endif
+
 static void choose_wakeup(struct usb_device *udev, pm_message_t msg)
 {
 	int	w;
@@ -1583,7 +1621,7 @@ int usb_autopm_get_interface_async(struct usb_interface *intf)
 	dev_vdbg(&intf->dev, "%s: cnt %d -> %d\n",
 			__func__, atomic_read(&intf->dev.power.usage_count),
 			status);
-	if (status > 0 || status == -EINPROGRESS)
+	if (status > 0)
 		status = 0;
 	return status;
 }
@@ -1668,11 +1706,6 @@ int usb_runtime_suspend(struct device *dev)
 		return -EAGAIN;
 
 	status = usb_suspend_both(udev, PMSG_AUTO_SUSPEND);
-
-	/* Allow a retry if autosuspend failed temporarily */
-	if (status == -EAGAIN || status == -EBUSY)
-		usb_mark_last_busy(udev);
-
 	/* The PM core reacts badly unless the return code is 0,
 	 * -EAGAIN, or -EBUSY, so always return -EBUSY on an error.
 	 */

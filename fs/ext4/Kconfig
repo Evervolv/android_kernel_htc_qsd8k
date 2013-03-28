@@ -83,3 +83,8 @@ config EXT4_DEBUG
 
 	  If you select Y here, then you will be able to turn on debugging
 	  with a command such as "echo 1 > /sys/kernel/debug/ext4/mballoc-debug"
+
+config EXT4_E2FSCK_RECOVER
+	bool "EXT4 e2fsck recovery support"
+	depends on EXT4_FS
+	default n

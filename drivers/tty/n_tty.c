@@ -1418,6 +1418,8 @@ static void n_tty_receive_buf(struct tty_struct *tty, const unsigned char *cp,
 			tty->ops->flush_chars(tty);
 	}
 
+	if (tty->is_rcvlock)
+		mutex_lock(&tty->rcv_room_lock);
 	n_tty_set_room(tty);
 
 	if ((!tty->icanon && (tty->read_cnt >= tty->minimum_to_wake)) ||
@@ -1434,6 +1436,14 @@ static void n_tty_receive_buf(struct tty_struct *tty, const unsigned char *cp,
 	 */
 	if (tty->receive_room < TTY_THRESHOLD_THROTTLE)
 		tty_throttle(tty);
+	if (tty->is_rcvlock)
+		mutex_unlock(&tty->rcv_room_lock);
+
+	if (!tty->receive_room && !tty->read_cnt) {
+		printk(KERN_ERR "%s, name:%s read_cnt=rcv_room=0!\n",
+			__func__, tty->name);
+		n_tty_set_room(tty);
+	}
 }
 
 int is_ignored(int sig)
@@ -1887,8 +1897,14 @@ do_it_again:
 		 * we won't get any more characters.
 		 */
 		if (n_tty_chars_in_buffer(tty) <= TTY_THRESHOLD_UNTHROTTLE) {
+			if (tty->is_rcvlock)
+				mutex_lock(&tty->rcv_room_lock);
+
 			n_tty_set_room(tty);
 			check_unthrottle(tty);
+
+			if (tty->is_rcvlock)
+				mutex_unlock(&tty->rcv_room_lock);
 		}
 
 		if (b - buf >= minimum)
@@ -1911,7 +1927,12 @@ do_it_again:
 	} else if (test_and_clear_bit(TTY_PUSH, &tty->flags))
 		 goto do_it_again;
 
+	if (tty->is_rcvlock)
+		mutex_lock(&tty->rcv_room_lock);
 	n_tty_set_room(tty);
+	if (tty->is_rcvlock)
+		mutex_unlock(&tty->rcv_room_lock);
+
 	return retval;
 }
 

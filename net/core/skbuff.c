@@ -252,6 +252,12 @@ struct sk_buff *__netdev_alloc_skb(struct net_device *dev,
 	struct sk_buff *skb;
 
 	skb = __alloc_skb(length + NET_SKB_PAD, gfp_mask, 0, NUMA_NO_NODE);
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(skb) || (!skb))
+		printk(KERN_ERR "[CORE] skb is NULL in %s!\n", __func__);
+#endif
+
 	if (likely(skb)) {
 		skb_reserve(skb, NET_SKB_PAD);
 		skb->dev = dev;
@@ -1242,7 +1248,12 @@ unsigned char *__pskb_pull_tail(struct sk_buff *skb, int delta)
 					insp = list;
 				}
 				if (!pskb_pull(list, eat)) {
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+					if (!IS_ERR(clone) && (clone))
+						kfree_skb(clone);
+#else
 					kfree_skb(clone);
+#endif
 					return NULL;
 				}
 				break;

@@ -2287,6 +2287,10 @@ static int xfrm_user_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 		return -EINVAL;
 
 	type -= XFRM_MSG_BASE;
+	if (type < 0) {
+		printk(KERN_ERR "[xfrm] xfrm_dispatch[type]: type is smaller than 0 %s!\n", __func__);
+		return -EINVAL;
+	}
 	link = &xfrm_dispatch[type];
 
 	/* All operations require privileges, even GET */

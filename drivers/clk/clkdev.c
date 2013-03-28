@@ -79,6 +79,11 @@ struct clk *clk_get(struct device *dev, const char *con_id)
 {
 	const char *dev_id = dev ? dev_name(dev) : NULL;
 
+#if !defined(CONFIG_REMOVE_EBI1_FIXED_CLK) && defined(CONFIG_ARCH_MSM7X30)
+	if (strncmp(con_id, "ebi1_clk", strlen("ebi1_clk")) == 0)
+		BUG();
+#endif
+
 	return clk_get_sys(dev_id, con_id);
 }
 EXPORT_SYMBOL(clk_get);

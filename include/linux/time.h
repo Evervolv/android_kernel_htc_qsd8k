@@ -113,6 +113,10 @@ static inline struct timespec timespec_sub(struct timespec lhs,
 #define timespec_valid(ts) \
 	(((ts)->tv_sec >= 0) && (((unsigned long) (ts)->tv_nsec) < NSEC_PER_SEC))
 
+extern struct timespec xtime;
+extern struct timespec wall_to_monotonic;
+extern seqlock_t xtime_lock;
+
 extern void read_persistent_clock(struct timespec *ts);
 extern void read_boot_clock(struct timespec *ts);
 extern int update_persistent_clock(struct timespec now);
@@ -310,5 +314,10 @@ struct itimerval {
  * The various flags for setting POSIX.1b interval timers:
  */
 #define TIMER_ABSTIME			0x01
+
+#ifdef CONFIG_ARCH_MSM8X60_LTE
+extern void htc_timer_stats_OnOff(char OnOff);
+extern void htc_timer_stats_show(u16 water_mark);
+#endif
 
 #endif

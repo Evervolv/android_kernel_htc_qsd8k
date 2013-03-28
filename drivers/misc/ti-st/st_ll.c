@@ -20,12 +20,35 @@
  */
 
 #define pr_fmt(fmt) "(stll) :" fmt
+#include <linux/platform_device.h>
 #include <linux/skbuff.h>
 #include <linux/module.h>
 #include <linux/ti_wilink_st.h>
 
 /**********************************************************************/
 /* internal functions */
+static void chip_pm_ctl(struct st_data_s *st_data, int request_awake)
+{
+	struct kim_data_s *kim_data;
+	struct ti_st_plat_data *pdata;
+	struct uart_state *state = st_data->tty->driver_data;
+	struct uart_port *uport = state->uart_port;
+
+	/* handle platform specific PM */
+	kim_data = st_data->kim_data;
+	pdata = kim_data->kim_pdev->dev.platform_data;
+	if (request_awake) {
+		if (pdata->chip_awake) {
+			printk(KERN_INFO "[BT]REQ W\n");
+			pdata->chip_awake(uport);
+		}
+	} else {
+		if (pdata->chip_asleep) {
+			printk(KERN_INFO "[BT]REQ S\n");
+			pdata->chip_asleep(uport);
+		}
+	}
+}
 static void send_ll_cmd(struct st_data_s *st_data,
 	unsigned char cmd)
 {
@@ -46,10 +69,14 @@ static void ll_device_want_to_sleep(struct st_data_s *st_data)
 	send_ll_cmd(st_data, LL_SLEEP_ACK);
 	/* update state */
 	st_data->ll_state = ST_LL_ASLEEP;
+	/* Request CLK off */
+	chip_pm_ctl(st_data, 0);
 }
 
 static void ll_device_want_to_wakeup(struct st_data_s *st_data)
 {
+	/* Request CLK on */
+	chip_pm_ctl(st_data, 1);
 	/* diff actions in diff states */
 	switch (st_data->ll_state) {
 	case ST_LL_ASLEEP:
@@ -62,6 +89,7 @@ static void ll_device_want_to_wakeup(struct st_data_s *st_data)
 	case ST_LL_AWAKE:
 		/* duplicate wake_ind */
 		pr_err("duplicate wake_ind already AWAKE");
+		send_ll_cmd(st_data, LL_WAKE_UP_ACK);	/* send wake_ack */
 		break;
 	case ST_LL_AWAKE_TO_ASLEEP:
 		/* duplicate wake_ind */
@@ -93,6 +121,7 @@ void st_ll_disable(struct st_data_s *ll)
 void st_ll_wakeup(struct st_data_s *ll)
 {
 	if (likely(ll->ll_state != ST_LL_AWAKE)) {
+		chip_pm_ctl(ll, 1);
 		send_ll_cmd(ll, LL_WAKE_UP_IND);	/* WAKE_IND */
 		ll->ll_state = ST_LL_ASLEEP_TO_AWAKE;
 	} else {

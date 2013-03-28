@@ -1,6 +1,6 @@
 /*
    BlueZ - Bluetooth protocol stack for Linux
-   Copyright (C) 2000-2001 Qualcomm Incorporated
+   Copyright (c) 2000-2001, 2011, Code Aurora Forum. All rights reserved.
 
    Written 2000,2001 by Maxim Krasnyansky <maxk@qualcomm.com>
 
@@ -49,7 +49,7 @@
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
 
-static int enable_mgmt;
+static int enable_mgmt = 1;
 
 /* ----- HCI socket interface ----- */
 
@@ -297,6 +297,9 @@ static inline int hci_sock_bound_ioctl(struct sock *sk, unsigned int cmd, unsign
 			return -EACCES;
 		return hci_blacklist_del(hdev, (void __user *) arg);
 
+	case HCISETAUTHINFO:
+		return hci_set_auth_info(hdev, (void __user *) arg);
+
 	default:
 		if (hdev->ioctl)
 			return hdev->ioctl(hdev, cmd, arg);
@@ -325,7 +328,12 @@ static int hci_sock_ioctl(struct socket *sock, unsigned int cmd, unsigned long a
 	case HCIDEVUP:
 		if (!capable(CAP_NET_ADMIN))
 			return -EACCES;
-		return hci_dev_open(arg);
+
+		err =  hci_dev_open(arg);
+		if (!err || err == -EALREADY)
+			return 0;
+		else
+			return err;
 
 	case HCIDEVDOWN:
 		if (!capable(CAP_NET_ADMIN))

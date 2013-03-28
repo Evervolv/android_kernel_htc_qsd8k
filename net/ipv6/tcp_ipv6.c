@@ -274,6 +274,11 @@ static int tcp_v6_connect(struct sock *sk, struct sockaddr *uaddr,
 	sk->sk_gso_type = SKB_GSO_TCPV6;
 	__ip6_dst_store(sk, dst, NULL, NULL);
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(dst) || (!dst))
+		printk(KERN_ERR "[NET] dst is NULL in %s!\n", __func__);
+#endif
+
 	rt = (struct rt6_info *) dst;
 	if (tcp_death_row.sysctl_tw_recycle &&
 	    !tp->rx_opt.ts_recent_stamp &&
@@ -1452,6 +1457,13 @@ static struct sock * tcp_v6_syn_recv_sock(struct sock *sk, struct sk_buff *skb,
 	 * count here, tcp_create_openreq_child now does this for us, see the
 	 * comment in that function for the gory details. -acme
 	 */
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(dst) || (!dst)) {
+		printk(KERN_ERR "[NET] dst is NULL in %s!\n", __func__);
+		goto out;
+	}
+#endif
 
 	newsk->sk_gso_type = SKB_GSO_TCPV6;
 	__ip6_dst_store(newsk, dst, NULL, NULL);

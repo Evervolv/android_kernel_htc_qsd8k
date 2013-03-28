@@ -187,8 +187,8 @@ static unsigned int snd_soc_8_8_read_i2c(struct snd_soc_codec *codec,
 					 unsigned int r)
 {
 	u8 reg = r;
-	u8 data;
-	int ret;
+	u8 data = 0;
+	int ret = 0;
 
 	ret = do_i2c_read(codec, &reg, 1, &data, 1);
 	if (ret < 0)
@@ -204,8 +204,8 @@ static unsigned int snd_soc_8_16_read_i2c(struct snd_soc_codec *codec,
 					  unsigned int r)
 {
 	u8 reg = r;
-	u16 data;
-	int ret;
+	u16 data = 0;
+	int ret = 0;
 
 	ret = do_i2c_read(codec, &reg, 1, &data, 2);
 	if (ret < 0)
@@ -221,8 +221,8 @@ static unsigned int snd_soc_16_8_read_i2c(struct snd_soc_codec *codec,
 					  unsigned int r)
 {
 	u16 reg = r;
-	u8 data;
-	int ret;
+	u8 data = 0;
+	int ret = 0;
 
 	ret = do_i2c_read(codec, &reg, 2, &data, 1);
 	if (ret < 0)
@@ -256,8 +256,8 @@ static unsigned int snd_soc_16_16_read_i2c(struct snd_soc_codec *codec,
 					   unsigned int r)
 {
 	u16 reg = cpu_to_be16(r);
-	u16 data;
-	int ret;
+	u16 data = 0;
+	int ret = 0;
 
 	ret = do_i2c_read(codec, &reg, 2, &data, 2);
 	if (ret < 0)

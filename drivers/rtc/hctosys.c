@@ -24,7 +24,7 @@
 
 int rtc_hctosys_ret = -ENODEV;
 
-static int __init rtc_hctosys(void)
+int rtc_hctosys(void)
 {
 	int err = -ENODEV;
 	struct rtc_time tm;
@@ -56,6 +56,9 @@ static int __init rtc_hctosys(void)
 
 	rtc_tm_to_time(&tm, &tv.tv_sec);
 
+	if (tv.tv_sec < 86400) {
+		tv.tv_sec = 86400;
+	}
 	do_settimeofday(&tv);
 
 	dev_info(rtc->dev.parent,

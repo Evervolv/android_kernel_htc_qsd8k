@@ -133,6 +133,7 @@ struct scsi_cmnd;
 #define SECURITY_PROTOCOL_OUT 0xb5
 #define READ_ELEMENT_STATUS   0xb8
 #define SEND_VOLUME_TAG       0xb6
+#define READ_CD               0xbe
 #define WRITE_LONG_2          0xea
 #define EXTENDED_COPY         0x83
 #define RECEIVE_COPY_RESULTS  0x84

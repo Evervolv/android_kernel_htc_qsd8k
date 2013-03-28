@@ -509,8 +509,15 @@ const struct file_operations bad_sock_fops = {
  *	an inode not a file.
  */
 
+int add_or_remove_port(struct sock *sk, int add_or_remove);	/* SSD_RIL: Garbage_Filter_TCP */
+
 void sock_release(struct socket *sock)
 {
+	/* ++SSD_RIL: Garbage_Filter_TCP */
+	if (sock->sk != NULL)
+		add_or_remove_port(sock->sk, 0);
+	/* --SSD_RIL: Garbage_Filter_TCP */
+
 	if (sock->ops) {
 		struct module *owner = sock->ops->owner;
 
@@ -1440,6 +1447,14 @@ SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 						      &address, addrlen);
 		}
 		fput_light(sock->file, fput_needed);
+		/* ++SSD_RIL: Garbage_Filter_UDP */
+		#ifdef CONFIG_ARCH_MSM8960
+		if (sock->sk != NULL) {
+			if (sock->sk->sk_protocol == IPPROTO_UDP)
+				add_or_remove_port(sock->sk, 1);
+		}
+		#endif
+		/* --SSD_RIL: Garbage_Filter_UDP */
 	}
 	return err;
 }
@@ -1467,6 +1482,10 @@ SYSCALL_DEFINE2(listen, int, fd, int, backlog)
 			err = sock->ops->listen(sock, backlog);
 
 		fput_light(sock->file, fput_needed);
+		/* ++SSD_RIL: Garbage_Filter_TCP */
+		if (sock->sk != NULL)
+			add_or_remove_port(sock->sk, 1);
+		/* --SSD_RIL: Garbage_Filter_TCP */
 	}
 	return err;
 }

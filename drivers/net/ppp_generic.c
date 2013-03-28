@@ -56,6 +56,17 @@
 
 #define PPP_VERSION	"2.4.2"
 
+#include <mach/board_htc.h>
+static int ppp_debug_mask;
+#define MODULE_NAME "[PPP]" /* HTC version */
+#if defined(pr_debug)
+#undef pr_debug
+#endif
+#define pr_debug(x...) do {                             \
+                if (ppp_debug_mask) \
+                        printk(KERN_DEBUG MODULE_NAME " "x);            \
+        } while (0)
+
 /*
  * Network protocols we support.
  */
@@ -454,6 +465,16 @@ static ssize_t ppp_read(struct file *file, char __user *buf,
 		goto outf;
 	ret = skb->len;
 
+	if (ppp_debug_mask)
+	{
+		int i=0;
+		printk(MODULE_NAME "%s len=%d \n", __func__, skb->len);
+		printk("[PPP] Rx: ");
+		for (i=0; i<skb->len; i++)
+			printk("%02x ",buf[i]);
+		printk("\n");
+	}
+
  outf:
 	kfree_skb(skb);
  out:
@@ -466,6 +487,16 @@ static ssize_t ppp_write(struct file *file, const char __user *buf,
 	struct ppp_file *pf = file->private_data;
 	struct sk_buff *skb;
 	ssize_t ret;
+
+	if (ppp_debug_mask)
+	{
+		int i=0;
+		printk(MODULE_NAME "%s len=%d \n", __func__, count);
+		printk("[PPP] Tx: ");
+		for (i=0; i<count; i++)
+			printk("%02x ",buf[i]);
+		printk("\n");
+	}
 
 	if (!pf)
 		return -ENXIO;
@@ -899,6 +930,15 @@ static int __init ppp_init(void)
 {
 	int err;
 
+	if (get_kernel_flag() & BIT(22)){
+		ppp_debug_mask = 1;
+		printk(KERN_DEBUG MODULE_NAME " %s enable ppp debug msg\n", __func__);
+	}
+	else{
+		ppp_debug_mask = 0;
+		printk(KERN_DEBUG MODULE_NAME " %s disable ppp debug msg\n", __func__);
+	}
+
 	pr_info("PPP generic driver version " PPP_VERSION "\n");
 
 	err = register_pernet_device(&ppp_net_ops);
@@ -1232,7 +1272,15 @@ ppp_send_frame(struct ppp *ppp, struct sk_buff *skb)
 	return;
 
  drop:
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (!IS_ERR(skb) && (skb))
+		kfree_skb(skb);
+	else
+		printk(KERN_ERR "[PPP] skb is NULL in %s!\n", __func__);
+#else
 	kfree_skb(skb);
+#endif
+
 	++ppp->dev->stats.tx_errors;
 }
 
@@ -1531,6 +1579,11 @@ ppp_channel_push(struct channel *pch)
 		while (!skb_queue_empty(&pch->file.xq)) {
 			skb = skb_dequeue(&pch->file.xq);
 			if (!pch->chan->ops->start_xmit(pch->chan, skb)) {
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+				if (IS_ERR(skb) || (!skb))
+					printk(KERN_ERR "[PPP] skb is NULL in %s!\n", __func__);
+#endif
 				/* put the packet back and try again later */
 				skb_queue_head(&pch->file.xq, skb);
 				break;

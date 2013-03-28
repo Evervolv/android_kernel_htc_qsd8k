@@ -17,6 +17,8 @@ obj-$(CONFIG_TEST_POWER)	+= test_power.o
 obj-$(CONFIG_BATTERY_DS2760)	+= ds2760_battery.o
 obj-$(CONFIG_BATTERY_DS2780)	+= ds2780_battery.o
 obj-$(CONFIG_BATTERY_DS2782)	+= ds2782_battery.o
+obj-$(CONFIG_BATTERY_DS2746)    += ds2746_battery.o
+obj-$(CONFIG_BATTERY_DS2746)    += ds2746_param.o
 obj-$(CONFIG_BATTERY_PMU)	+= pmu_battery.o
 obj-$(CONFIG_BATTERY_OLPC)	+= olpc_battery.o
 obj-$(CONFIG_BATTERY_TOSA)	+= tosa_battery.o
@@ -36,3 +38,21 @@ obj-$(CONFIG_CHARGER_ISP1704)	+= isp1704_charger.o
 obj-$(CONFIG_CHARGER_MAX8903)	+= max8903_charger.o
 obj-$(CONFIG_CHARGER_TWL4030)	+= twl4030_charger.o
 obj-$(CONFIG_CHARGER_GPIO)	+= gpio-charger.o
+obj-$(CONFIG_BATTERY_MSM)       += msm_battery.o
+obj-$(CONFIG_BATTERY_MSM8X60)   += msm_charger.o
+obj-$(CONFIG_PM8058_CHARGER)    += pmic8058-charger.o
+obj-$(CONFIG_ISL9519_CHARGER)   += isl9519q.o
+obj-$(CONFIG_PM8058_FIX_USB)    += pm8058_usb_fix.o
+obj-$(CONFIG_BATTERY_QCIBAT)    += qci_battery.o
+obj-$(CONFIG_BATTERY_BQ27520)	+= bq27520_fuelgauger.o
+obj-$(CONFIG_BATTERY_BQ27541)	+= bq27541_fuelgauger.o
+obj-$(CONFIG_SMB137B_CHARGER)   += smb137b.o
+obj-$(CONFIG_PM8XXX_CCADC)	+= pm8xxx-ccadc.o
+obj-$(CONFIG_PM8921_BMS)	+= pm8921-bms.o
+ifdef CONFIG_PM8921_CHARGER
+ifndef CONFIG_HTC_BATT_8960
+		obj-y += pm8921-charger.o
+else
+		obj-y += pm8921-charger-htc.o
+endif
+endif

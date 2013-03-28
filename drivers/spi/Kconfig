@@ -253,6 +253,19 @@ config SPI_OC_TINY
 	help
 	  This is the driver for OpenCores tiny SPI master controller.
 
+config SPI_AIC3254
+	tristate "TI AIC3254 SPI support"
+        default n
+	depends on ARCH_MSM7X30 || ARCH_MSM8X60
+	help
+	  TI AIC3254 is external codec for audio RX
+
+config SPI_SP8803COM
+	tristate "SP 8803 COM SPI support"
+        default n
+	depends on ARCH_MSM7X30 || ARCH_MSM8X60
+	help
+	  SP 8803 COM is one modem
 config SPI_OMAP_UWIRE
 	tristate "OMAP1 MicroWire"
 	depends on ARCH_OMAP1
@@ -309,6 +322,16 @@ config SPI_PXA2XX
 
 config SPI_PXA2XX_PCI
 	def_bool SPI_PXA2XX && X86_32 && PCI
+
+config SPI_QSD
+	tristate "Qualcomm MSM SPI support"
+	default n
+	depends on ARCH_MSM_SCORPION && !MSM_SMP
+
+config SPI_DISPLAY
+	tristate "htc spi workaround"
+	default n
+	depends on ARCH_MSM_SCORPION && !MSM_SMP
 
 config SPI_S3C24XX
 	tristate "Samsung S3C24XX series SPI"
@@ -419,6 +442,34 @@ config SPI_NUC900
 	select SPI_BITBANG
 	help
 	  SPI driver for Nuvoton NUC900 series ARM SoCs
+
+config SPI_QSD
+	tristate "Qualcomm MSM SPI support"
+	default n
+	depends on ARCH_MSM_SCORPION && !MSM_SMP
+	help
+	  Support for Serial Peripheral Interface for Qualcomm MSM
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called spi_qsd.
+
+config SPI_QUP
+	tristate "Qualcomm MSM SPI QUPe Support"
+	depends on ARCH_MSM && !SPI_QSD
+	default n
+	help
+	  Support for Serial Peripheral Interface for Qualcomm Universal
+          Peripheral.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called spi_qsd.
+
+config SPI_TOUCHSCREEN_NTRIG
+	tristate "SPI support for Touchscreen"
+	default y
+	depends on ARCH_MSM7X30 || ARCH_MSM8X60
+	help
+		SPI driver for N-trig Touchscreen
 
 #
 # Add new SPI master controllers in alphabetical order above this line

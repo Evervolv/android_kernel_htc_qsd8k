@@ -10,6 +10,7 @@
  *  Page table mapping constructs and function prototypes
  */
 #include <asm/io.h>
+#include <asm/page.h>
 
 struct map_desc {
 	unsigned long virtual;
@@ -29,11 +30,21 @@ struct map_desc {
 #define MT_MEMORY_NONCACHED	11
 #define MT_MEMORY_DTCM		12
 #define MT_MEMORY_ITCM		13
+#define MT_DEVICE_STRONGLY_ORDERED 14
+#define MT_MEMORY_R		15
+#define MT_MEMORY_RW		16
+#define MT_MEMORY_RX		17
 
 #ifdef CONFIG_MMU
 extern void iotable_init(struct map_desc *, int);
 
-struct mem_type;
+struct mem_type {
+	pteval_t prot_pte;
+	unsigned int prot_l1;
+	unsigned int prot_sect;
+	unsigned int domain;
+};
+
 extern const struct mem_type *get_mem_type(unsigned int type);
 /*
  * external interface to remap single page with appropriate type

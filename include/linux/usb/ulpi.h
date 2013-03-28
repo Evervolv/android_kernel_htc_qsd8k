@@ -68,8 +68,17 @@
 #define ULPI_FUNC_CTRL				0x04
 #define ULPI_IFC_CTRL				0x07
 #define ULPI_OTG_CTRL				0x0a
+#define ULPI_OTG_CTRL_W				0x0a
+#define ULPI_OTG_CTRL_S				0x0b
+#define ULPI_OTG_CTRL_C				0x0c
 #define ULPI_USB_INT_EN_RISE			0x0d
+#define ULPI_USB_INT_EN_RISE_W			0x0d
+#define ULPI_USB_INT_EN_RISE_S			0x0e
+#define ULPI_USB_INT_EN_RISE_C			0x0f
 #define ULPI_USB_INT_EN_FALL			0x10
+#define ULPI_USB_INT_EN_FALL_W			0x10
+#define ULPI_USB_INT_EN_FALL_S			0x11
+#define ULPI_USB_INT_EN_FALL_C			0x12
 #define ULPI_USB_INT_STS			0x13
 #define ULPI_USB_INT_LATCH			0x14
 #define ULPI_DEBUG				0x15
@@ -91,7 +100,26 @@
 #define ULPI_VENDOR_SPECIFIC			0x30
 /* Extended Registers */
 #define ULPI_EXT_VENDOR_SPECIFIC		0x80
+/* SNPS_28NM_INTEGRATED_PHY */
+#define ULPI_PARM_OVERRIDE_A			0x80
+#define ULPI_PARM_OVERRIDE_B			0x81
+#define ULPI_PARM_OVERRIDE_C			0x82
+#define ULPI_PARM_OVERRIDE_D			0x83
 
+#define ULPI_CHRG_DET_CTRL			0x84
+#define ULPI_CHRG_DET_CTRL_S		0x85
+#define ULPI_CHRG_DET_CTRL_C		0x86
+#define ULPI_CHRG_DET_OUTPUT		0x87
+
+#define ULPI_POW_CLK		0x88
+#define ULPI_POW_CLK_S		0x89
+#define ULPI_POW_CLK_C		0x8a
+#define ULPI_ALT_INT_LATCH			0x91
+#define ULPI_ALT_INT_LATCH_S			0x92
+#define ULPI_ALT_INT_EN		0x93
+#define ULPI_ALT_INT_EN_S		0x94
+#define ULPI_ALT_INT_EN_C		0x95
+#define ULPI_MISC_A			0x96
 /*-------------------------------------------------------------------------*/
 
 /*
@@ -178,6 +206,47 @@
 #define ULPI_CARKIT_PLS_CTRL_RXPLSEN		(1 << 1)
 #define ULPI_CARKIT_PLS_CTRL_SPKRLEFT_BIASEN	(1 << 2)
 #define ULPI_CARKIT_PLS_CTRL_SPKRRIGHT_BIASEN	(1 << 3)
+
+/* Extend ULPI register */
+
+/* ULPI_PARM_OVERRIDE_A */
+#define ULPI_OTGTUNE			(0x07UL <<  0)
+#define ULPI_COMPDISTUNE		(0x07UL <<  4)
+/* ULPI_PARM_OVERRIDE_B */
+/* ULPI_PARM_OVERRIDE_C */
+/* ULPI_PARM_OVERRIDE_D */
+
+/* ULPI_CHRG_DET_CTRL */
+#define ULPI_ACAENB			BIT(5)
+#define ULPI_DCDENB			BIT(4)
+#define ULPI_CHRGSEL		BIT(3)
+#define ULPI_VDATSRCAUTO	BIT(2)
+#define ULPI_VDATSRCENB		BIT(1)
+#define ULPI_VDATDETENB		BIT(0)
+
+/* ULPI_CHRG_DET_OUTPUT */
+#define ULPI_ULPI_RID		(0x07UL <<  2)
+#define ULPI_DCDOUT				BIT(1)
+#define ULPI_CHGDET				BIT(0)
+/* ULPI_POW_CLK */
+#define ULPI_COMMONONN			BIT(1)
+#define ULPI_OTGDISABLE			BIT(0)
+
+/* ULPI_ALT_INT_LATCH */
+#define ULPI_DMINTLCH			BIT(4)
+#define ULPI_DPINTLCH			BIT(3)
+#define ULPI_DCDINTLCH			BIT(2)
+#define ULPI_CHGDETINTLCH		BIT(1)
+#define ULPI_ACADETINTLCH 		BIT(0)
+/* ULPI_ALT_INT_EN */
+#define ULPI_DMINTENB			BIT(4)
+#define ULPI_DPINTENB			BIT(3)
+#define ULPI_DCDINTENB			BIT(2)
+#define ULPI_CHGDETINTENB		BIT(1)
+#define ULPI_ACADETINTENB		BIT(0)
+/* ULPI_MISC_A */
+#define ULPI_VBUSVLDEXTSEL		BIT(1)
+#define ULPI_VBUSVLDEXT			BIT(0)
 
 /*-------------------------------------------------------------------------*/
 

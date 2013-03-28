@@ -273,8 +273,20 @@ static int pfkey_broadcast(struct sk_buff *skb, gfp_t allocation,
 	if (one_sk != NULL)
 		err = pfkey_broadcast_one(skb, &skb2, allocation, one_sk);
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (!IS_ERR(skb2) && (skb2))
+		kfree_skb(skb2);
+#else
 	kfree_skb(skb2);
+#endif
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (!IS_ERR(skb) && (skb))
+		kfree_skb(skb);
+#else
 	kfree_skb(skb);
+#endif
+
 	return err;
 }
 
@@ -1320,6 +1332,12 @@ static int pfkey_getspi(struct sock *sk, struct sk_buff *skb, const struct sadb_
 	}
 
 	if (hdr->sadb_msg_seq) {
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(xdaddr) || (!xdaddr))
+		printk(KERN_ERR "[NET] xdaddr is NULL in %s!\n", __func__);
+#endif
+
 		x = xfrm_find_acq_byseq(net, DUMMY_MARK, hdr->sadb_msg_seq);
 		if (x && xfrm_addr_cmp(&x->id.daddr, xdaddr, family)) {
 			xfrm_state_put(x);
@@ -3570,7 +3588,14 @@ static int pfkey_sendmsg(struct kiocb *kiocb,
 out:
 	if (err && hdr && pfkey_error(hdr, err, sk) == 0)
 		err = 0;
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (!IS_ERR(skb) && (skb))
+		kfree_skb(skb);
+#else
 	kfree_skb(skb);
+#endif
+
 
 	return err ? : len;
 }

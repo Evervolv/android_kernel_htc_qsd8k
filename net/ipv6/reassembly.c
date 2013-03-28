@@ -380,6 +380,11 @@ found:
 		fq->q.last_in |= INET_FRAG_FIRST_IN;
 	}
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(dev) || (!dev))
+		printk(KERN_ERR "[NET] dev is NULL in %s!\n", __func__);
+#endif
+
 	if (fq->q.last_in == (INET_FRAG_FIRST_IN | INET_FRAG_LAST_IN) &&
 	    fq->q.meat == fq->q.len)
 		return ip6_frag_reasm(fq, prev, dev);

@@ -163,6 +163,11 @@ static int mip6_destopt_output(struct xfrm_state *x, struct sk_buff *skb)
 	hao = mip6_padn((char *)(dstopt + 1),
 			calc_padlen(sizeof(*dstopt), 6));
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(hao) || (!hao))
+		printk(KERN_ERR "[NET] hao is NULL in %s!\n", __func__);
+#endif
+
 	hao->type = IPV6_TLV_HAO;
 	BUILD_BUG_ON(sizeof(*hao) != 18);
 	hao->length = sizeof(*hao) - 2;

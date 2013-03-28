@@ -28,5 +28,7 @@ extern void mmc_queue_resume(struct mmc_queue *);
 extern unsigned int mmc_queue_map_sg(struct mmc_queue *);
 extern void mmc_queue_bounce_pre(struct mmc_queue *);
 extern void mmc_queue_bounce_post(struct mmc_queue *);
-
+extern int mmc_reinit_card(struct mmc_host *host);
+extern int mmc_schedule_card_removal_work(struct delayed_work *work,
+				     unsigned long delay);
 #endif

@@ -42,6 +42,8 @@
 #include <asm/mach/irq.h>
 #include <asm/mach/time.h>
 
+#include <asm/perftypes.h>
+
 /*
  * No architecture-specific irq_finish function defined in arm/arch/irqs.h.
  */
@@ -66,16 +68,56 @@ int arch_show_interrupts(struct seq_file *p, int prec)
 	return 0;
 }
 
+#ifdef CONFIG_ARCH_MSM8X60_LTE
+unsigned int previous_irqs[NR_IRQS+1] = {0};
+void htc_show_interrupt(int i)
+{
+	struct irqaction *action;
+	unsigned long flags;
+	if (i < NR_IRQS) {
+		raw_spin_lock_irqsave(&irq_desc[i].lock, flags);
+		action = irq_desc[i].action;
+		if (!action)
+			goto unlock;
+		if (!(kstat_irqs_cpu(i, 0)) || previous_irqs[i] == (kstat_irqs_cpu(i, 0)))
+			goto unlock;
+		printk("%3d:", i);
+		printk("%6u\t", kstat_irqs_cpu(i, 0)-previous_irqs[i]);
+		printk("%s", action->name);
+		for (action = action->next; action; action = action->next)
+			printk(KERN_INFO ", %s", action->name);
+		printk("\n");
+		previous_irqs[i] = kstat_irqs_cpu(i, 0);
+unlock:
+		raw_spin_unlock_irqrestore(&irq_desc[i].lock, flags);
+	} else if (i == NR_IRQS) {
+		if (previous_irqs[NR_IRQS] == irq_err_count)
+			return;
+		printk("Err: %lud\n", irq_err_count-previous_irqs[NR_IRQS]);
+		previous_irqs[NR_IRQS] = irq_err_count;
+	}
+}
+
+void htc_show_interrupts(void)
+{
+	int i = 0;
+	for (i = 0; i <= NR_IRQS; i++)
+		htc_show_interrupt(i);
+}
+#endif
+
+
 /*
- * do_IRQ handles all hardware IRQ's.  Decoded IRQs should not
- * come via this function.  Instead, they should provide their
- * own 'handler'
+ * handle_IRQ handles all hardware IRQ's.  Decoded IRQs should
+ * not come via this function.  Instead, they should provide their
+ * own 'handler'.  Used by platform code implementing C-based 1st
+ * level decoding.
  */
-asmlinkage void __exception_irq_entry
-asm_do_IRQ(unsigned int irq, struct pt_regs *regs)
+void handle_IRQ(unsigned int irq, struct pt_regs *regs)
 {
 	struct pt_regs *old_regs = set_irq_regs(regs);
 
+	perf_mon_interrupt_in();
 	irq_enter();
 
 	/*
@@ -95,6 +137,16 @@ asm_do_IRQ(unsigned int irq, struct pt_regs *regs)
 
 	irq_exit();
 	set_irq_regs(old_regs);
+	perf_mon_interrupt_out();
+}
+
+/*
+ * asm_do_IRQ is the interface to be used from assembly code.
+ */
+asmlinkage void __exception_irq_entry
+asm_do_IRQ(unsigned int irq, struct pt_regs *regs)
+{
+	handle_IRQ(irq, regs);
 }
 
 void set_irq_flags(unsigned int irq, unsigned int iflags)
@@ -131,54 +183,63 @@ int __init arch_probe_nr_irqs(void)
 
 #ifdef CONFIG_HOTPLUG_CPU
 
-static bool migrate_one_irq(struct irq_data *d)
+static bool migrate_one_irq(struct irq_desc *desc)
 {
-	unsigned int cpu = cpumask_any_and(d->affinity, cpu_online_mask);
+	struct irq_data *d = irq_desc_get_irq_data(desc);
+	const struct cpumask *affinity = d->affinity;
+	struct irq_chip *c;
 	bool ret = false;
 
-	if (cpu >= nr_cpu_ids) {
-		cpu = cpumask_any(cpu_online_mask);
+	/*
+	 * If this is a per-CPU interrupt, or the affinity does not
+	 * include this CPU, then we have nothing to do.
+	 */
+	if (irqd_is_per_cpu(d) || !cpumask_test_cpu(smp_processor_id(), affinity))
+		return false;
+
+	if (cpumask_any_and(affinity, cpu_online_mask) >= nr_cpu_ids) {
+		affinity = cpu_online_mask;
 		ret = true;
 	}
 
-	pr_debug("IRQ%u: moving from cpu%u to cpu%u\n", d->irq, d->node, cpu);
-
-	d->chip->irq_set_affinity(d, cpumask_of(cpu), true);
+	c = irq_data_get_irq_chip(d);
+	if (c->irq_set_affinity)
+		c->irq_set_affinity(d, affinity, true);
+	else
+		pr_debug("IRQ%u: unable to set affinity\n", d->irq);
 
 	return ret;
 }
 
 /*
- * The CPU has been marked offline.  Migrate IRQs off this CPU.  If
- * the affinity settings do not allow other CPUs, force them onto any
+ * The current CPU has been marked offline.  Migrate IRQs off this CPU.
+ * If the affinity settings do not allow other CPUs, force them onto any
  * available CPU.
+ *
+ * Note: we must iterate over all IRQs, whether they have an attached
+ * action structure or not, as we need to get chained interrupts too.
  */
 void migrate_irqs(void)
 {
-	unsigned int i, cpu = smp_processor_id();
+	unsigned int i;
 	struct irq_desc *desc;
 	unsigned long flags;
 
 	local_irq_save(flags);
 
 	for_each_irq_desc(i, desc) {
-		struct irq_data *d = &desc->irq_data;
 		bool affinity_broken = false;
 
+		if (!desc)
+			continue;
+
 		raw_spin_lock(&desc->lock);
-		do {
-			if (desc->action == NULL)
-				break;
-
-			if (d->node != cpu)
-				break;
-
-			affinity_broken = migrate_one_irq(d);
-		} while (0);
+		affinity_broken = migrate_one_irq(desc);
 		raw_spin_unlock(&desc->lock);
 
 		if (affinity_broken && printk_ratelimit())
-			pr_warning("IRQ%u no longer affine to CPU%u\n", i, cpu);
+			pr_warning("IRQ%u no longer affine to CPU%u\n", i,
+				smp_processor_id());
 	}
 
 	local_irq_restore(flags);

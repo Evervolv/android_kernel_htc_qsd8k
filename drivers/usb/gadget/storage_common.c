@@ -205,6 +205,17 @@ struct interrupt_data {
 /* Length of a SCSI Command Data Block */
 #define MAX_COMMAND_SIZE	16
 
+#ifdef CONFIG_PASCAL_DETECT
+#define SC_PASCAL_MODE		0xff
+#endif
+#ifdef CONFIG_LISMO
+/* [ADD START] 2012/01/17 KDDI : Android ICS */
+/* [ADD START] 2011/04/15 KDDI : define vendor command code */
+#define SC_VENDOR_START			0xe4
+#define SC_VENDOR_END			0xef
+/* [ADD END] 2011/04/15 KDDI : define vendor command code */
+/* [ADD END] 2012/01/17 KDDI : Android ICS */
+#endif
 /* SCSI Sense Key/Additional Sense Code/ASC Qualifier values */
 #define SS_NO_SENSE				0
 #define SS_COMMUNICATION_FAILURE		0x040800
@@ -225,9 +236,50 @@ struct interrupt_data {
 #define ASC(x)		((u8) ((x) >> 8))
 #define ASCQ(x)		((u8) (x))
 
+#ifdef CONFIG_LISMO
+/* [ADD START] 2012/01/17 KDDI : Android ICS */
+/* [ADD START] 2011/04/15 KDDI : define count of vendor command */
+#define VENDOR_CMD_NR	(SC_VENDOR_END - SC_VENDOR_START + 1)
+/* [ADD END] 2011/04/15 KDDI : define count of vendor command */
+/* [ADD START] 2011/05/18 KDDI : define inquiry command init response */
+#define INQUIRY_VENDOR_INIT	"LISMOSC1"
+/* [ADD END] 2011/05/18 KDDI : define inquiry command init response */
+
+/* [ADD START] 2011/05/26 KDDI : inquiry respons [Vendor specific]length)*/
+#define INQUIRY_VENDOR_SPECIFIC_SIZE 20 /* Size of InquiryResponse VendorSpecific */
+/* [ADD END] 2011/05/26 KDDI : inquiry respons [Vendor specific]length)*/
+
+/* [ADD START] 2011/08/23 KDDI : buffer size alloc at __init() */
+#define ALLOC_INI_SIZE  0x101000
+#define ALLOC_CMD_CNT   1
+/* [ADD ENDT] 2011/08/23 KDDI : buffer size alloc at __init() */
+/* [ADD END] 2012/01/17 KDDI : Android ICS */
 
 /*-------------------------------------------------------------------------*/
 
+/* [ADD START] 2012/01/17 KDDI : Android ICS */
+/* [ADD START] 2011/04/15 KDDI : etc define for vendor command */
+struct op_desc {
+	struct device	dev;
+	unsigned long	flags;
+/* flag symbols are bit numbers */
+#define FLAG_IS_READ	0
+#define FLAG_IS_WRITE	1
+#define FLAG_EXPORT	2	/* protected by sysfs_lock */
+
+	char			*buffer;
+	size_t			len;
+	struct bin_attribute	dev_bin_attr_buffer;
+	unsigned long 		update;
+	struct work_struct	work;
+	struct sysfs_dirent	*value_sd;
+};
+static void op_release(struct device *dev);
+
+static DEFINE_MUTEX(sysfs_lock);
+/* [ADD END] 2011/04/15 KDDI : etc define for vendor command */
+/* [ADD END] 2012/01/17 KDDI : Android ICS */
+#endif
 
 struct fsg_lun {
 	struct file	*filp;
@@ -248,6 +300,32 @@ struct fsg_lun {
 	u32		unit_attention_data;
 
 	struct device	dev;
+#ifdef CONFIG_USB_MSC_PROFILING
+	spinlock_t	lock;
+	struct {
+
+		unsigned long rbytes;
+		unsigned long wbytes;
+		ktime_t rtime;
+		ktime_t wtime;
+	} perf;
+
+#endif
+#ifdef CONFIG_LISMO
+/* [ADD START] 2012/01/17 KDDI : Android ICS */
+/* [ADD START] 2011/04/15 KDDI : add define to device struct */
+	struct op_desc *op_desc[VENDOR_CMD_NR];
+
+/* [CHANGE START] 2011/05/26 KDDI : add Vendor specific length */
+	/* Vendor specific and NUL byte */
+	char inquiry_vendor[INQUIRY_VENDOR_SPECIFIC_SIZE + 1];
+/* [CHANGE END] 2011/05/26 KDDI : add Vendor specific length */
+/* [ADD END] 2011/04/15 KDDI : add define to device struct */
+/* [ADD START] 2011/08/23 KDDI : add buffer malloc table */
+	char   *reserve_buf[VENDOR_CMD_NR];
+/* [ADD ENDT] 2011/08/23 KDDI : add buffer malloc table */
+/* [ADD END] 2012/01/17 KDDI : Android ICS */
+#endif
 };
 
 #define fsg_lun_is_open(curlun)	((curlun)->filp != NULL)
@@ -257,13 +335,23 @@ static struct fsg_lun *fsg_lun_from_dev(struct device *dev)
 	return container_of(dev, struct fsg_lun, dev);
 }
 
+#ifdef CONFIG_LISMO
+/* [ADD START] 2012/01/17 KDDI : Android ICS */
+/* [ADD START] 2011/04/15 KDDI : define container(adress_get) */
+static struct op_desc *dev_to_desc(struct device *dev)
+{
+	return container_of(dev, struct op_desc, dev);
+}
+/* [ADD END] 2011/04/15 KDDI : define container(adress_get)*/
+/* [ADD END] 2012/01/17 KDDI : Android ICS */
+#endif
 
 /* Big enough to hold our biggest descriptor */
 #define EP0_BUFSIZE	256
 #define DELAYED_STATUS	(EP0_BUFSIZE + 999)	/* An impossibly large value */
 
-/* Number of buffers we will use.  2 is enough for double-buffering */
-#define FSG_NUM_BUFFERS	2
+/* Number of buffers for CBW, DATA and CSW */
+#define FSG_NUM_BUFFERS    8
 
 /* Default size of buffer length. */
 #define FSG_BUFLEN	((u32)16384)
@@ -631,10 +719,16 @@ static void fsg_lun_close(struct fsg_lun *curlun)
 static int fsg_lun_fsync_sub(struct fsg_lun *curlun)
 {
 	struct file	*filp = curlun->filp;
+	int ret = 0;
 
 	if (curlun->ro || !filp)
 		return 0;
-	return vfs_fsync(filp, 1);
+
+	printk(KERN_DEBUG "vfs_fsync++\n");
+	ret = vfs_fsync(filp, 1);
+	printk(KERN_DEBUG "vfs_fsync--\n");
+
+	return ret;
 }
 
 static void store_cdrom_address(u8 *dest, int msf, u32 addr)
@@ -677,6 +771,43 @@ static ssize_t fsg_show_nofua(struct device *dev, struct device_attribute *attr,
 	return sprintf(buf, "%u\n", curlun->nofua);
 }
 
+#ifdef CONFIG_USB_MSC_PROFILING
+static ssize_t fsg_show_perf(struct device *dev, struct device_attribute *attr,
+			      char *buf)
+{
+	struct fsg_lun	*curlun = fsg_lun_from_dev(dev);
+	unsigned long rbytes, wbytes;
+	int64_t rtime, wtime;
+
+	spin_lock(&curlun->lock);
+	rbytes = curlun->perf.rbytes;
+	wbytes = curlun->perf.wbytes;
+	rtime = ktime_to_us(curlun->perf.rtime);
+	wtime = ktime_to_us(curlun->perf.wtime);
+	spin_unlock(&curlun->lock);
+
+	return snprintf(buf, PAGE_SIZE, "Write performance :"
+					"%lu bytes in %lld microseconds\n"
+					"Read performance :"
+					"%lu bytes in %lld microseconds\n",
+					wbytes, wtime, rbytes, rtime);
+}
+static ssize_t fsg_store_perf(struct device *dev, struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	struct fsg_lun	*curlun = fsg_lun_from_dev(dev);
+	int value;
+
+	sscanf(buf, "%d", &value);
+	if (!value) {
+		spin_lock(&curlun->lock);
+		memset(&curlun->perf, 0, sizeof(curlun->perf));
+		spin_unlock(&curlun->lock);
+	}
+
+	return count;
+}
+#endif
 static ssize_t fsg_show_file(struct device *dev, struct device_attribute *attr,
 			     char *buf)
 {
@@ -763,10 +894,17 @@ static ssize_t fsg_store_file(struct device *dev, struct device_attribute *attr,
 	struct rw_semaphore	*filesem = dev_get_drvdata(dev);
 	int		rc = 0;
 
+
+	printk(KERN_INFO "[USB] store_file: \"%s\" to %s\n", buf, dev->kobj.name);
+#ifndef CONFIG_USB_ANDROID_MASS_STORAGE
+	/* disabled in android because we need to allow closing the backing file
+	 * if the media was removed
+	 */
 	if (curlun->prevent_medium_removal && fsg_lun_is_open(curlun)) {
 		LDBG(curlun, "eject attempt prevented\n");
 		return -EBUSY;				/* "Door is locked" */
 	}
+#endif
 
 	/* Remove a trailing newline */
 	if (count > 0 && buf[count-1] == '\n')

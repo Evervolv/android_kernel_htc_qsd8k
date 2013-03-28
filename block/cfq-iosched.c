@@ -1283,6 +1283,7 @@ static void cfq_service_tree_add(struct cfq_data *cfqd, struct cfq_queue *cfqq,
 
 	service_tree = service_tree_for(cfqq->cfqg, cfqq_prio(cfqq),
 						cfqq_type(cfqq));
+	BUG_ON(service_tree == NULL);
 	if (cfq_class_idle(cfqq)) {
 		rb_key = CFQ_IDLE_DELAY;
 		parent = rb_last(&service_tree->rb);
@@ -2167,7 +2168,10 @@ static enum wl_type_t cfq_choose_wl(struct cfq_data *cfqd,
 
 	for (i = 0; i <= SYNC_WORKLOAD; ++i) {
 		/* select the one with lowest rb_key */
-		queue = cfq_rb_first(service_tree_for(cfqg, prio, i));
+		struct cfq_rb_root *service_tree;
+		service_tree = service_tree_for(cfqg, prio, i);
+		BUG_ON(service_tree == NULL);
+		queue = cfq_rb_first(service_tree);
 		if (queue &&
 		    (!key_valid || time_before(queue->rb_key, lowest_key))) {
 			lowest_key = queue->rb_key;
@@ -2207,6 +2211,7 @@ static void choose_service_tree(struct cfq_data *cfqd, struct cfq_group *cfqg)
 	 * expiration time
 	 */
 	st = service_tree_for(cfqg, cfqd->serving_prio, cfqd->serving_type);
+	BUG_ON(st == NULL);
 	count = st->count;
 
 	/*
@@ -2274,7 +2279,7 @@ static struct cfq_group *cfq_get_next_cfqg(struct cfq_data *cfqd)
 static void cfq_choose_cfqg(struct cfq_data *cfqd)
 {
 	struct cfq_group *cfqg = cfq_get_next_cfqg(cfqd);
-
+	BUG_ON(cfqg == NULL);
 	cfqd->serving_group = cfqg;
 
 	/* Restore the workload type data */

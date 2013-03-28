@@ -566,6 +566,12 @@ static void icmpv6_echo_reply(struct sk_buff *skb)
 		hlimit = np->mcast_hops;
 	else
 		hlimit = np->hop_limit;
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(dst) || (!dst))
+		printk(KERN_ERR "[NET] dst is NULL in %s!\n", __func__);
+#endif
+
 	if (hlimit < 0)
 		hlimit = ip6_dst_hoplimit(dst);
 

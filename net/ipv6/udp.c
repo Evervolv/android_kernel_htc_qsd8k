@@ -1138,6 +1138,11 @@ do_udp_sendmsg:
 		goto out;
 	}
 
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(dst) || (!dst))
+		printk(KERN_ERR "[NET] dst is NULL in %s!\n", __func__);
+#endif
+
 	if (hlimit < 0) {
 		if (ipv6_addr_is_multicast(&fl6.daddr))
 			hlimit = np->mcast_hops;
@@ -1173,6 +1178,12 @@ back_from_confirm:
 do_append_data:
 	up->len += ulen;
 	getfrag  =  is_udplite ?  udplite_getfrag : ip_generic_getfrag;
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(dst) || (!dst))
+		printk(KERN_ERR "[NET] dst is NULL in %s!\n", __func__);
+#endif
+
 	err = ip6_append_data(sk, getfrag, msg->msg_iov, ulen,
 		sizeof(struct udphdr), hlimit, tclass, opt, &fl6,
 		(struct rt6_info*)dst,

@@ -268,9 +268,36 @@ config MWL8K
 	  To compile this driver as a module, choose M here: the module
 	  will be called mwl8k.  If unsure, say N.
 
+config WIFI_CONTROL_FUNC
+	bool "Enable WiFi control function abstraction"
+	help
+	  Enables Power/Reset/Carddetect function abstraction
+
+config LIBRA_SDIOIF
+	tristate "Qualcomm libra wlan SDIO driver"
+	select WIRELESS_EXT
+	select WEXT_PRIV
+	select WEXT_CORE
+	select WEXT_SPY
+	depends on MMC_MSM
+	---help---
+	  A driver for Qualcomm WLAN SDIO Libra chipset.
+
+config WCNSS_CORE
+	tristate "Qualcomm WCNSS CORE driver"
+	depends on ARCH_MSM8960
+	select WIRELESS_EXT
+	select WEXT_PRIV
+	select WEXT_CORE
+	select WEXT_SPY
+	---help---
+	  Core driver for the Qualcomm WCNSS triple play connectivity subsystem
+
 source "drivers/net/wireless/ath/Kconfig"
 source "drivers/net/wireless/b43/Kconfig"
 source "drivers/net/wireless/b43legacy/Kconfig"
+source "drivers/net/wireless/bcm4329/Kconfig"
+source "drivers/net/wireless/bcmdhd/Kconfig"
 source "drivers/net/wireless/hostap/Kconfig"
 source "drivers/net/wireless/ipw2x00/Kconfig"
 source "drivers/net/wireless/iwlwifi/Kconfig"
@@ -285,5 +312,8 @@ source "drivers/net/wireless/wl1251/Kconfig"
 source "drivers/net/wireless/wl12xx/Kconfig"
 source "drivers/net/wireless/zd1211rw/Kconfig"
 source "drivers/net/wireless/mwifiex/Kconfig"
+source "drivers/net/wireless/qualcomm_wlan/Kconfig"
+source "drivers/net/wireless/bcm4329_248/Kconfig"
+source "drivers/net/wireless/bcm4330b2/Kconfig"
 
 endif # WLAN

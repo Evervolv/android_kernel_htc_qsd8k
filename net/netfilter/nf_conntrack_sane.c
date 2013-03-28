@@ -76,6 +76,12 @@ static int help(struct sk_buff *skb,
 	struct sane_reply_net_start *reply;
 
 	ct_sane_info = &nfct_help(ct)->help.ct_sane_info;
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(ct_sane_info) || (!ct_sane_info))
+		printk(KERN_ERR "[NET] ct_sane_info is NULL in %s!\n", __func__);
+#endif
+
 	/* Until there's been traffic both ways, don't look in packets. */
 	if (ctinfo != IP_CT_ESTABLISHED &&
 	    ctinfo != IP_CT_ESTABLISHED_REPLY)

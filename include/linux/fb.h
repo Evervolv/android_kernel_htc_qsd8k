@@ -1169,6 +1169,16 @@ extern int fb_find_mode(struct fb_var_screeninfo *var,
 			const struct fb_videomode *default_mode,
 			unsigned int default_bpp);
 
+struct gamma_curvy {
+	u32 gamma_len;
+	u32 bl_len;
+	u32 ref_y_gamma[33];
+	u32 ref_y_shade[33];
+	u32 ref_bl_lvl[8];
+	u32 ref_y_lvl[8];
+	struct fb_cmap gc_tbl;
+};
+
 #endif /* __KERNEL__ */
 
 #endif /* _LINUX_FB_H */

@@ -525,7 +525,13 @@ retry:
 out_unlock:
 	rcu_read_unlock();
 out_free:
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (!IS_ERR(skb) && (skb))
+		kfree_skb(skb);
+#else
 	kfree_skb(skb);
+#endif
+
 	return err;
 }
 
@@ -853,7 +859,14 @@ ring_is_full:
 	spin_unlock(&sk->sk_receive_queue.lock);
 
 	sk->sk_data_ready(sk, 0);
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (!IS_ERR(copy_skb) && (copy_skb))
+		kfree_skb(copy_skb);
+#else
 	kfree_skb(copy_skb);
+#endif
+
 	goto drop_n_restore;
 }
 
@@ -1090,7 +1103,14 @@ static int tpacket_snd(struct packet_sock *po, struct msghdr *msg)
 
 out_status:
 	__packet_set_status(po, ph, status);
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (!IS_ERR(skb) && (skb))
+		kfree_skb(skb);
+#else
 	kfree_skb(skb);
+#endif
+
 out_put:
 	dev_put(dev);
 out:

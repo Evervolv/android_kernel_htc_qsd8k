@@ -20,9 +20,69 @@
 #include <linux/err.h>
 #include <linux/ctype.h>
 #include <linux/leds.h>
+#include <linux/slab.h>
 #include "leds.h"
 
+#define LED_BUFF_SIZE 50
+
 static struct class *leds_class;
+static struct workqueue_struct *leds_workqueue;
+
+void led_brightness_switch(const char * const led_name,  enum led_brightness brightness)
+{
+	struct led_classdev *led_cdev;
+
+	if (!led_name)
+		return;
+
+	down_read(&leds_list_lock);
+	list_for_each_entry(led_cdev, &leds_list, node) {
+		if (!strcmp(led_name, led_cdev->name))
+			led_set_brightness(led_cdev, brightness);
+	}
+	up_read(&leds_list_lock);
+}
+EXPORT_SYMBOL_GPL(led_brightness_switch);
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+
+static void change_brightness(struct work_struct *brightness_change_data)
+{
+	struct deferred_brightness_change *brightness_change = container_of(
+			brightness_change_data,
+			struct deferred_brightness_change,
+			brightness_change_work);
+	struct led_classdev *led_cdev = brightness_change->led_cdev;
+	enum led_brightness value = brightness_change->value;
+
+	led_cdev->brightness_set(led_cdev, value);
+
+	/* Free up memory for the brightness_change structure. */
+	kfree(brightness_change);
+}
+
+int queue_brightness_change(struct led_classdev *led_cdev,
+	enum led_brightness value)
+{
+	/* Initialize the brightness_change_work and its super-struct. */
+	struct deferred_brightness_change *brightness_change =
+		kzalloc(sizeof(struct deferred_brightness_change), GFP_KERNEL);
+
+	if (!brightness_change)
+		return -ENOMEM;
+
+	brightness_change->led_cdev = led_cdev;
+	brightness_change->value = value;
+
+	INIT_WORK(&(brightness_change->brightness_change_work),
+		change_brightness);
+	queue_work(leds_workqueue,
+		&(brightness_change->brightness_change_work));
+
+	return 0;
+}
+
+#endif
 
 static void led_update_brightness(struct led_classdev *led_cdev)
 {
@@ -38,7 +98,7 @@ static ssize_t led_brightness_show(struct device *dev,
 	/* no lock needed for this */
 	led_update_brightness(led_cdev);
 
-	return sprintf(buf, "%u\n", led_cdev->brightness);
+	return snprintf(buf, LED_BUFF_SIZE, "%u\n", led_cdev->brightness);
 }
 
 static ssize_t led_brightness_store(struct device *dev,
@@ -64,17 +124,71 @@ static ssize_t led_brightness_store(struct device *dev,
 	return ret;
 }
 
+static ssize_t led_offset_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+
+	/* no lock needed for this */
+	led_update_brightness(led_cdev);
+
+	return snprintf(buf, LED_BUFF_SIZE, "%u\n", led_cdev->offset);
+}
+
+static ssize_t led_offset_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	ssize_t ret = -EINVAL;
+	char *after;
+	unsigned long state = simple_strtoul(buf, &after, 10);
+	size_t count = after - buf;
+
+	if (isspace(*after))
+		count++;
+
+	if (count == size) {
+		ret = count;
+
+		led_cdev->offset = state;
+		led_set_brightness(led_cdev, led_cdev->brightness);
+	}
+
+	return ret;
+}
+
+static ssize_t led_max_brightness_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	ssize_t ret = -EINVAL;
+	unsigned long state = 0;
+
+	ret = strict_strtoul(buf, 10, &state);
+	if (!ret) {
+		ret = size;
+		if (state > LED_FULL)
+			state = LED_FULL;
+		led_cdev->max_brightness = state;
+		led_set_brightness(led_cdev, led_cdev->brightness);
+	}
+
+	return ret;
+}
+
 static ssize_t led_max_brightness_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
 
-	return sprintf(buf, "%u\n", led_cdev->max_brightness);
+	return snprintf(buf, LED_BUFF_SIZE, "%u\n", led_cdev->max_brightness);
 }
 
 static struct device_attribute led_class_attrs[] = {
 	__ATTR(brightness, 0644, led_brightness_show, led_brightness_store),
-	__ATTR(max_brightness, 0444, led_max_brightness_show, NULL),
+	__ATTR(offset, 0644, led_offset_show, led_offset_store),
+	__ATTR(max_brightness, 0644, led_max_brightness_show,
+			led_max_brightness_store),
 #ifdef CONFIG_LEDS_TRIGGERS
 	__ATTR(trigger, 0644, led_trigger_show, led_trigger_store),
 #endif
@@ -297,12 +411,17 @@ static int __init leds_init(void)
 	leds_class->suspend = led_suspend;
 	leds_class->resume = led_resume;
 	leds_class->dev_attrs = led_class_attrs;
+
+	/* create an ordered workqueue to process every call to sysfs */
+	leds_workqueue = alloc_ordered_workqueue("leds_wq", 0);
+
 	return 0;
 }
 
 static void __exit leds_exit(void)
 {
 	class_destroy(leds_class);
+	destroy_workqueue(leds_workqueue);
 }
 
 subsys_initcall(leds_init);

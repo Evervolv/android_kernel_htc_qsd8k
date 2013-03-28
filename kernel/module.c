@@ -2559,7 +2559,7 @@ static int move_module(struct module *mod, struct load_info *info)
 	 * after the module is initialized.
 	 */
 	kmemleak_ignore(ptr);
-	if (!ptr && mod->init_size) {
+	if (!ptr) {
 		module_free(mod, mod->module_core);
 		return -ENOMEM;
 	}
@@ -3408,6 +3408,26 @@ void print_modules(void)
 		printk(" [last unloaded: %s]", last_unloaded_module);
 	printk("\n");
 }
+
+#ifdef CONFIG_WIMAX
+bool find_wimax_modules(void)
+{
+	struct module *mod;
+    bool ret = false;
+
+	/* Most callers should already have preempt disabled, but make sure */
+	preempt_disable();
+	list_for_each_entry_rcu(mod, &modules, list) {
+		if (strcmp(mod->name, "sequans_sdio") == 0) {
+		    ret = true;
+		    break;
+		}
+	}
+	preempt_enable();
+
+	return ret;
+}
+#endif
 
 #ifdef CONFIG_MODVERSIONS
 /* Generate the signature for all relevant module structures here.

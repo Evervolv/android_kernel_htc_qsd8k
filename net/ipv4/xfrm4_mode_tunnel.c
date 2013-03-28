@@ -86,7 +86,10 @@ static int xfrm4_mode_tunnel_input(struct xfrm_state *x, struct sk_buff *skb)
 
 	old_mac = skb_mac_header(skb);
 	skb_set_mac_header(skb, -skb->mac_len);
-	memmove(skb_mac_header(skb), old_mac, skb->mac_len);
+	if (old_mac != NULL) {
+		/*printk(KERN_ERR "[XFRM] old_mac!=NULL: %s\n", __func__);*/
+		memmove(skb_mac_header(skb), old_mac, skb->mac_len);
+	}
 	skb_reset_network_header(skb);
 	err = 0;
 

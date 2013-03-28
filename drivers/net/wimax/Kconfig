@@ -11,7 +11,18 @@ if WIMAX
 menu "WiMAX Wireless Broadband devices"
 
 source "drivers/net/wimax/i2400m/Kconfig"
+source "drivers/net/wimax/SQN/Kconfig"
 
 endmenu
 
 endif
+config WIMAX_SERIAL_MSM
+	tristate "WIMAX uart debug console support"
+	depends on WIMAX && SERIAL_MSM
+	default n
+	---help---
+	  This module adds support for wimax chip console based on
+	  UART port interface.
+
+	  Need define CONFIG_SERIAL_MSM as pre-condition to enable BSP UART.
+

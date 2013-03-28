@@ -865,6 +865,12 @@ static int rawv6_sendmsg(struct kiocb *iocb, struct sock *sk,
 			hlimit = np->mcast_hops;
 		else
 			hlimit = np->hop_limit;
+
+#ifdef CONFIG_HTC_NETWORK_MODIFY
+	if (IS_ERR(dst) || (!dst))
+		printk(KERN_ERR "[NET] dst is NULL in %s!\n", __func__);
+#endif
+
 		if (hlimit < 0)
 			hlimit = ip6_dst_hoplimit(dst);
 	}
