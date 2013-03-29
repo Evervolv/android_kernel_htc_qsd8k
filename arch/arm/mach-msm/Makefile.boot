@@ -81,10 +81,16 @@ params_phys-$(CONFIG_MACH_KINGDOM)	:= 0x05000100
 initrd_phys-$(CONFIG_MACH_KINGDOM)	:= 0x06000000
 
 ifeq ($(CONFIG_MSM_SOC_REV_A),y)
+# QSD8x50A
+   zreladdr-$(CONFIG_ARCH_QSD8X50)	:= 0x00008000
+params_phys-$(CONFIG_ARCH_QSD8X50)	:= 0x00000100
+initrd_phys-$(CONFIG_ARCH_QSD8X50)	:= 0x04000000
+else
 # QSD8x50
    zreladdr-$(CONFIG_ARCH_QSD8X50)	:= 0x20008000
 params_phys-$(CONFIG_ARCH_QSD8X50)	:= 0x20000100
 initrd_phys-$(CONFIG_ARCH_QSD8X50)	:= 0x24000000
+#initrd_phys-$(CONFIG_ARCH_QSD8X50) := 0x21000000
 endif
 
 # QSD8x50 in HTC Leo
