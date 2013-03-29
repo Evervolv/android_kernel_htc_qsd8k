@@ -384,6 +384,13 @@ config MACH_PRIMODD
 		help
 			Support for Primodd_ct (PDA phone).
 
+config MACH_BRAVO
+    depends on ARCH_QSD8X50
+    default y
+    bool "HTC Bravo"
+    help
+      Select this to support the HTC Bravo device
+
 config MACH_HTCLEO
 	depends on ARCH_QSD8X50
 	default y
