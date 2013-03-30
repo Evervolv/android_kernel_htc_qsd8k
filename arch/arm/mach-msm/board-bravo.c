@@ -1479,5 +1479,4 @@ MACHINE_START(BRAVOC, "bravoc")
 	.init_irq	= msm_init_irq,
 	.init_machine	= bravo_init,
 	.timer		= &msm_timer,
-MACHINE_ENDandroid_pmem_adsp_pdata,
-	},
+MACHINE_END
