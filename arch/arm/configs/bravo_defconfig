@@ -290,7 +290,7 @@ CONFIG_PERFLOCK_BOOT_LOCK=y
 #
 # MSM Board Selection
 #
-CONFIG_MACH_HTCLEO=y
+CONFIG_MACH_BRAVO=y
 # CONFIG_ARCH_MSM7X30_SMD is not set
 # CONFIG_MACH_QSD8X50_SURF is not set
 # CONFIG_MACH_QSD8X50_FFA is not set
@@ -1095,7 +1095,6 @@ CONFIG_MTD_CFI_I2=y
 # Self-contained MTD device drivers
 #
 # CONFIG_MTD_MSM_NAND is not set
-CONFIG_MTD_HTCLEO_NAND=y
 # CONFIG_MTD_DATAFLASH is not set
 # CONFIG_MTD_M25P80 is not set
 # CONFIG_MTD_SST25L is not set
@@ -1441,13 +1440,13 @@ CONFIG_SERIAL_BCM_BT_LPM=y
 #
 # Diag Support
 #
-CONFIG_DIAG_CHAR=y
+# CONFIG_DIAG_CHAR is not set
 
 #
 # DIAG traffic over USB
 #
-CONFIG_DIAG_OVER_USB=y
-CONFIG_MODEM_DIAG_MASTER=y
+# CONFIG_DIAG_OVER_USB is not set
+# CONFIG_MODEM_DIAG_MASTER is not set
 
 #
 # SDIO support for DIAG

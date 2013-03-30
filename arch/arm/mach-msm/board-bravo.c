@@ -976,7 +976,7 @@ static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
 static struct bcm_bt_lpm_platform_data bcm_bt_lpm_pdata = {
 	.gpio_wake = BRAVO_GPIO_BT_WAKE,
 	.gpio_host_wake = BRAVO_GPIO_BT_HOST_WAKE,
-	.request_clock_off_locked = msm_hs_request_clock_off_locked,
+	.request_clock_off_locked = msm_hs_request_clock_off,
 	.request_clock_on_locked = msm_hs_request_clock_on_locked,
 };
 
