@@ -51,7 +51,7 @@ config ARCH_QSD8X50
 	select CPU_USE_DOMAINS
 	select EMULATE_DOMAIN_MANAGER_V7
 	select MSM_GPIOMUX
-	select MSM_DALRPC if !MACH_HTCLEO
+	select MSM_DALRPC
 
 config ARCH_MSM8X60
 	bool "MSM8X60"
@@ -390,13 +390,6 @@ config MACH_BRAVO
     bool "HTC Bravo"
     help
       Select this to support the HTC Bravo device
-
-config MACH_HTCLEO
-	depends on ARCH_QSD8X50
-	default y
-	bool "HTC Leo"
-	help
-	  Select this to support the HTC Leo device
 
 config MACH_PRIMODS
 		depends on ARCH_MSM7X27A
@@ -925,7 +918,6 @@ config PHYS_OFFSET
 	default "0x00200000" if !MSM_STACKED_MEMORY
 	default "0x00000000" if ARCH_QSD8X50 && MSM_SOC_REV_A
 	default "0x20000000" if ARCH_QSD8X50
-	default "0x11800000" if MACH_HTCLEO
 	default "0x48000000" if ARCH_MSM8X60
 	default "0x10000000"
 
@@ -1889,59 +1881,6 @@ config MSM_IDLE_WAIT_ON_MODEM
 	  If Modem is not ready to handle Application Processor's request
 	  for idle power collapse, wait the number of microseconds in case
 	  Modem becomes ready soon.
-
-config HTCLEO_ENABLE_MULTI_TOUCH
-	bool "Support for multitouch"
-	default y
-	depends on MACH_HTCLEO
-	help
-		Add multitouch support for touchscreen
-
-config HTCLEO_TOUCHSCREEN_FILTER
-	bool "Enable touchscreen filter"
-	default y
-	depends on MACH_HTCLEO
-	help
-		Enable input filtering for touchscreen
-
-choice
-	prompt "HTCLEO Keymapping"
-	default HTCLEO_KEYMAP_ANDROID
-
-	config HTCLEO_KEYMAP_ANDROID
-		bool "Keymapping for Android"
-	help
-		Optimized for the default Android GUI
-
-	config HTCLEO_KEYMAP_DPAD
-		bool "Alternative Keymapping"
-	help
-		Useful in GUIs not designed for touch-only use as this enables
-		four direction keys, alt key and enter key. Assumes landscape orientation.
-endchoice
-
-choice
-	prompt "HTCLEO Backlight API type"
-	default HTCLEO_BACKLIGHT_LED
-
-	config HTCLEO_BACKLIGHT_LED
-		bool "Backlight control via LED API"
-	help
-		Needed by Google Android
-
-	config HTCLEO_BACKLIGHT
-	select BACKLIGHT_LCD_SUPPORT
-		bool "Standard backlight API"
-	help
-		Works in standard Linux distros. Tested in GNOME.
-endchoice
-
-config HTCLEO_BTN_BACKLIGHT_MANAGER
-	depends on MACH_HTCLEO
-	default y
-	bool "Use button backlight manager"
-	help
-	  Use kernel button backlight manager to turn on/off backlight
 
 config HTC_HEADSET_MGR
 	tristate "HTC headset manager driver"
