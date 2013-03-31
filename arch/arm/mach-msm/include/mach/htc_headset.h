@@ -33,11 +33,20 @@ struct h2w_platform_data {
 	int (*get_clk)(void);
 };
 
-#define BIT_HEADSET		(1 << 0)
+#define BIT_HEADSET	    	(1 << 0)
 #define BIT_HEADSET_NO_MIC	(1 << 1)
-#define BIT_TTY			(1 << 2)
+#define BIT_TTY_FULL		(1 << 2)
 #define BIT_FM_HEADSET 		(1 << 3)
 #define BIT_FM_SPEAKER		(1 << 4)
+#define BIT_TTY_VCO         (1 << 5)
+#define BIT_TTY_HCO         (1 << 6)
+#define BIT_35MM_HEADSET    (1 << 7)
+#define BIT_TV_OUT          (1 << 8)
+#define BIT_USB_CRADLE      (1 << 9)
+#define BIT_TV_OUT_AUDIO    (1 << 10)
+#define BIT_HDMI_CABLE      (1 << 11)
+#define BIT_HDMI_AUDIO      (1 << 12)
+#define BIT_USB_HEADSET     (1 << 13)
 
 enum {
 	H2W_NO_DEVICE	= 0,

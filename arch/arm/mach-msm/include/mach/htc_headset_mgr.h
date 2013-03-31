@@ -192,6 +192,7 @@ enum {
 	UART_DEBUG		= 5,
 	H2W_TVOUT		= 6,
 	USB_HEADSET		= 7,
+    USB_AUDIO_OUT   = 8,
 };
 
 #define RESEND_DELAY		(3)	/* ms */

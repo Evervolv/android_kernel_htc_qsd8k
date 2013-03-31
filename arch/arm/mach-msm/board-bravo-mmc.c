@@ -272,6 +272,10 @@ int bravo_wifi_power(int on)
 	return 0;
 }
 
+
+int msm_add_sdcc(unsigned int controller, struct mmc_platform_data *plat,
+		 unsigned int stat_irq, unsigned long stat_irq_flags);
+
 static int bravo_wifi_reset_state;
 
 int bravo_wifi_reset(int on)

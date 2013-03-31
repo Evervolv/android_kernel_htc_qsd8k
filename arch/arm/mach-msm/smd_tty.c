@@ -437,7 +437,21 @@ static int smd_tty_write(struct tty_struct *tty, const unsigned char *buf, int l
 
 	return smd_write(info->ch, buf, len);
 }
+static const struct smd_tty_channel_desc smd_default_tty_channels[] = {
+	{ .id = 0, .name = "SMD_DS" },
+	{ .id = 27, .name = "SMD_GPSNMEA" },
+};
 
+static const struct smd_tty_channel_desc *smd_tty_channels =
+		smd_default_tty_channels;
+static int smd_tty_channels_len = ARRAY_SIZE(smd_default_tty_channels);
+
+int smd_set_channel_list(const struct smd_tty_channel_desc *channels, int len)
+{
+	smd_tty_channels = channels;
+	smd_tty_channels_len = len;
+	return 0;
+}
 static int smd_tty_write_room(struct tty_struct *tty)
 {
 	struct smd_tty_info *info = tty->driver_data;

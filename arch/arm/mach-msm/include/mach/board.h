@@ -554,6 +554,11 @@ void msm_map_copper_io(void);
 void  msm_init_irq(void);
 void msm_copper_init_irq(void);
 
+#ifdef CONFIG_ARCH_MSM8X60
+struct mmc_platform_data;
+int  msm_add_sdcc(unsigned int controller,
+		struct mmc_platform_data *plat);
+#endif
 struct msm_usb_host_platform_data;
 int  msm_add_host(unsigned int host,
 		struct msm_usb_host_platform_data *plat);
@@ -638,9 +643,7 @@ int usb_host_detect_register_notifier(struct t_usb_host_status_notifier *);
 static LIST_HEAD(g_lh_usb_host_detect_notifier_list);
 #endif
 /* END: add USB connected notify function */
-
 char *board_serialno(void);
-
 int board_mfg_mode(void);
 int board_build_flag(void);
 int __init parse_tag_skuid(const struct tag *tags);

@@ -396,7 +396,7 @@ static void cable_detect_handler(struct work_struct *w)
 		case DOCK_STATE_USB_HEADSET:
 			CABLE_INFO("USB headset removed\n");
 #ifdef CONFIG_HTC_HEADSET_MGR
-			headset_ext_detect(USB_NO_HEADSET);
+			headset_ext_detect(USB_HEADSET);
 #endif
 			if (pInfo->usb_dpdn_switch)
 				pInfo->usb_dpdn_switch(PATH_USB);
@@ -433,10 +433,10 @@ static void cable_detect_handler(struct work_struct *w)
 		return;
 #endif
 	if (pInfo->accessory_type == DOCK_STATE_UNDOCKED)
-		set_irq_type(pInfo->idpin_irq,
+		irq_set_irq_type(pInfo->idpin_irq,
 			value ? IRQF_TRIGGER_LOW : IRQF_TRIGGER_HIGH);
 	else
-		set_irq_type(pInfo->idpin_irq, IRQF_TRIGGER_HIGH);
+		irq_set_irq_type(pInfo->idpin_irq, IRQF_TRIGGER_HIGH);
 
 	enable_irq(pInfo->idpin_irq);
 #if 0

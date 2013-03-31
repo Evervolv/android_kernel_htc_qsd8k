@@ -17,6 +17,9 @@
 #include <asm/setup.h>
 #include <linux/mtd/nand.h>
 
+static char *df_serialno = "000000000000";
+static char *board_sn;
+
 #define MFG_GPIO_TABLE_MAX_SIZE        0x400
 static unsigned char mfg_gpio_table[MFG_GPIO_TABLE_MAX_SIZE];
 
@@ -292,6 +295,7 @@ char *board_get_mfg_sleep_gpio_table(void)
 	return mfg_gpio_table;
 }
 EXPORT_SYMBOL(board_get_mfg_sleep_gpio_table);
+
 static int mfg_mode;
 int __init board_mfg_mode_init(char *s)
 {
@@ -317,6 +321,26 @@ int __init board_mfg_mode_init(char *s)
 }
 __setup("androidboot.mode=", board_mfg_mode_init);
 
+static int __init board_serialno_setup(char *serialno)
+{
+  char *str;
+
+  /* use default serial number when mode is factory2 */
+  if (board_mfg_mode() == 1 || !strlen(serialno))
+    str = df_serialno;
+  else
+    str = serialno;
+  board_sn = str;
+  return 1;
+}
+__setup("androidboot.serialno=", board_serialno_setup);
+
+char *board_serialno(void)
+{
+  return board_sn;
+}
+
+EXPORT_SYMBOL(board_serialno);
 
 int board_mfg_mode(void)
 {

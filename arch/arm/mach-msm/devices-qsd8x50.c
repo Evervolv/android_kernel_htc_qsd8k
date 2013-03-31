@@ -399,6 +399,29 @@ static struct resource resources_otg[] = {
 	},
 };
 
+static struct resource resources_hsusb[] = {
+	{
+		.start	= MSM_HSUSB_PHYS,
+		.end	= MSM_HSUSB_PHYS + MSM_HSUSB_SIZE,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= INT_USB_HS,
+		.end	= INT_USB_HS,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+struct platform_device msm_device_hsusb = {
+	.name		= "msm_hsusb",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(resources_hsusb),
+	.resource	= resources_hsusb,
+	.dev		= {
+		.coherent_dma_mask	= 0xffffffff,
+	},
+};
+
 struct platform_device msm_device_otg = {
 	.name		= "msm_otg",
 	.id		= -1,
@@ -455,6 +478,83 @@ struct platform_device msm_device_dmov = {
 		.platform_data = &msm_dmov_pdata,
 	},
 };
+#if defined(CONFIG_ARCH_QSD8X50)
+static struct resource resources_spi[] = {
+	{
+		.name   = "spi_base",
+		.start  = MSM_SPI_PHYS,
+		.end    = MSM_SPI_PHYS + MSM_SPI_SIZE - 1,
+		.flags  = IORESOURCE_MEM,
+	},
+	{
+		.name   = "spi_irq_in",
+		.start  = INT_SPI_INPUT,
+		.end    = INT_SPI_INPUT,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_irq_out",
+		.start  = INT_SPI_OUTPUT,
+		.end    = INT_SPI_OUTPUT,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_irq_err",
+		.start  = INT_SPI_ERROR,
+		.end    = INT_SPI_ERROR,
+		.flags  = IORESOURCE_IRQ,
+	},
+#if defined(CONFIG_SPI_QSD)
+	{
+		.name   = "spi_clk",
+		.start  = 17,
+		.end    = 1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_mosi",
+		.start  = 18,
+		.end    = 1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_miso",
+		.start  = 19,
+		.end    = 1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_cs0",
+		.start  = 20,
+		.end    = 1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_pwr",
+		.start  = 21,
+		.end    = 0,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_irq_cs0",
+		.start  = 22,
+		.end    = 0,
+		.flags  = IORESOURCE_IRQ,
+	},
+#endif
+};
+struct platform_device msm_device_spi = {
+#if defined(CONFIG_SPI_QSD)
+	.name		= "spi_qsd",
+#else
+	.name		= "msm_spi",
+#endif
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(resources_spi),
+	.resource	= resources_spi,
+};
+#endif
+
 
 #define MSM_SDC1_BASE         0xA0300000
 #define MSM_SDC2_BASE_PHYS    0xA0400000

@@ -143,8 +143,8 @@
 #define NR_GPIO_IRQS		182
 #ifdef CONFIG_PMIC8058
 #define PMIC8058_IRQ_BASE	(NR_MSM_IRQS + NR_GPIO_IRQS)
-#define NR_PMIC8058_IRQS	256
-#define NR_BOARD_IRQS		NR_PMIC8058_IRQS
+#define set_irq_type	256
+#define NR_BOARD_IRQS		set_irq_type
 #else /* For Maxim MAX8957 */
 #define MAX8957_IRQ_BASE	(NR_MSM_IRQS + NR_GPIO_IRQS)
 #define NR_MAX8957_TOP_IRQS 13

@@ -41,6 +41,7 @@
 #include <asm/mach/map.h>
 #include <asm/setup.h>
 #include <mach/board.h>
+#include <mach/board_htc.h>
 #include <mach/hardware.h>
 #include <mach/msm_hsusb.h>
 #include <mach/msm_iomap.h>
@@ -78,7 +79,6 @@ static uint debug_uart;
 module_param_named(debug_uart, debug_uart, uint, 0);
 
 extern void notify_usb_connected(int);
-extern void msm_init_pmic_vibrator(void);
 extern void __init bravo_audio_init(void);
 
 extern int microp_headset_has_mic(void);

@@ -1758,6 +1758,14 @@ static int __init htc_battery_init(void)
 	return 0;
 }
 
+static int inited;
+static struct work_struct vbus_work;
+void notify_vbus_change_intr(void)  
+{  
+    if (!inited)    return;  
+    schedule_work(&vbus_work);  
+}
+
 module_init(htc_battery_init);
 MODULE_DESCRIPTION("HTC Battery Driver");
 MODULE_LICENSE("GPL");
