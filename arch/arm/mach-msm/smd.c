@@ -64,6 +64,8 @@
 #define SMD_VERSION 0x00020000
 #define SMSM_SNAPSHOT_CNT 64
 
+void (*msm_hw_reset_hook)(void);
+
 uint32_t SMSM_NUM_ENTRIES = 8;
 uint32_t SMSM_NUM_HOSTS = 3;
 
@@ -360,10 +362,9 @@ static void handle_modem_crash(void)
 	pr_err("MODEM/AMSS has CRASHED\n");
 	smd_diag();
 
-	/* hard reboot if possible FIXME
-	if (msm_reset_hook)
-		msm_reset_hook();
-	*/
+  /* hard reboot if possible */
+    if (msm_hw_reset_hook)
+        msm_hw_reset_hook();
 
 	/* in this case the modem or watchdog should reboot us */
 	for (;;)

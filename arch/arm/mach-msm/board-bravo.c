@@ -1389,7 +1389,7 @@ static void __init bravo_init(void)
 		smd_set_channel_list(smd_cdma_default_channels,
 				ARRAY_SIZE(smd_cdma_default_channels));
 
-	//msm_hw_reset_hook = bravo_reset;
+	msm_hw_reset_hook = bravo_reset;
 
 	bravo_board_serialno_setup(board_serialno());
 
