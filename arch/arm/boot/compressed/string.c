@@ -40,7 +40,7 @@ void *memcpy(void *__dest, __const void *__src, size_t __n)
 	return __dest;
 }
 
-void *memmove(void *__dest, __const void *__src, size_t count)
+void *memmove2(void *__dest, __const void *__src, size_t count)
 {
 	unsigned char *d = __dest;
 	const unsigned char *s = __src;
