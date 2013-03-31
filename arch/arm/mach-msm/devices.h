@@ -201,6 +201,7 @@ void __init msm_fb_register_device(char *name, void *data);
 void __init msm_camera_register_device(void *, uint32_t, void *);
 struct platform_device *msm_add_gsbi9_uart(void);
 extern struct platform_device msm_device_touchscreen;
+extern struct platform_device msm_device_spi;
 extern unsigned engineer_id;
 extern int ps_type;
 

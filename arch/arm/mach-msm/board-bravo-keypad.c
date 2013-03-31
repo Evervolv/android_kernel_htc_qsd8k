@@ -62,9 +62,9 @@ static struct gpio_event_matrix_info bravo_keypad_matrix_info = {
 	.input_gpios = bravo_row_gpios,
 	.noutputs = ARRAY_SIZE(bravo_col_gpios),
 	.ninputs = ARRAY_SIZE(bravo_row_gpios),
-	.settle_time.tv.nsec = 40 * NSEC_PER_USEC,
-	.poll_time.tv.nsec = 20 * NSEC_PER_MSEC,
-	.debounce_delay.tv.nsec = 5 * NSEC_PER_MSEC,
+	.settle_time.tv_nsec = 40 * NSEC_PER_USEC,
+	.poll_time.tv_nsec = 20 * NSEC_PER_MSEC,
+	.debounce_delay.tv_nsec = 5 * NSEC_PER_MSEC,
 	.flags = (GPIOKPF_LEVEL_TRIGGERED_IRQ |
 		  GPIOKPF_REMOVE_PHANTOM_KEYS |
 		  GPIOKPF_PRINT_UNMAPPED_KEYS),
@@ -85,7 +85,7 @@ static struct gpio_event_input_info bravo_keypad_key_info = {
 	.info.no_suspend = true,
 	.flags = GPIOEDF_PRINT_KEYS,
 	.type = EV_KEY,
-	.debounce_time.tv.nsec = 5 * NSEC_PER_MSEC,
+	.debounce_time.tv64 = 5 * NSEC_PER_MSEC,
 	.keymap = bravo_keypad_key_map,
 	.keymap_size = ARRAY_SIZE(bravo_keypad_key_map)
 };

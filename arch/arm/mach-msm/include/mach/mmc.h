@@ -27,6 +27,7 @@ struct msm_mmc_gpio_data {
 
 struct msm_mmc_platform_data {
 	unsigned int ocr_mask;			/* available voltages */
+	int built_in;				/* built-in device flag */
 	u32 (*translate_vdd)(struct device *, unsigned int);
 	unsigned int (*status)(struct device *);
 	struct embedded_sdio_data *embedded_sdio;

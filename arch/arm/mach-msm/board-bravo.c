@@ -1393,11 +1393,6 @@ static void __init bravo_init(void)
 
 	bravo_board_serialno_setup(board_serialno());
 
-	if (is_cdma_version(system_rev))
-		msm_acpu_clock_init(&bravo_cdma_clock_data);
-	else
-		msm_acpu_clock_init(&bravo_clock_data);
-
 #ifdef CONFIG_PERFLOCK
 	//perflock_init(&bravo_perflock_data);
 #endif

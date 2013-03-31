@@ -162,6 +162,13 @@ int smd_write_segment(smd_channel_t *ch, void *data, int len, int user_buf);
  */
 int smd_write_end(smd_channel_t *ch);
 
+struct smd_tty_channel_desc {
+	int id;
+	const char *name;
+};
+
+int smd_set_channel_list(const struct smd_tty_channel_desc *, int len);
+
 #else
 
 static inline int smd_open(const char *name, smd_channel_t **ch, void *priv,
