@@ -29,7 +29,7 @@ extern unsigned long ebi2_register_base;
 #define NC10(X) ((X) + msm_nandc10_phys - msm_nand_phys)
 #define NC11(X) ((X) + msm_nandc11_phys - msm_nand_phys)
 
-#define MSM_NAND_REG(off) (msm_nand_phys + (off))
+#define MSM_NAND_REG(off) (MSM_NAND_PHYS + (off))
 
 #define MSM_NAND_FLASH_CMD            MSM_NAND_REG(0x0000)
 #define MSM_NAND_ADDR0                MSM_NAND_REG(0x0004)

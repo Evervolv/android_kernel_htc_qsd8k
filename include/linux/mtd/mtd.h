@@ -324,6 +324,9 @@ static inline uint32_t mtd_mod_by_ws(uint64_t sz, struct mtd_info *mtd)
 
 struct mtd_partition;
 
+extern int add_mtd_device(struct mtd_info *mtd);
+extern int del_mtd_device (struct mtd_info *mtd);
+
 extern int mtd_device_register(struct mtd_info *master,
 			       const struct mtd_partition *parts,
 			       int nr_parts);
