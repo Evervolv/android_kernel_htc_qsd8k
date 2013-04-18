@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -53,7 +53,7 @@ static const struct pm_id_name pm3_types[] = {
 	{CP_IM_LOAD,			"IN__LOAD"},
 	{CP_IM_LOAD_IMMEDIATE,		"IM_LOADI"},
 	{CP_IM_STORE,			"IM_STORE"},
-	{CP_INDIRECT_BUFFER,		"IND_BUF_"},
+	{CP_INDIRECT_BUFFER_PFE,	"IND_BUF_"},
 	{CP_INDIRECT_BUFFER_PFD,	"IND_BUFP"},
 	{CP_INTERRUPT,			"PM4_INTR"},
 	{CP_INVALIDATE_STATE,		"INV_STAT"},
@@ -156,7 +156,7 @@ static void adreno_dump_regs(struct kgsl_device *device,
 	}
 }
 
-static void dump_ib(struct kgsl_device *device, char* buffId, uint32_t pt_base,
+void dump_ib(struct kgsl_device *device, char *buffId, uint32_t pt_base,
 	uint32_t base_offset, uint32_t ib_base, uint32_t ib_size, bool dump)
 {
 	uint8_t *base_addr = adreno_convertaddr(device, pt_base,
@@ -172,15 +172,7 @@ static void dump_ib(struct kgsl_device *device, char* buffId, uint32_t pt_base,
 			base_addr ? "" : " [Invalid]");
 }
 
-#define IB_LIST_SIZE	64
-struct ib_list {
-	int count;
-	uint32_t bases[IB_LIST_SIZE];
-	uint32_t sizes[IB_LIST_SIZE];
-	uint32_t offsets[IB_LIST_SIZE];
-};
-
-static void dump_ib1(struct kgsl_device *device, uint32_t pt_base,
+void dump_ib1(struct kgsl_device *device, uint32_t pt_base,
 			uint32_t base_offset,
 			uint32_t ib1_base, uint32_t ib1_size,
 			struct ib_list *ib_list, bool dump)
@@ -547,7 +539,8 @@ static int adreno_dump(struct kgsl_device *device)
 		" %08X\n", r1, r2, pt_base);
 	cur_pt_base = pt_base;
 
-	KGSL_LOG_DUMP(device, "PAGETABLE SIZE: %08X ", KGSL_PAGETABLE_SIZE);
+	KGSL_LOG_DUMP(device, "PAGETABLE SIZE: %08X ",
+		kgsl_mmu_get_ptsize());
 
 	kgsl_regread(device, MH_MMU_TRAN_ERROR, &r1);
 	KGSL_LOG_DUMP(device, "        TRAN_ERROR = %08X\n", r1);

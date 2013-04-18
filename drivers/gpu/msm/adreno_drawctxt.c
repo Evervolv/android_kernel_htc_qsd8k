@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -138,6 +138,7 @@ int adreno_drawctxt_create(struct kgsl_device *device,
 
 	drawctxt->pagetable = pagetable;
 	drawctxt->bin_base_offset = 0;
+	drawctxt->id = context->id;
 
 	if (flags & KGSL_CONTEXT_PREAMBLE)
 		drawctxt->flags |= CTXT_FLAGS_PREAMBLE;
@@ -171,10 +172,12 @@ void adreno_drawctxt_destroy(struct kgsl_device *device,
 			  struct kgsl_context *context)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct adreno_context *drawctxt = context->devctxt;
+	struct adreno_context *drawctxt;
 
-	if (drawctxt == NULL)
+	if (context == NULL || context->devctxt == NULL)
 		return;
+
+	drawctxt = context->devctxt;
 
 	/* deactivate context */
 	if (adreno_dev->drawctxt_active == drawctxt) {
@@ -243,8 +246,13 @@ void adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 	}
 
 	/* already current? */
-	if (adreno_dev->drawctxt_active == drawctxt)
+	if (adreno_dev->drawctxt_active == drawctxt) {
+		if (adreno_dev->gpudev->ctxt_draw_workaround &&
+			adreno_is_a225(adreno_dev))
+				adreno_dev->gpudev->ctxt_draw_workaround(
+					adreno_dev, drawctxt);
 		return;
+	}
 
 	KGSL_CTXT_INFO(device, "from %p to %p flags %d\n",
 			adreno_dev->drawctxt_active, drawctxt, flags);
@@ -253,6 +261,8 @@ void adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 	adreno_dev->gpudev->ctxt_save(adreno_dev, adreno_dev->drawctxt_active);
 
 	/* Set the new context */
-	adreno_dev->drawctxt_active = drawctxt;
 	adreno_dev->gpudev->ctxt_restore(adreno_dev, drawctxt);
+	adreno_dev->drawctxt_active = drawctxt;
 }
+
+
