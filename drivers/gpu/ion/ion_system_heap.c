@@ -2,6 +2,7 @@
  * drivers/gpu/ion/ion_system_heap.c
  *
  * Copyright (C) 2011 Google, Inc.
+ * Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -20,11 +21,17 @@
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
+#include <linux/iommu.h>
+#include <linux/seq_file.h>
+#include <mach/iommu_domains.h>
 #include "ion_priv.h"
 #include <mach/memory.h>
+#include <asm/cacheflush.h>
 
 static atomic_t system_heap_allocated;
 static atomic_t system_contig_heap_allocated;
+static unsigned int system_heap_has_outer_cache;
+static unsigned int system_heap_contig_has_outer_cache;
 
 static int ion_system_heap_allocate(struct ion_heap *heap,
 				     struct ion_buffer *buffer,
@@ -98,6 +105,32 @@ void ion_system_heap_unmap_kernel(struct ion_heap *heap,
 {
 }
 
+void ion_system_heap_unmap_iommu(struct ion_iommu_map *data)
+{
+	unsigned int domain_num;
+	unsigned int partition_num;
+	struct iommu_domain *domain;
+
+	if (!msm_use_iommu())
+		return;
+
+	domain_num = iommu_map_domain(data);
+	partition_num = iommu_map_partition(data);
+
+	domain = msm_get_iommu_domain(domain_num);
+
+	if (!domain) {
+		WARN(1, "Could not get domain %d. Corruption?\n", domain_num);
+		return;
+	}
+
+	iommu_unmap_range(domain, data->iova_addr, data->mapped_size);
+	msm_free_iova_address(data->iova_addr, domain_num, partition_num,
+				data->mapped_size);
+
+	return;
+}
+
 int ion_system_heap_map_user(struct ion_heap *heap, struct ion_buffer *buffer,
 			     struct vm_area_struct *vma, unsigned long flags)
 {
@@ -114,50 +147,163 @@ int ion_system_heap_cache_ops(struct ion_heap *heap, struct ion_buffer *buffer,
 			void *vaddr, unsigned int offset, unsigned int length,
 			unsigned int cmd)
 {
-	unsigned long vstart, pstart;
-	void *vtemp;
-	unsigned long ln = 0;
-	void (*op)(unsigned long, unsigned long, unsigned long);
+	void (*outer_cache_op)(phys_addr_t, phys_addr_t);
 
 	switch (cmd) {
 	case ION_IOC_CLEAN_CACHES:
-		op = clean_caches;
+		dmac_clean_range(vaddr, vaddr + length);
+		outer_cache_op = outer_clean_range;
 		break;
 	case ION_IOC_INV_CACHES:
-		op = invalidate_caches;
+		dmac_inv_range(vaddr, vaddr + length);
+		outer_cache_op = outer_inv_range;
 		break;
 	case ION_IOC_CLEAN_INV_CACHES:
-		op = clean_and_invalidate_caches;
+		dmac_flush_range(vaddr, vaddr + length);
+		outer_cache_op = outer_flush_range;
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	for (vtemp = buffer->priv_virt + offset,
-	     vstart = (unsigned long) vaddr;
-			ln < length;
-			vtemp += PAGE_SIZE, ln += PAGE_SIZE,
-			vstart += PAGE_SIZE) {
-		pstart = page_to_phys(vmalloc_to_page(vtemp));
-		/*
-		 * If vmalloc -> page -> phys is returning NULL, something
-		 * has really gone wrong...
-		 */
-		if (!pstart) {
-			WARN(1, "Could not translate %p to physical address\n",
-				vtemp);
+	if (system_heap_has_outer_cache) {
+		unsigned long pstart;
+		void *vend;
+		void *vtemp;
+		unsigned long ln = 0;
+		vend = buffer->priv_virt + buffer->size;
+		vtemp = buffer->priv_virt + offset;
+
+		if ((vtemp+length) > vend) {
+			pr_err("Trying to flush outside of mapped range.\n");
+			pr_err("End of mapped range: %p, trying to flush to "
+				"address %p\n", vend, vtemp+length);
+			WARN(1, "%s: called with heap name %s, buffer size 0x%x, "
+				"vaddr 0x%p, offset 0x%x, length: 0x%x\n",
+				__func__, heap->name, buffer->size, vaddr,
+				offset, length);
 			return -EINVAL;
 		}
 
-		op(vstart, PAGE_SIZE, pstart);
+		for (; ln < length && vtemp < vend;
+		      vtemp += PAGE_SIZE, ln += PAGE_SIZE) {
+			struct page *page = vmalloc_to_page(vtemp);
+			if (!page) {
+				WARN(1, "Could not find page for virt. address %p\n",
+					vtemp);
+				return -EINVAL;
+			}
+			pstart = page_to_phys(page);
+			/*
+			 * If page -> phys is returning NULL, something
+			 * has really gone wrong...
+			 */
+			if (!pstart) {
+				WARN(1, "Could not translate %p to physical address\n",
+					vtemp);
+				return -EINVAL;
+			}
+
+			outer_cache_op(pstart, pstart + PAGE_SIZE);
+		}
 	}
+	return 0;
+}
+
+static int ion_system_print_debug(struct ion_heap *heap, struct seq_file *s)
+{
+	seq_printf(s, "total bytes currently allocated: %lx\n",
+			(unsigned long) atomic_read(&system_heap_allocated));
 
 	return 0;
 }
 
-static unsigned long ion_system_heap_get_allocated(struct ion_heap *heap)
+int ion_system_heap_map_iommu(struct ion_buffer *buffer,
+				struct ion_iommu_map *data,
+				unsigned int domain_num,
+				unsigned int partition_num,
+				unsigned long align,
+				unsigned long iova_length,
+				unsigned long flags)
 {
-	return atomic_read(&system_heap_allocated);
+	int ret = 0, i;
+	struct iommu_domain *domain;
+	unsigned long extra;
+	unsigned long extra_iova_addr;
+	struct page *page;
+	int npages = buffer->size >> PAGE_SHIFT;
+	void *vaddr = buffer->priv_virt;
+	struct scatterlist *sglist = 0;
+	int prot = IOMMU_WRITE | IOMMU_READ;
+	prot |= ION_IS_CACHED(flags) ? IOMMU_CACHE : 0;
+
+	if (!ION_IS_CACHED(flags))
+		return -EINVAL;
+
+	if (!msm_use_iommu())
+		return -EINVAL;
+
+	data->mapped_size = iova_length;
+	extra = iova_length - buffer->size;
+
+	data->iova_addr = msm_allocate_iova_address(domain_num, partition_num,
+						data->mapped_size, align);
+
+	if (!data->iova_addr) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	domain = msm_get_iommu_domain(domain_num);
+
+	if (!domain) {
+		ret = -ENOMEM;
+		goto out1;
+	}
+
+
+	sglist = vmalloc(sizeof(*sglist) * npages);
+	if (!sglist) {
+		ret = -ENOMEM;
+		goto out1;
+	}
+
+	sg_init_table(sglist, npages);
+	for (i = 0; i < npages; i++) {
+		page = vmalloc_to_page(vaddr);
+		if (!page)
+			goto out1;
+		sg_set_page(&sglist[i], page, PAGE_SIZE, 0);
+		vaddr += PAGE_SIZE;
+	}
+
+	ret = iommu_map_range(domain, data->iova_addr, sglist,
+			      buffer->size, prot);
+
+	if (ret) {
+		pr_err("%s: could not map %lx in domain %p\n",
+			__func__, data->iova_addr, domain);
+		goto out1;
+	}
+
+	extra_iova_addr = data->iova_addr + buffer->size;
+	if (extra) {
+		ret = msm_iommu_map_extra(domain, extra_iova_addr, extra, SZ_4K,
+					  prot);
+		if (ret)
+			goto out2;
+	}
+	vfree(sglist);
+	return ret;
+
+out2:
+	iommu_unmap_range(domain, data->iova_addr, buffer->size);
+out1:
+	vfree(sglist);
+	msm_free_iova_address(data->iova_addr, domain_num, partition_num,
+				data->mapped_size);
+out:
+	return ret;
 }
 
 static struct ion_heap_ops vmalloc_ops = {
@@ -169,10 +315,12 @@ static struct ion_heap_ops vmalloc_ops = {
 	.unmap_kernel = ion_system_heap_unmap_kernel,
 	.map_user = ion_system_heap_map_user,
 	.cache_op = ion_system_heap_cache_ops,
-	.get_allocated = ion_system_heap_get_allocated,
+	.print_debug = ion_system_print_debug,
+	.map_iommu = ion_system_heap_map_iommu,
+	.unmap_iommu = ion_system_heap_unmap_iommu,
 };
 
-struct ion_heap *ion_system_heap_create(struct ion_platform_heap *unused)
+struct ion_heap *ion_system_heap_create(struct ion_platform_heap *pheap)
 {
 	struct ion_heap *heap;
 
@@ -181,6 +329,7 @@ struct ion_heap *ion_system_heap_create(struct ion_platform_heap *unused)
 		return ERR_PTR(-ENOMEM);
 	heap->ops = &vmalloc_ops;
 	heap->type = ION_HEAP_TYPE_SYSTEM;
+	system_heap_has_outer_cache = pheap->has_outer_cache;
 	return heap;
 }
 
@@ -252,37 +401,126 @@ int ion_system_contig_heap_cache_ops(struct ion_heap *heap,
 			unsigned int offset, unsigned int length,
 			unsigned int cmd)
 {
-	unsigned long vstart, pstart;
-
-	pstart = virt_to_phys(buffer->priv_virt) + offset;
-	if (!pstart) {
-		WARN(1, "Could not do virt to phys translation on %p\n",
-			buffer->priv_virt);
-		return -EINVAL;
-	}
-
-	vstart = (unsigned long) vaddr;
+	void (*outer_cache_op)(phys_addr_t, phys_addr_t);
 
 	switch (cmd) {
 	case ION_IOC_CLEAN_CACHES:
-		clean_caches(vstart, length, pstart);
+		dmac_clean_range(vaddr, vaddr + length);
+		outer_cache_op = outer_clean_range;
 		break;
 	case ION_IOC_INV_CACHES:
-		invalidate_caches(vstart, length, pstart);
+		dmac_inv_range(vaddr, vaddr + length);
+		outer_cache_op = outer_inv_range;
 		break;
 	case ION_IOC_CLEAN_INV_CACHES:
-		clean_and_invalidate_caches(vstart, length, pstart);
+		dmac_flush_range(vaddr, vaddr + length);
+		outer_cache_op = outer_flush_range;
 		break;
 	default:
 		return -EINVAL;
 	}
 
+	if (system_heap_contig_has_outer_cache) {
+		unsigned long pstart;
+
+		pstart = virt_to_phys(buffer->priv_virt) + offset;
+		if (!pstart) {
+			WARN(1, "Could not do virt to phys translation on %p\n",
+				buffer->priv_virt);
+			return -EINVAL;
+		}
+
+		outer_cache_op(pstart, pstart + PAGE_SIZE);
+	}
+
 	return 0;
 }
 
-static unsigned long ion_system_contig_heap_get_allocated(struct ion_heap *heap)
+static int ion_system_contig_print_debug(struct ion_heap *heap,
+					 struct seq_file *s)
 {
-	return atomic_read(&system_contig_heap_allocated);
+	seq_printf(s, "total bytes currently allocated: %lx\n",
+		(unsigned long) atomic_read(&system_contig_heap_allocated));
+
+	return 0;
+}
+
+int ion_system_contig_heap_map_iommu(struct ion_buffer *buffer,
+				struct ion_iommu_map *data,
+				unsigned int domain_num,
+				unsigned int partition_num,
+				unsigned long align,
+				unsigned long iova_length,
+				unsigned long flags)
+{
+	int ret = 0;
+	struct iommu_domain *domain;
+	unsigned long extra;
+	struct scatterlist *sglist = 0;
+	struct page *page = 0;
+	int prot = IOMMU_WRITE | IOMMU_READ;
+	prot |= ION_IS_CACHED(flags) ? IOMMU_CACHE : 0;
+
+	if (!ION_IS_CACHED(flags))
+		return -EINVAL;
+
+	if (!msm_use_iommu()) {
+		data->iova_addr = virt_to_phys(buffer->vaddr);
+		return 0;
+	}
+
+	data->mapped_size = iova_length;
+	extra = iova_length - buffer->size;
+
+	data->iova_addr = msm_allocate_iova_address(domain_num, partition_num,
+						data->mapped_size, align);
+
+	if (!data->iova_addr) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	domain = msm_get_iommu_domain(domain_num);
+
+	if (!domain) {
+		ret = -ENOMEM;
+		goto out1;
+	}
+	page = virt_to_page(buffer->vaddr);
+
+	sglist = vmalloc(sizeof(*sglist));
+	if (!sglist)
+		goto out1;
+
+	sg_init_table(sglist, 1);
+	sg_set_page(sglist, page, buffer->size, 0);
+
+	ret = iommu_map_range(domain, data->iova_addr, sglist,
+			      buffer->size, prot);
+	if (ret) {
+		pr_err("%s: could not map %lx in domain %p\n",
+			__func__, data->iova_addr, domain);
+		goto out1;
+	}
+
+	if (extra) {
+		unsigned long extra_iova_addr = data->iova_addr + buffer->size;
+		ret = msm_iommu_map_extra(domain, extra_iova_addr, extra, SZ_4K,
+					  prot);
+		if (ret)
+			goto out2;
+	}
+	vfree(sglist);
+	return ret;
+out2:
+	iommu_unmap_range(domain, data->iova_addr, buffer->size);
+
+out1:
+	vfree(sglist);
+	msm_free_iova_address(data->iova_addr, domain_num, partition_num,
+						data->mapped_size);
+out:
+	return ret;
 }
 
 static struct ion_heap_ops kmalloc_ops = {
@@ -295,10 +533,12 @@ static struct ion_heap_ops kmalloc_ops = {
 	.unmap_kernel = ion_system_heap_unmap_kernel,
 	.map_user = ion_system_contig_heap_map_user,
 	.cache_op = ion_system_contig_heap_cache_ops,
-	.get_allocated = ion_system_contig_heap_get_allocated,
+	.print_debug = ion_system_contig_print_debug,
+	.map_iommu = ion_system_contig_heap_map_iommu,
+	.unmap_iommu = ion_system_heap_unmap_iommu,
 };
 
-struct ion_heap *ion_system_contig_heap_create(struct ion_platform_heap *unused)
+struct ion_heap *ion_system_contig_heap_create(struct ion_platform_heap *pheap)
 {
 	struct ion_heap *heap;
 
@@ -307,6 +547,7 @@ struct ion_heap *ion_system_contig_heap_create(struct ion_platform_heap *unused)
 		return ERR_PTR(-ENOMEM);
 	heap->ops = &kmalloc_ops;
 	heap->type = ION_HEAP_TYPE_SYSTEM_CONTIG;
+	system_heap_contig_has_outer_cache = pheap->has_outer_cache;
 	return heap;
 }
 
