@@ -76,6 +76,7 @@
 #include <linux/msm_kgsl.h>
 #include <linux/regulator/machine.h>
 #include "footswitch.h"
+#include <linux/ion.h>
 
 #define SMEM_SPINLOCK_I2C	   6
 
@@ -571,6 +572,8 @@ struct platform_device *msm_footswitch_devices[] = {
 unsigned msm_num_footswitch_devices = ARRAY_SIZE(msm_footswitch_devices);
 /* end footswitch regulator */
 
+/* pmem heaps */
+#ifndef CONFIG_ION_MSM
 static struct android_pmem_platform_data mdp_pmem_pdata = {
 	.name		= "pmem",
 	.start		= MSM_PMEM_MDP_BASE,
@@ -579,6 +582,15 @@ static struct android_pmem_platform_data mdp_pmem_pdata = {
 	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
 	.cached		= 1,
 };
+
+static struct platform_device android_pmem_mdp_device = {
+	.name		= "android_pmem",
+	.id		= 0,
+	.dev		= {
+		.platform_data = &mdp_pmem_pdata
+	},
+};
+#endif
 
 static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.name		= "pmem_adsp",
@@ -589,6 +601,14 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.cached		= 1,
 };
 
+static struct platform_device android_pmem_adsp_device = {
+	.name		= "android_pmem",
+	.id		= 4,
+	.dev		= {
+		.platform_data = &android_pmem_adsp_pdata,
+	},
+};
+
 static struct android_pmem_platform_data android_pmem_venc_pdata = {
 	.name		= "pmem_venc",
 	.start		= MSM_PMEM_VENC_BASE,
@@ -596,6 +616,14 @@ static struct android_pmem_platform_data android_pmem_venc_pdata = {
 /*	.no_allocator	= 0,*/
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached		= 1,
+};
+
+static struct platform_device android_pmem_venc_device = {
+	.name		= "android_pmem",
+	.id		= 6,
+	.dev		= {
+		.platform_data = &android_pmem_venc_pdata,
+	},
 };
 
 #ifdef CONFIG_BUILD_CIQ
@@ -608,6 +636,12 @@ static struct android_pmem_platform_data android_pmem_ciq_pdata = {
 	.cached = 0,
 };
 
+static struct platform_device android_pmem_ciq_device = {
+	.name = "android_pmem",
+	.id = 7,
+	.dev = { .platform_data = &android_pmem_ciq_pdata },
+};
+
 static struct android_pmem_platform_data android_pmem_ciq1_pdata = {
 	.name = "pmem_ciq1",
 	.start = MSM_PMEM_CIQ1_BASE,
@@ -615,6 +649,12 @@ static struct android_pmem_platform_data android_pmem_ciq1_pdata = {
 /*	.no_allocator	= 0,*/
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
+};
+
+static struct platform_device android_pmem_ciq1_device = {
+	.name = "android_pmem",
+	.id = 8,
+	.dev = { .platform_data = &android_pmem_ciq1_pdata },
 };
 
 static struct android_pmem_platform_data android_pmem_ciq2_pdata = {
@@ -626,6 +666,12 @@ static struct android_pmem_platform_data android_pmem_ciq2_pdata = {
 	.cached = 0,
 };
 
+static struct platform_device android_pmem_ciq2_device = {
+	.name = "android_pmem",
+	.id = 9,
+	.dev = { .platform_data = &android_pmem_ciq2_pdata },
+};
+
 static struct android_pmem_platform_data android_pmem_ciq3_pdata = {
 	.name = "pmem_ciq3",
 	.start = MSM_PMEM_CIQ3_BASE,
@@ -634,50 +680,6 @@ static struct android_pmem_platform_data android_pmem_ciq3_pdata = {
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
-#endif
-
-static struct platform_device android_pmem_mdp_device = {
-	.name		= "android_pmem",
-	.id		= 0,
-	.dev		= {
-		.platform_data = &mdp_pmem_pdata
-	},
-};
-
-static struct platform_device android_pmem_adsp_device = {
-	.name		= "android_pmem",
-	.id		= 4,
-	.dev		= {
-		.platform_data = &android_pmem_adsp_pdata,
-	},
-};
-
-static struct platform_device android_pmem_venc_device = {
-	.name		= "android_pmem",
-	.id		= 6,
-	.dev		= {
-		.platform_data = &android_pmem_venc_pdata,
-	},
-};
-
-#ifdef CONFIG_BUILD_CIQ
-static struct platform_device android_pmem_ciq_device = {
-	.name = "android_pmem",
-	.id = 7,
-	.dev = { .platform_data = &android_pmem_ciq_pdata },
-};
-
-static struct platform_device android_pmem_ciq1_device = {
-	.name = "android_pmem",
-	.id = 8,
-	.dev = { .platform_data = &android_pmem_ciq1_pdata },
-};
-
-static struct platform_device android_pmem_ciq2_device = {
-	.name = "android_pmem",
-	.id = 9,
-	.dev = { .platform_data = &android_pmem_ciq2_pdata },
-};
 
 static struct platform_device android_pmem_ciq3_device = {
 	.name = "android_pmem",
@@ -685,8 +687,43 @@ static struct platform_device android_pmem_ciq3_device = {
 	.dev = { .platform_data = &android_pmem_ciq3_pdata },
 };
 #endif
+/* end pmem heaps */
 
+/* ion heaps */
+#ifdef CONFIG_ION_MSM
+static struct ion_co_heap_pdata co_ion_pdata = {
+	.adjacent_mem_id = INVALID_HEAP_ID,
+	.align = PAGE_SIZE,
+};
 
+static struct ion_platform_data ion_pdata = {
+	.nr = 2,
+	.heaps = {
+		{
+			.id	= ION_SYSTEM_HEAP_ID,
+			.type	= ION_HEAP_TYPE_SYSTEM,
+			.name	= ION_VMALLOC_HEAP_NAME,
+		},
+		/* PMEM_MDP = SF */
+		{
+			.id	= ION_SF_HEAP_ID,
+			.type	= ION_HEAP_TYPE_CARVEOUT,
+			.name	= ION_SF_HEAP_NAME,
+			.base	= MSM_PMEM_MDP_BASE,
+			.size	= MSM_PMEM_MDP_SIZE,
+			.memory_type = ION_EBI_TYPE,
+			.extra_data = (void *)&co_ion_pdata,
+		},
+	}
+};
+
+static struct platform_device ion_dev = {
+	.name = "ion-msm",
+	.id = 1,
+	.dev = { .platform_data = &ion_pdata },
+};
+#endif
+/* end ion heaps */
 
 static struct resource ram_console_resources[] = {
 	{
@@ -1454,7 +1491,11 @@ static struct platform_device *devices[] __initdata = {
 	&rndis_device,
 #endif
 	&android_usb_device,
+#ifndef CONFIG_ION_MSM
 	&android_pmem_mdp_device,
+#else
+	&ion_dev,
+#endif
 	&android_pmem_adsp_device,
 //	&android_pmem_camera_device,
 #ifdef CONFIG_720P_CAMERA
