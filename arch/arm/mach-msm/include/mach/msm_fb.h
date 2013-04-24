@@ -18,6 +18,10 @@
 #define _MSM_FB_H_
 
 #include <linux/device.h>
+#include <linux/wakelock.h>
+#include <linux/hrtimer.h>
+#include <linux/earlysuspend.h>
+
 
 struct mddi_info;
 
@@ -245,6 +249,46 @@ struct mdp_device {
 	unsigned overrides;
 	uint32_t width;		/*panel width*/
 	uint32_t height;	/*panel height*/
+};
+
+struct msmfb_info {
+	struct fb_info *fb;
+	struct msm_panel_data *panel;
+	int xres;
+	int yres;
+	unsigned output_format;
+	unsigned yoffset;
+	unsigned frame_requested;
+	unsigned frame_done;
+	int sleeping;
+	unsigned update_frame;
+	struct {
+		int left;
+		int top;
+		int eright; /* exclusive */
+		int ebottom; /* exclusive */
+	} update_info;
+	char *black;
+#ifdef CONFIG_HTC_ONMODE_CHARGING
+	struct early_suspend onchg_earlier_suspend;
+	struct early_suspend onchg_suspend;
+#endif
+	struct early_suspend earlier_suspend;
+	struct early_suspend early_suspend;
+
+	struct wake_lock idle_lock;
+	spinlock_t update_lock;
+	struct mutex panel_init_lock;
+	wait_queue_head_t frame_wq;
+	struct workqueue_struct *resume_workqueue;
+	struct work_struct resume_work;
+	struct work_struct msmfb_resume_work;
+	struct msmfb_callback dma_callback;
+	struct msmfb_callback vsync_callback;
+	struct hrtimer fake_vsync;
+	ktime_t vsync_request_time;
+	unsigned fb_resumed;
+	struct ion_client *iclient;
 };
 
 struct class_interface;
