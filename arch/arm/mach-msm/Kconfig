@@ -633,6 +633,13 @@ config MSM_RPCSERVERS
 	help
 	  none
 
+config EXPERIMENTAL_FREQ_TABLE
+	depends on ARCH_QSD8X50
+        default n
+	bool "Use experimental 8X50 freq table"
+        help
+          Allow the use of experimental frequencies upto 1850Mhz for QSD8X50.
+ 
 if CPU_FREQ_MSM
 
 config MSM_CPU_FREQ_SET_MIN_MAX
