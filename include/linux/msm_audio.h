@@ -18,7 +18,6 @@
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
-#include <asm/sizes.h>
 
 /* PCM Audio */
 
@@ -61,8 +60,6 @@
 #define AUDIO_ENABLE_AUXPGA_LOOPBACK _IOW(AUDIO_IOCTL_MAGIC, 40, unsigned)
 #define AUDIO_SET_AUXPGA_GAIN       _IOW(AUDIO_IOCTL_MAGIC, 41, unsigned)
 #define AUDIO_SET_RX_MUTE           _IOW(AUDIO_IOCTL_MAGIC, 42, unsigned)
-
-#define	AUDIO_MAX_COMMON_IOCTL_NUM	100
 
 #define	AUDIO_MAX_COMMON_IOCTL_NUM	100
 
