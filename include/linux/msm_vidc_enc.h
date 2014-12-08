@@ -1,31 +1,3 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- *       copyright notice, this list of conditions and the following
- *       disclaimer in the documentation and/or other materials provided
- *       with the distribution.
- *     * Neither the name of Code Aurora Forum, Inc. nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
- * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
- * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
- * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
 #ifndef _MSM_VIDC_ENC_H_
 #define _MSM_VIDC_ENC_H_
 
@@ -80,6 +52,11 @@
 #define VEN_BUFFLAG_EXTRADATA	0x00000040
 #define VEN_BUFFLAG_CODECCONFIG	0x00000080
 
+/*Post processing flags bit masks*/
+#define VEN_EXTRADATA_NONE          0x001
+#define VEN_EXTRADATA_QCOMFILLER    0x002
+#define VEN_EXTRADATA_SLICEINFO     0x100
+
 /*ENCODER CONFIGURATION CONSTANTS*/
 
 /*Encoded video frame types*/
@@ -93,42 +70,44 @@
 #define VEN_CODEC_H263	3/* H.263 Codec */
 
 /*Video codec profile types.*/
-#define VEN_PROFILE_MPEG4_SP	1/* 1 - MPEG4 SP profile  */
-#define VEN_PROFILE_MPEG4_ASP	2/* 2 - MPEG4 ASP profile */
-#define VEN_PROFILE_H264_BASELINE	3/* 3 - H264 Baseline profile	*/
-#define VEN_PROFILE_H264_MAIN	4/* 4 - H264 Main profile*/
-#define VEN_PROFILE_H264_HIGH	5/* 5 - H264 High profile*/
-#define VEN_PROFILE_H263_BASELINE	6/* 6 - H263 Baseline profile */
+#define VEN_PROFILE_MPEG4_SP      1/* 1 - MPEG4 SP profile      */
+#define VEN_PROFILE_MPEG4_ASP     2/* 2 - MPEG4 ASP profile     */
+#define VEN_PROFILE_H264_BASELINE 3/* 3 - H264 Baseline profile	*/
+#define VEN_PROFILE_H264_MAIN     4/* 4 - H264 Main profile     */
+#define VEN_PROFILE_H264_HIGH     5/* 5 - H264 High profile     */
+#define VEN_PROFILE_H263_BASELINE 6/* 6 - H263 Baseline profile */
 
 /*Video codec profile level types.*/
-#define VEN_LEVEL_MPEG4_0	0x1/* MPEG4 Level 0	 */
-#define VEN_LEVEL_MPEG4_1	0x2/* MPEG4 Level 1	 */
-#define VEN_LEVEL_MPEG4_2	0x3/* MPEG4 Level 2	 */
-#define VEN_LEVEL_MPEG4_3	0x4/* MPEG4 Level 3	 */
-#define VEN_LEVEL_MPEG4_4	0x5/* MPEG4 Level 4	 */
-#define VEN_LEVEL_MPEG4_5	0x6/* MPEG4 Level 5	 */
-#define VEN_LEVEL_MPEG4_3b	0x7/* MPEG4 Level 3b  */
-#define VEN_LEVEL_MPEG4_6	0x8/* MPEG4 Level 6	 */
+#define VEN_LEVEL_MPEG4_0	 0x1/* MPEG4 Level 0  */
+#define VEN_LEVEL_MPEG4_1	 0x2/* MPEG4 Level 1  */
+#define VEN_LEVEL_MPEG4_2	 0x3/* MPEG4 Level 2  */
+#define VEN_LEVEL_MPEG4_3	 0x4/* MPEG4 Level 3  */
+#define VEN_LEVEL_MPEG4_4	 0x5/* MPEG4 Level 4  */
+#define VEN_LEVEL_MPEG4_5	 0x6/* MPEG4 Level 5  */
+#define VEN_LEVEL_MPEG4_3b	 0x7/* MPEG4 Level 3b */
+#define VEN_LEVEL_MPEG4_6	 0x8/* MPEG4 Level 6  */
 
-#define VEN_LEVEL_H264_1	0x9/* H.264 Level 1	 */
-#define VEN_LEVEL_H264_1b 0xA/* H.264 Level 1b  */
-#define VEN_LEVEL_H264_1p1	0xB/* H.264 Level 1.1 */
-#define VEN_LEVEL_H264_1p2	0xC/* H.264 Level 1.2 */
-#define VEN_LEVEL_H264_1p3	0xD/* H.264 Level 1.3 */
-#define VEN_LEVEL_H264_2	0xE/* H.264 Level 2	 */
-#define VEN_LEVEL_H264_2p1	0xF/* H.264 Level 2.1 */
+#define VEN_LEVEL_H264_1	 0x9/* H.264 Level 1   */
+#define VEN_LEVEL_H264_1b        0xA/* H.264 Level 1b  */
+#define VEN_LEVEL_H264_1p1	 0xB/* H.264 Level 1.1 */
+#define VEN_LEVEL_H264_1p2	 0xC/* H.264 Level 1.2 */
+#define VEN_LEVEL_H264_1p3	 0xD/* H.264 Level 1.3 */
+#define VEN_LEVEL_H264_2	 0xE/* H.264 Level 2   */
+#define VEN_LEVEL_H264_2p1	 0xF/* H.264 Level 2.1 */
 #define VEN_LEVEL_H264_2p2	0x10/* H.264 Level 2.2 */
-#define VEN_LEVEL_H264_3	0x11/* H.264 Level 3	 */
+#define VEN_LEVEL_H264_3	0x11/* H.264 Level 3   */
 #define VEN_LEVEL_H264_3p1	0x12/* H.264 Level 3.1 */
+#define VEN_LEVEL_H264_3p2	0x13/* H.264 Level 3.2 */
+#define VEN_LEVEL_H264_4	0x14/* H.264 Level 4   */
 
-#define VEN_LEVEL_H263_10	0x13/* H.263 Level 10  */
-#define VEN_LEVEL_H263_20	0x14/* H.263 Level 20  */
-#define VEN_LEVEL_H263_30	0x15/* H.263 Level 30  */
-#define VEN_LEVEL_H263_40	0x16/* H.263 Level 40  */
-#define VEN_LEVEL_H263_45	0x17/* H.263 Level 45  */
-#define VEN_LEVEL_H263_50	0x18/* H.263 Level 50  */
-#define VEN_LEVEL_H263_60	0x19/* H.263 Level 60  */
-#define VEN_LEVEL_H263_70	0x1A/* H.263 Level 70  */
+#define VEN_LEVEL_H263_10	0x15/* H.263 Level 10  */
+#define VEN_LEVEL_H263_20	0x16/* H.263 Level 20  */
+#define VEN_LEVEL_H263_30	0x17/* H.263 Level 30  */
+#define VEN_LEVEL_H263_40	0x18/* H.263 Level 40  */
+#define VEN_LEVEL_H263_45	0x19/* H.263 Level 45  */
+#define VEN_LEVEL_H263_50	0x1A/* H.263 Level 50  */
+#define VEN_LEVEL_H263_60	0x1B/* H.263 Level 60  */
+#define VEN_LEVEL_H263_70	0x1C/* H.263 Level 70  */
 
 /*Entropy coding model selection for H.264 encoder.*/
 #define VEN_ENTROPY_MODEL_CAVLC	1
@@ -154,6 +133,7 @@
 #define VEN_RC_VBR_VFR	2
 #define VEN_RC_VBR_CFR	3
 #define VEN_RC_CBR_VFR	4
+#define VEN_RC_CBR_CFR	5
 
 /*Different modes for flushing buffers*/
 #define VEN_FLUSH_INPUT	1
@@ -163,6 +143,8 @@
 /*Different input formats for YUV data.*/
 #define VEN_INPUTFMT_NV12	1/* NV12 Linear */
 #define VEN_INPUTFMT_NV21	2/* NV21 Linear */
+#define VEN_INPUTFMT_NV12_16M2KA	3/* NV12 Linear */
+#define VEN_INPUTFMT_NV21_16M2KA	4
 
 /*Different allowed rotation modes.*/
 #define VEN_ROTATION_0	1/* 0 degrees */
@@ -184,7 +166,7 @@
 /* Base value for encoder configuration ioctls*/
 #define VEN_IOCTLBASE_ENC	0x850
 
-struct venc_ioctl_msg {
+struct venc_ioctl_msg{
 	void __user *in;
 	void __user *out;
 };
@@ -271,6 +253,16 @@ struct venc_ioctl_msg {
 
 /* Asynchronous respone message code:VEN_MSG_STOP*/
 #define VEN_IOCTL_CMD_STOP _IO(VEN_IOCTLBASE_NENC, 19)
+
+#define VEN_IOCTL_SET_RECON_BUFFER \
+	_IOW(VEN_IOCTLBASE_NENC, 20, struct venc_ioctl_msg)
+
+#define VEN_IOCTL_FREE_RECON_BUFFER \
+	_IOW(VEN_IOCTLBASE_NENC, 21, struct venc_ioctl_msg)
+
+#define VEN_IOCTL_GET_RECON_BUFFER_SIZE \
+	_IOW(VEN_IOCTLBASE_NENC, 22, struct venc_ioctl_msg)
+
 
 
 /*ENCODER PROPERTY CONFIGURATION & CAPABILITY IOCTLs*/
@@ -449,77 +441,100 @@ struct venc_ioctl_msg {
 #define VEN_IOCTL_GET_QP_RANGE \
 	_IOR(VEN_IOCTLBASE_ENC, 45, struct venc_ioctl_msg)
 
-struct venc_switch {
-	unsigned char status;
+#define VEN_IOCTL_GET_NUMBER_INSTANCES \
+	_IOR(VEN_IOCTLBASE_ENC, 46, struct venc_ioctl_msg)
+
+#define VEN_IOCTL_SET_METABUFFER_MODE \
+	_IOW(VEN_IOCTLBASE_ENC, 47, struct venc_ioctl_msg)
+
+
+/*IOCTL params:SET: InputData - unsigned int, OutputData - NULL.*/
+#define VEN_IOCTL_SET_EXTRADATA \
+	_IOW(VEN_IOCTLBASE_ENC, 48, struct venc_ioctl_msg)
+/*IOCTL params:GET: InputData - NULL, OutputData - unsigned int.*/
+#define VEN_IOCTL_GET_EXTRADATA \
+	_IOR(VEN_IOCTLBASE_ENC, 49, struct venc_ioctl_msg)
+
+/*IOCTL params:SET: InputData - NULL, OutputData - NULL.*/
+#define VEN_IOCTL_SET_SLICE_DELIVERY_MODE \
+	_IO(VEN_IOCTLBASE_ENC, 50)
+
+/*IOCTL params:SET: InputData - unsigned int, OutputData - NULL*/
+#define VEN_IOCTL_SET_SPS_PPS_FOR_IDR \
+	_IOW(VEN_IOCTLBASE_ENC, 51, struct venc_ioctl_msg)
+
+struct venc_switch{
+	unsigned char	status;
 };
 
-struct venc_allocatorproperty {
-	u32 mincount;
-	u32 maxcount;
-	u32 actualcount;
-	u32 datasize;
-	u32 suffixsize;
-	u32 alignment;
-	u32 bufpoolid;
+struct venc_allocatorproperty{
+	unsigned long	 mincount;
+	unsigned long	 maxcount;
+	unsigned long	 actualcount;
+	unsigned long	 datasize;
+	unsigned long	 suffixsize;
+	unsigned long	 alignment;
+	unsigned long	 bufpoolid;
 };
 
-struct venc_bufferpayload {
-	void __user *buffer;
-	size_t sz;
-	int fd;
-	size_t offset;
-	unsigned int maped_size;
-	unsigned long filled_len;
+struct venc_bufferpayload{
+	unsigned char *pbuffer;
+	size_t	sz;
+	int	fd;
+	unsigned int	offset;
+	unsigned int	maped_size;
+	unsigned long	filled_len;
 };
 
-struct venc_buffer {
-	void __user *addr;
-	size_t sz;
-	size_t len;
-	size_t offset;
-	long long timestamp;
-	u32 flags;
-	void *clientdata;
+struct venc_buffer{
+ unsigned char *ptrbuffer;
+ unsigned long	sz;
+ unsigned long	len;
+ unsigned long	offset;
+ long long	timestamp;
+ unsigned long	flags;
+ void	*clientdata;
 };
 
-struct venc_basecfg {
-	u32 input_width;
-	u32 input_height;
-	u32 dvs_width;
-	u32 dvs_height;
-	u32 codectype;
-	u32 fps_num;
-	u32 fps_den;
-	u32 targetbitrate;
-	u32 inputformat;
+struct venc_basecfg{
+	unsigned long	input_width;
+	unsigned long	input_height;
+	unsigned long	dvs_width;
+	unsigned long	dvs_height;
+	unsigned long	codectype;
+	unsigned long	fps_num;
+	unsigned long	fps_den;
+	unsigned long	targetbitrate;
+	unsigned long	inputformat;
 };
 
-struct venc_profile {
+struct venc_profile{
 	unsigned long	profile;
 };
-struct ven_profilelevel {
+struct ven_profilelevel{
 	unsigned long	level;
 };
 
-struct venc_sessionqp {
+struct venc_sessionqp{
 	unsigned long	iframeqp;
 	unsigned long	pframqp;
 };
 
-struct venc_qprange {
-	u32 maxqp;
-	u32 minqp;
+struct venc_qprange{
+	unsigned long	maxqp;
+	unsigned long	minqp;
 };
-struct venc_intraperiod {
+struct venc_intraperiod{
 	unsigned long	num_pframes;
+	unsigned long	num_bframes;
 };
-struct venc_seqheader {
-	void *buf;
-	size_t buf_sz;
-	size_t hdr_len;
+struct venc_seqheader{
+	unsigned char *hdrbufptr;
+	unsigned long	bufsize;
+	unsigned long	hdrlen;
 };
 
-struct venc_capability {
+struct venc_capability{
 	unsigned long	codec_types;
 	unsigned long	maxframe_width;
 	unsigned long	maxframe_height;
@@ -529,64 +544,79 @@ struct venc_capability {
 	unsigned char	dvs;
 };
 
-struct venc_entropycfg {
+struct venc_entropycfg{
 	unsigned longentropysel;
 	unsigned long	cabacmodel;
 };
 
-struct venc_dbcfg {
-	u32 db_mode;
-	u32 slicealpha_offset;
-	u32 slicebeta_offset;
+struct venc_dbcfg{
+	unsigned long	db_mode;
+	unsigned long	slicealpha_offset;
+	unsigned long	slicebeta_offset;
 };
 
-struct venc_intrarefresh {
+struct venc_intrarefresh{
 	unsigned long	irmode;
 	unsigned long	mbcount;
 };
 
-struct venc_multiclicecfg {
+struct venc_multiclicecfg{
 	unsigned long	mslice_mode;
 	unsigned long	mslice_size;
 };
 
-struct venc_bufferflush {
+struct venc_bufferflush{
 	unsigned long	flush_mode;
 };
 
-struct venc_ratectrlcfg {
+struct venc_ratectrlcfg{
 	unsigned long	rcmode;
 };
 
-struct	venc_voptimingcfg {
-	u32 voptime_resolution;
+struct	venc_voptimingcfg{
+	unsigned long	voptime_resolution;
 };
-struct venc_framerate {
-	u32 fps_denominator;
-	u32 fps_numerator;
+struct venc_framerate{
+	unsigned long	fps_denominator;
+	unsigned long	fps_numerator;
 };
 
-//TODO remove these stupid structs
 struct venc_targetbitrate{
-	u32 target_bitrate;
+	unsigned long	target_bitrate;
 };
 
-struct venc_rotation {
-	u32 rotation;
+
+struct venc_rotation{
+	unsigned long	rotation;
 };
 
-struct venc_timeout {
-	u32 millisec;
+struct venc_timeout{
+	 unsigned long	millisec;
 };
 
-struct venc_headerextension {
-	unsigned long header_extension;
+struct venc_headerextension{
+	 unsigned long	header_extension;
 };
 
-struct venc_msg {
-	unsigned long statuscode;
-	unsigned long msgcode;
-	struct venc_buffer buf;
-	size_t msgdata_size;
+struct venc_msg{
+	unsigned long	statuscode;
+	unsigned long	msgcode;
+	struct venc_buffer	buf;
+	unsigned long	msgdata_size;
 };
+
+struct venc_recon_addr{
+	unsigned char *pbuffer;
+	unsigned long buffer_size;
+	unsigned long pmem_fd;
+	unsigned long offset;
+};
+
+struct venc_recon_buff_size{
+	int width;
+	int height;
+	int size;
+	int alignment;
+};
+
 #endif /* _MSM_VIDC_ENC_H_ */
